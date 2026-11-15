@@ -87,3 +87,17 @@ struct NavRoot: View {
     #expect(texts(list).contains { $0.0 == "row 39" })
     #expect(hitIDs(list).allSatisfy { !$0.isEmpty })
 }
+
+@Test func scrollOffsetSurvivesRebuild() {
+    // Régression : le décalage de défilement était effacé par le nettoyage de fin de passe.
+    let graph = ViewGraph()
+    let many = List { ForEach(0..<40) { i in Text("row \(i)") } }
+    var list = renderScreen(many, graph: graph)
+    let before = texts(list).first { $0.0 == "row 0" }!.1.minY
+    let id = list.items.compactMap { if case let .scrollRegion(id, _) = $0 { id } else { nil } }.first!
+    graph.scroll(id, by: 300)
+    list = renderScreen(many, graph: graph)
+    list = renderScreen(many, graph: graph)
+    let after = texts(list).first { $0.0 == "row 0" }!.1.minY
+    #expect(before - after == 300)
+}

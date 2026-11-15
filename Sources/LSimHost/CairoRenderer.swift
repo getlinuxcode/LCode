@@ -195,8 +195,76 @@ struct CairoRenderer {
                 cairo_rectangle(cr, rect.minX, rect.minY, rect.width, rect.height)
                 cairo_fill(cr)
                 cairo_pattern_destroy(gradient)
+            case let .backdrop(rect, blur, tint):
+                blurRegion(rect, sigma: blur)
+                setColor(tint)
+                cairo_rectangle(cr, rect.minX, rect.minY, rect.width, rect.height)
+                cairo_fill(cr)
             case .hitRegion, .scrollRegion:
                 break
+            }
+        }
+    }
+
+    /// Flou approchant un flou gaussien (trois passes de flou boîte) sur une zone déjà dessinée.
+    func blurRegion(_ rect: CGRect, sigma: CGFloat) {
+        let target = cairo_get_group_target(cr)
+        guard cairo_surface_get_type(target) == CAIRO_SURFACE_TYPE_IMAGE else { return }
+        cairo_surface_flush(target)
+        var x0 = Double(rect.minX), y0 = Double(rect.minY), x1 = Double(rect.maxX), y1 = Double(rect.maxY)
+        cairo_user_to_device(cr, &x0, &y0)
+        cairo_user_to_device(cr, &x1, &y1)
+        var dx = 0.0, dy = 0.0
+        cairo_surface_get_device_offset(target, &dx, &dy)
+        var radius = Double(sigma), unused = 0.0
+        cairo_user_to_device_distance(cr, &radius, &unused)
+
+        let width = Int(cairo_image_surface_get_width(target))
+        let height = Int(cairo_image_surface_get_height(target))
+        let stride = Int(cairo_image_surface_get_stride(target)) / 4
+        guard let raw = cairo_image_surface_get_data(target) else { return }
+        let left = max(0, Int((min(x0, x1) - dx).rounded(.down)))
+        let top = max(0, Int((min(y0, y1) - dy).rounded(.down)))
+        let right = min(width, Int((max(x0, x1) - dx).rounded(.up)))
+        let bottom = min(height, Int((max(y0, y1) - dy).rounded(.up)))
+        guard right > left, bottom > top else { return }
+
+        let pixels = UnsafeMutableRawPointer(raw).assumingMemoryBound(to: UInt32.self)
+        let w = right - left, h = bottom - top
+        // Trois passes de flou boîte de demi-largeur r ≈ σ·√3 / … (approximation classique).
+        let r = max(1, Int((radius * 0.95).rounded()))
+        var buffer = [UInt32](repeating: 0, count: w * h)
+        for y in 0..<h { for x in 0..<w { buffer[y * w + x] = pixels[(top + y) * stride + left + x] } }
+        for _ in 0..<3 {
+            Self.boxBlur(&buffer, w, h, r, horizontal: true)
+            Self.boxBlur(&buffer, w, h, r, horizontal: false)
+        }
+        for y in 0..<h { for x in 0..<w { pixels[(top + y) * stride + left + x] = buffer[y * w + x] } }
+        cairo_surface_mark_dirty(target)
+    }
+
+    static func boxBlur(_ data: inout [UInt32], _ w: Int, _ h: Int, _ r: Int, horizontal: Bool) {
+        let lines = horizontal ? h : w
+        let length = horizontal ? w : h
+        var line = [UInt32](repeating: 0, count: length)
+        for l in 0..<lines {
+            let index: (Int) -> Int = horizontal ? { l * w + $0 } : { $0 * w + l }
+            for i in 0..<length { line[i] = data[index(i)] }
+            var sums = [Int](repeating: 0, count: 4)
+            func channels(_ p: UInt32) -> (Int, Int, Int, Int) {
+                (Int(p >> 24 & 0xFF), Int(p >> 16 & 0xFF), Int(p >> 8 & 0xFF), Int(p & 0xFF))
+            }
+            // Bords étendus (le pixel du bord est répété).
+            for k in -r...r {
+                let c = channels(line[min(max(k, 0), length - 1)])
+                sums[0] += c.0; sums[1] += c.1; sums[2] += c.2; sums[3] += c.3
+            }
+            let n = 2 * r + 1
+            for i in 0..<length {
+                data[index(i)] = UInt32(sums[0] / n) << 24 | UInt32(sums[1] / n) << 16 | UInt32(sums[2] / n) << 8 | UInt32(sums[3] / n)
+                let out = channels(line[min(max(i - r, 0), length - 1)])
+                let inn = channels(line[min(max(i + r + 1, 0), length - 1)])
+                sums[0] += inn.0 - out.0; sums[1] += inn.1 - out.1; sums[2] += inn.2 - out.2; sums[3] += inn.3 - out.3
             }
         }
     }

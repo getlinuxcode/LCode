@@ -21,6 +21,8 @@ public enum DisplayItem {
     case popClip
     /// Fondu vertical d'une couleur opaque (en haut) vers transparent (en bas).
     case fade(CGRect, RGBA)
+    /// Matière : floute ce qui est déjà dessiné dans la zone, puis applique un voile coloré.
+    case backdrop(CGRect, blur: CGFloat, tint: RGBA)
     /// Zone interactive (bouton, onTapGesture). Les dernières zones dessinées sont au-dessus.
     case hitRegion(id: String, CGRect)
     /// Zone défilable : identifiant d'état, zone visible.

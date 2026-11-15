@@ -11,6 +11,7 @@ import Observation
 /// - `LSIM_DESIGN=compat` : style iOS 18 (apps liées avec un SDK antérieur à iOS 26)
 /// - `LSIM_ZOOM`       : facteur d'échelle de la fenêtre (défaut 1)
 /// - `LSIM_SCREENSHOT` : rend une image PNG dans ce fichier puis quitte (sans fenêtre)
+/// - `LSIM_SCROLL`     : défilement (en points) de la première zone défilante avant la capture
 /// - `LSIM_TAPS`       : touchers à simuler avant la capture, en points écran : `x,y;x,y`
 public final class SimulatorHost {
     let device: DeviceProfile
@@ -324,6 +325,13 @@ public final class SimulatorHost {
 
     func screenshot(to path: String, taps: String) {
         // Touchers simulés : chaque toucher reconstruit le layout puis déclenche l'action visée.
+        if let scroll = ProcessInfo.processInfo.environment["LSIM_SCROLL"].flatMap(Double.init) {
+            updateLayout()
+            let first = displayList.items.compactMap { item -> String? in
+                if case let .scrollRegion(id, _) = item { return id } else { return nil }
+            }.first
+            if let first { graph.scroll(first, by: CGFloat(scroll)) }
+        }
         for tap in taps.split(separator: ";") {
             let parts = tap.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
             guard parts.count == 2 else { continue }

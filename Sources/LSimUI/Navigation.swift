@@ -32,6 +32,8 @@ public enum NavigationMetrics {
     /// Le chevron n'est pas centré optiquement dans la pastille : décalé vers la gauche.
     public static var glassChevronOffsetX: CGFloat = -1.8
     public static var glassBarHeight: CGFloat = 54
+    /// Rayon du flou de la matière de barre (écart-type, en points).
+    public static var glassMaterialBlur: CGFloat = 5
     /// Le grand titre Liquid Glass est un peu plus bas sous la barre.
     public static var glassLargeTitleTopOffset: CGFloat = 2.7
 
@@ -225,10 +227,19 @@ final class NavigationNode: LayoutNode {
             page.render(in: Alignment.center.place(s, in: contentRect), lc, &list)
         }
 
-        // Effet de bord iOS 26 : le contenu s'estompe sous la barre.
+        // Effet de bord quand le contenu passe sous la barre.
         if let scroll, scroll.offset > 0 {
-            let top = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: bar.maxY - lc.screen.minY + 12)
-            list.append(.fade(top, Color.systemGroupedBackground.resolve(in: lc.colorScheme)))
+            let top = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: bar.maxY - lc.screen.minY)
+            let dark = lc.colorScheme == .dark
+            if DesignStyle.current == .liquidGlass {
+                // Mesuré sur iOS 27 : flou ≈ 5 pt, voile blanc ≈ 65 %, filet à la base de la barre.
+                let tint = dark ? RGBA(0.07, 0.07, 0.08, 0.72) : RGBA(0.99, 0.99, 1.0, 0.68)
+                list.append(.backdrop(top, blur: M.glassMaterialBlur, tint: tint))
+                let line = CGRect(x: top.minX, y: top.maxY - 1.0 / 3.0, width: top.width, height: 1.0 / 3.0)
+                list.append(.fill(.rectangle, line, dark ? RGBA(1, 1, 1, 0.15) : .rgb255(60, 60, 67, 0.12)))
+            } else {
+                list.append(.fade(top.insetBy(dx: 0, dy: 0).offsetBy(dx: 0, dy: 0), Color.systemGroupedBackground.resolve(in: lc.colorScheme)))
+            }
         }
 
         let centerY = bar.minY + M.contentCenterY

@@ -64,6 +64,10 @@ final class ScrollNode: LayoutNode {
         self.graph = graph
         self.background = background
         self.centerContent = centerContent
+        super.init()
+        // Marque le décalage comme utilisé pendant la construction, sinon le nettoyage
+        // de fin de passe le supprimerait (il n'est relu qu'au moment du dessin).
+        _ = graph.scrollOffset(id)
     }
 
     var offset: CGFloat { graph.scrollOffset(id) }
