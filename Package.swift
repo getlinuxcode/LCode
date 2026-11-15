@@ -32,6 +32,12 @@ let package = Package(
             path: "Examples/Shared/Fruits",
             swiftSettings: v5
         ),
+        .executableTarget(
+            name: "CatalogExample",
+            dependencies: ["SwiftUI"],
+            path: "Examples/Shared/Catalog",
+            swiftSettings: v5
+        ),
         .testTarget(name: "LSimUITests", dependencies: ["LSimUI"], swiftSettings: v5),
     ]
 )

@@ -12,6 +12,8 @@ import Observation
 /// - `LSIM_ZOOM`       : facteur d'échelle de la fenêtre (défaut 1)
 /// - `LSIM_SCREENSHOT` : rend une image PNG dans ce fichier puis quitte (sans fenêtre)
 /// - `LSIM_SCROLL`     : défilement (en points) de la première zone défilante avant la capture
+/// - `LSIM_SCREEN_ONLY=1` : capture du seul contenu de l'écran, @3x (calibration)
+/// - `LSIM_DUMP`       : écrit les repères `accessibilityIdentifier` en JSON (calibration)
 /// - `LSIM_TAPS`       : touchers à simuler avant la capture, en points écran : `x,y;x,y`
 public final class SimulatorHost {
     let device: DeviceProfile
@@ -339,14 +341,50 @@ public final class SimulatorHost {
             let point = CGPoint(x: parts[0], y: parts[1])
             if let id = displayList.hitTest(point) { graph.performAction(id) }
         }
-        let pixelScale: CGFloat = 2
-        let surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Int32(outerSize.width * zoom * pixelScale), Int32(outerSize.height * zoom * pixelScale))
+        let env = ProcessInfo.processInfo.environment
+        let screenOnly = env["LSIM_SCREEN_ONLY"] == "1"
+        // Écran seul : contenu de l'app à l'échelle de l'appareil (@3x), sans cadre ni barre d'état,
+        // comme une capture faite par l'app elle-même sur l'iPhone.
+        let pixelScale: CGFloat = screenOnly ? 3 : 2
+        let size = screenOnly ? device.screenSize : CGSize(width: outerSize.width * zoom, height: outerSize.height * zoom)
+        let surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Int32(size.width * pixelScale), Int32(size.height * pixelScale))
         let cr = cairo_create(surface)!
         cairo_scale(cr, pixelScale, pixelScale)
-        draw(cr)
+        if screenOnly {
+            updateLayout()
+            let r = CairoRenderer(cr: cr, text: text)
+            r.fill(.rectangle, device.screenRect, colorScheme == .light ? RGBA(1, 1, 1) : RGBA(0, 0, 0))
+            r.draw(displayList)
+        } else {
+            draw(cr)
+        }
         cairo_surface_write_to_png(surface, path)
         cairo_destroy(cr)
         cairo_surface_destroy(surface)
+        if let dump = env["LSIM_DUMP"] {
+            writeDump(to: dump)
+        }
         print("[LSim] capture écrite : \(path)")
+    }
+
+    /// Repères de mesure au format commun avec l'app Catalogue sur iPhone (points écran).
+    func writeDump(to path: String) {
+        let markers = displayList.markers.map { m -> [String: Any] in
+            ["id": m.id, "x": Double(m.rect.minX), "y": Double(m.rect.minY), "width": Double(m.rect.width), "height": Double(m.rect.height)]
+        }
+        let json: [String: Any] = [
+            "source": "lsim",
+            "device": device.name,
+            "screen": ["width": Double(device.screenSize.width), "height": Double(device.screenSize.height), "scale": 3.0],
+            "colorScheme": colorScheme == .light ? "light" : "dark",
+            "markers": markers,
+        ]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: URL(fileURLWithPath: path))
+            print("[LSim] mesures écrites : \(path) (\(markers.count) repères)")
+        } catch {
+            print("[LSim] échec d'écriture des mesures : \(error)")
+        }
     }
 }

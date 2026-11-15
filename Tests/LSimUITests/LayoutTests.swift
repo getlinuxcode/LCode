@@ -92,3 +92,17 @@ struct Counter: View {
     // Comme dans SwiftUI, une vue retirée puis réinsérée repart de son état initial.
     #expect(texts(list)[0].0 == "count 0")
 }
+
+@Test func idModifierResetsState() {
+    struct Root: View {
+        let key: Int
+        var body: some View { Counter().id(key) }
+    }
+    let graph = ViewGraph()
+    var list = render(Root(key: 1), graph: graph)
+    graph.performAction(list.hitTest(CGPoint(x: 200, y: 400))!)
+    list = render(Root(key: 1), graph: graph)
+    #expect(texts(list)[0].0 == "count 1")
+    list = render(Root(key: 2), graph: graph)
+    #expect(texts(list)[0].0 == "count 0")
+}

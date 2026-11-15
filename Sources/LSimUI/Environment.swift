@@ -16,6 +16,8 @@ public struct EnvironmentValues {
     public var isEnabled = true
     public var textCase: Text.Case?
     var buttonStyle: _ButtonStyleKind = .automatic
+    public var controlSize: ControlSize = .regular
+    public var buttonBorderShape: ButtonBorderShape = .automatic
 
     private var custom: [ObjectIdentifier: Any] = [:]
 

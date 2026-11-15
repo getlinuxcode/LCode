@@ -11,6 +11,8 @@ public struct RGBA: Hashable, Sendable {
         self.a = a
     }
 
+    func withAlpha(_ alpha: Double) -> RGBA { RGBA(r, g, b, alpha) }
+
     static func rgb255(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> RGBA {
         RGBA(r / 255, g / 255, b / 255, a)
     }

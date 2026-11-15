@@ -66,6 +66,27 @@ Display list ──► LSimRender (Cairo/Pango) ──► fenêtre GTK habillée
 - **Composants** : NavigationStack, List, TabView, sheet, alert, Form, Toggle…
 - **Animations** : courbes par défaut (spring), transitions.
 
+## Banc de calibration
+
+La fidélité ne repose pas sur des captures faites à la main mais sur des mesures exactes :
+
+1. `Examples/Shared/Catalog/` : un catalogue SwiftUI (toutes les variantes d'un composant,
+   chacune avec un identifiant) compilé à la fois pour iOS (xtool) et pour LSim.
+2. Sur iPhone, l'app **LCode Catalogue** s'auto-inspecte page par page, en clair et en sombre :
+   cadres calculés par SwiftUI (`onGeometryChange`), couches Core Animation (rayons, courbes,
+   couleurs converties en sRVB, filtres, ombres) et capture sRVB, envoyés au PC.
+3. `tools/calibration/receiver.py` reçoit les mesures ; `tools/calibration/compare.py` fait rendre
+   les mêmes pages par LSim (`LSIM_SCREEN_ONLY`, `LSIM_DUMP`) et produit un rapport des écarts
+   et des planches iPhone | LSim | différence.
+
+Les mesures sont reportées dans des tables (`ButtonMetrics`, `ListMetrics`, `NavigationMetrics`),
+par génération de design (`DesignStyle` : Liquid Glass ou compatibilité).
+
+Pièges connus : les captures d'iPhone sont en Display P3 (convertir avant de comparer) ;
+`lld` inscrit la version minimale comme version du SDK (forcer `-platform_version`), sinon iOS
+affiche l'app en mode compatibilité ; `xtool launch` ne fonctionne pas sur iOS 27 (lancer l'app
+à la main).
+
 ## Limites assumées
 
 - UIKit, frameworks matériels et fermés (ARKit, caméra, HealthKit…) : bouchons.

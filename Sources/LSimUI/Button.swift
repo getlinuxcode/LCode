@@ -5,7 +5,60 @@ public enum ButtonRole: Hashable, Sendable {
 }
 
 public enum _ButtonStyleKind: Hashable, Sendable {
-    case automatic, plain, borderless, bordered, borderedProminent
+    case automatic, plain, borderless, bordered, borderedProminent, glass, glassProminent
+
+    /// Styles dessinés avec un fond (forme + marges).
+    var hasBackground: Bool { [.bordered, .borderedProminent, .glass, .glassProminent].contains(self) }
+}
+
+public enum ControlSize: CaseIterable, Hashable, Sendable {
+    case mini, small, regular, large, extraLarge
+}
+
+public struct ButtonBorderShape: Hashable, Sendable {
+    enum Kind: Hashable { case automatic, capsule, circle, roundedRectangle(CGFloat?) }
+    let kind: Kind
+    public static let automatic = ButtonBorderShape(kind: .automatic)
+    public static let capsule = ButtonBorderShape(kind: .capsule)
+    public static let circle = ButtonBorderShape(kind: .circle)
+    public static let roundedRectangle = ButtonBorderShape(kind: .roundedRectangle(nil))
+    public static func roundedRectangle(radius: CGFloat) -> ButtonBorderShape { ButtonBorderShape(kind: .roundedRectangle(radius)) }
+}
+
+/// Mesures des boutons, par taille de contrôle.
+public struct ButtonSizeMetrics: Sendable {
+    public var font: Font
+    public var padding: EdgeInsets
+    /// Marge horizontale avec `.buttonBorderShape(.circle)`.
+    public var circlePaddingH: CGFloat
+    public var defaultCornerRadius: CGFloat
+}
+
+/// Mesures relevées sur iOS 27.2 par le banc de calibration (app Catalogue, couches Core Animation).
+/// Tous les styles à fond (bordered, borderedProminent, glass, glassProminent) partagent le même gabarit.
+public enum ButtonMetrics {
+    public static func metrics(_ size: ControlSize) -> ButtonSizeMetrics {
+        if DesignStyle.current == .compatibility {
+            return .init(font: .body, padding: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12), circlePaddingH: 7, defaultCornerRadius: 7)
+        }
+        switch size {
+        case .mini, .small:
+            // « Bouton » : 69,3 × 28 pt (texte 15 pt de 49,3 × 18), capsule de rayon 14.
+            return .init(font: .system(size: 15), padding: EdgeInsets(top: 5, leading: 10, bottom: 5, trailing: 10), circlePaddingH: 7, defaultCornerRadius: 7)
+        case .regular:
+            // 78,7 × 34,3 pt (texte 17 pt de 54,7 × 20,3), capsule de rayon 17,2.
+            return .init(font: .body, padding: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12), circlePaddingH: 7, defaultCornerRadius: 7)
+        case .large, .extraLarge:
+            // 94,7 × 50,3 pt, capsule de rayon 25,2.
+            return .init(font: .body, padding: EdgeInsets(top: 15, leading: 20, bottom: 15, trailing: 20), circlePaddingH: 7, defaultCornerRadius: 7)
+        }
+    }
+
+    /// Remplissage `.bordered` : gris système sans teinte, sinon la teinte à 18 % (clair) / 25 % (sombre).
+    static func borderedFill(tint: Color?) -> Color {
+        guard let tint else { return .secondarySystemFill }
+        return Color(light: tint.light.withAlpha(0.18), dark: tint.dark.withAlpha(0.25))
+    }
 }
 
 public struct Button<Label: View>: View, _PrimitiveView {
@@ -31,16 +84,22 @@ public struct Button<Label: View>: View, _PrimitiveView {
 
         let tint: Color = role == .destructive ? .red : (env.tint ?? .accentColor)
         let style = env.buttonStyle
+        let size = ButtonMetrics.metrics(env.controlSize)
         var labelCtx = context.child("label")
         switch style {
         case .plain:
             break
-        case .borderedProminent:
+        case .borderedProminent, .glassProminent:
             labelCtx.environment.foregroundColor = .white
+        case .glass:
+            // Mesuré : le texte d'un bouton en verre est en couleur primaire, même destructif.
+            labelCtx.environment.foregroundColor = env.foregroundColor ?? .primary
         default:
             labelCtx.environment.foregroundColor = env.foregroundColor ?? tint
         }
         if !env.isEnabled { labelCtx.environment.foregroundColor = .tertiaryLabel }
+        // Mesuré : .plain ignore controlSize (reste en 17 pt) ; les autres styles suivent la taille.
+        if !env.isInList && style != .plain { labelCtx.environment.font = env.font ?? size.font }
         // Le style ne se propage pas aux boutons imbriqués dans le label.
         labelCtx.environment.buttonStyle = .automatic
         labelCtx.environment.isInList = false
@@ -50,23 +109,35 @@ public struct Button<Label: View>: View, _PrimitiveView {
             ? labelNodes[0]
             : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: labelNodes)
 
-        switch style {
-        case .bordered, .borderedProminent:
-            let prominent = style == .borderedProminent && env.isEnabled
-            if DesignStyle.current == .liquidGlass {
-                // Mesuré sur iOS 27 (Liquid Glass) : capsule de 33,8 pt, teinte pleine
-                // (couleur vérifiée après conversion Display P3 → sRVB de la capture).
-                let fill: Color = prominent ? tint : .secondarySystemFill
-                node = PaddingNode(node, insets: EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
-                node = LayerNode(node, layer: [ShapeNode(.capsule, color: fill)], alignment: .center, isBackground: true)
-            } else {
-                // Mode compatibilité : rectangle arrondi de 7 pt, marges 12 × 7 pt (bouton « + » : 35 × 35 pt).
-                let fill: Color = prominent ? tint : .secondarySystemFill
-                node = PaddingNode(node, insets: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
-                node = LayerNode(node, layer: [ShapeNode(.roundedRectangle(cornerRadius: 7), color: fill)], alignment: .center, isBackground: true)
+        if style.hasBackground {
+            let prominent = (style == .borderedProminent || style == .glassProminent) && env.isEnabled
+            let glass = DesignStyle.current == .liquidGlass
+            let shape: ShapeKind
+            switch env.buttonBorderShape.kind {
+            case .capsule: shape = .capsule
+            case .circle: shape = .circle
+            case let .roundedRectangle(r): shape = .roundedRectangle(cornerRadius: r ?? size.defaultCornerRadius)
+            case .automatic: shape = (glass || style == .glass || style == .glassProminent) ? .capsule : .roundedRectangle(cornerRadius: size.defaultCornerRadius)
             }
-        default:
-            break
+            var padding = size.padding
+            if shape == .circle {
+                // Mesuré : le cadre n'est pas carré, seule la marge horizontale diminue (7 pt).
+                padding.leading = size.circlePaddingH
+                padding.trailing = size.circlePaddingH
+            }
+            node = PaddingNode(node, insets: padding)
+            let background: LayoutNode
+            if style == .glass || (style == .glassProminent && !env.isEnabled) {
+                // Un bouton glassProminent désactivé est dessiné comme du verre simple.
+                background = GlassShapeNode(shape)
+            } else if style == .glassProminent {
+                background = GlassShapeNode(shape, tint: tint)
+            } else if prominent {
+                background = ShapeNode(shape, color: tint)
+            } else {
+                background = ShapeNode(shape, color: env.isEnabled ? ButtonMetrics.borderedFill(tint: role == .destructive ? .red : env.tint) : .secondarySystemFill)
+            }
+            node = LayerNode(node, layer: [background], alignment: .center, isBackground: true)
         }
 
         // Dans une List, un bouton standard occupe toute la ligne (surbrillance gérée par la liste).
@@ -75,7 +146,7 @@ public struct Button<Label: View>: View, _PrimitiveView {
         }
 
         let pressed = context.graph.pressedID == id
-        return [TapNode(node, id: id, isPressed: pressed, pressedOpacity: style == .borderedProminent ? 0.7 : 0.25)]
+        return [TapNode(node, id: id, isPressed: pressed, pressedOpacity: style == .borderedProminent || style == .glassProminent ? 0.7 : 0.25)]
     }
 }
 
@@ -107,8 +178,63 @@ extension PrimitiveButtonStyle where Self == BorderlessButtonStyle { public stat
 extension PrimitiveButtonStyle where Self == BorderedButtonStyle { public static var bordered: Self { .init() } }
 extension PrimitiveButtonStyle where Self == BorderedProminentButtonStyle { public static var borderedProminent: Self { .init() } }
 
+public struct GlassButtonStyle: PrimitiveButtonStyle { public init() {}; public var _kind: _ButtonStyleKind { .glass } }
+public struct GlassProminentButtonStyle: PrimitiveButtonStyle { public init() {}; public var _kind: _ButtonStyleKind { .glassProminent } }
+extension PrimitiveButtonStyle where Self == GlassButtonStyle { public static var glass: Self { .init() } }
+extension PrimitiveButtonStyle where Self == GlassProminentButtonStyle { public static var glassProminent: Self { .init() } }
+
 extension View {
     public func buttonStyle<S: PrimitiveButtonStyle>(_ style: S) -> some View {
         modifier(_EnvironmentModifier { $0.buttonStyle = style._kind })
+    }
+
+    public func controlSize(_ size: ControlSize) -> some View {
+        modifier(_EnvironmentModifier { $0.controlSize = size })
+    }
+
+    public func buttonBorderShape(_ shape: ButtonBorderShape) -> some View {
+        modifier(_EnvironmentModifier { $0.buttonBorderShape = shape })
+    }
+}
+
+/// Rend son enfant carré (côté = la plus grande dimension), pour les boutons circulaires.
+final class SquareNode: SingleChildNode {
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        let s = child.sizeThatFits(p, lc)
+        let side = max(s.width, s.height)
+        return CGSize(width: side, height: side)
+    }
+
+    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let s = child.sizeThatFits(ProposedViewSize(rect.size), lc)
+        child.render(in: Alignment.center.place(s, in: rect), lc, &list)
+    }
+}
+
+/// Fond en verre (approximation : remplissage clair, liseré, ombre douce).
+final class GlassShapeNode: LayoutNode {
+    let shape: ShapeKind
+    let tint: Color?
+    init(_ shape: ShapeKind, tint: Color? = nil) {
+        self.shape = shape
+        self.tint = tint
+    }
+
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        p.replacingUnspecifiedDimensions()
+    }
+
+    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let dark = lc.colorScheme == .dark
+        list.append(.fill(shape, rect.offsetBy(dx: 0, dy: 1.5), RGBA(0, 0, 0, dark ? 0.25 : 0.05)))
+        if let tint {
+            // Verre teinté : teinte pleine, reflet clair sur le pourtour (plus marqué en haut).
+            list.append(.fill(shape, rect, tint.resolve(in: lc.colorScheme)))
+            list.append(.stroke(shape, rect.insetBy(dx: 0.75, dy: 0.75), RGBA(1, 1, 1, 0.45), lineWidth: 1))
+            list.append(.fade(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.5), RGBA(1, 1, 1, 0.08)))
+        } else {
+            list.append(.fill(shape, rect, dark ? RGBA(0.17, 0.17, 0.18, 0.96) : RGBA(0.976, 0.976, 0.976, 0.97)))
+            list.append(.stroke(shape, rect.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.18) : RGBA(0, 0, 0, 0.22), lineWidth: 0.5))
+        }
     }
 }

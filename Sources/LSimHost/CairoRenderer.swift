@@ -49,7 +49,8 @@ final class PangoText: TextMeasurer {
         return max(0, 0.37 * (1 - CGFloat(size - 40) / 40))
     }
 
-    /// Hauteur de ligne des styles Dynamic Type d'iOS (taille → interligne), en points.
+    /// Interlignes « Dynamic Type » des HIG. Non utilisés : le banc de calibration a montré que SwiftUI
+    /// utilise la hauteur naturelle de la police (17 pt → 20,3 pt). Conservés pour référence.
     static func lineHeight(for font: Font) -> CGFloat? {
         let table: [CGFloat: CGFloat] = [34: 41, 28: 34, 22: 28, 20: 25, 17: 22, 16: 21, 15: 20, 13: 18, 12: 16, 11: 13]
         return table[font.size]
@@ -61,9 +62,6 @@ final class PangoText: TextMeasurer {
         let tracking = Self.tracking(for: font)
         if tracking != 0 {
             pango_attr_list_insert(attrs, pango_attr_letter_spacing_new(Int32(tracking * CGFloat(PANGO_SCALE))))
-        }
-        if let lineHeight = Self.lineHeight(for: font) {
-            pango_attr_list_insert(attrs, pango_attr_line_height_new_absolute(Int32(lineHeight * CGFloat(PANGO_SCALE))))
         }
         pango_layout_set_attributes(layout, attrs)
         pango_attr_list_unref(attrs)
@@ -200,7 +198,7 @@ struct CairoRenderer {
                 setColor(tint)
                 cairo_rectangle(cr, rect.minX, rect.minY, rect.width, rect.height)
                 cairo_fill(cr)
-            case .hitRegion, .scrollRegion:
+            case .hitRegion, .scrollRegion, .marker:
                 break
             }
         }

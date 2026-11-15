@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+"""Récepteur des mesures envoyées par l'app « LCode Catalogue » sur iPhone.
+
+Usage : python3 tools/calibration/receiver.py [--port 8765] [--out Calibration]
+Chaque page reçue est enregistrée dans <out>/<run>/ios/<page>.<clair|sombre>.{json,png}.
+"""
+import argparse
+import base64
+import json
+import os
+import re
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+MAX_BODY = 64 * 1024 * 1024
+SAFE = re.compile(r"[^A-Za-z0-9._-]")
+
+
+def safe(name: str) -> str:
+    return SAFE.sub("_", name)[:120] or "x"
+
+
+class Handler(BaseHTTPRequestHandler):
+    out_dir = "Calibration"
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"LCode calibration receiver\n")
+
+    def do_POST(self):
+        if self.path != "/upload":
+            self.send_error(404)
+            return
+        length = int(self.headers.get("Content-Length", "0"))
+        if length <= 0 or length > MAX_BODY:
+            self.send_error(413)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length))
+        except json.JSONDecodeError:
+            self.send_error(400)
+            return
+        run = safe(payload.get("run", "run"))
+        page = safe(payload.get("page", "page"))
+        scheme = safe(payload.get("colorScheme", "light"))
+        folder = os.path.join(self.out_dir, run, "ios")
+        os.makedirs(folder, exist_ok=True)
+        png = payload.pop("png", "")
+        base = os.path.join(folder, f"{page}.{scheme}")
+        if png:
+            with open(base + ".png", "wb") as f:
+                f.write(base64.b64decode(png))
+        with open(base + ".json", "w") as f:
+            json.dump(payload, f, indent=1, sort_keys=True)
+        print(f"reçu {page} ({scheme}) : {len(payload.get('markers', []))} repères, "
+              f"{len(payload.get('layers', []))} couches — {payload.get('device')} iOS {payload.get('system')}", flush=True)
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"ok")
+
+    def log_message(self, *args):
+        pass
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--out", default="Calibration")
+    args = parser.parse_args()
+    Handler.out_dir = args.out
+    server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
+    print(f"En attente des mesures sur le port {args.port} → {args.out}/", flush=True)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

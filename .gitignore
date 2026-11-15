@@ -2,3 +2,5 @@
 .swiftpm/
 *.xip
 .bsp/
+Calibration/
+Examples/iOS/Catalog/Sources/Catalog/CalibrationServer.swift

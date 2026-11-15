@@ -41,7 +41,9 @@ final class TextNode: LayoutNode {
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let size = lc.measurer.measure(string, font: font, maxWidth: p.width.flatMap { $0.isFinite ? $0 : nil })
-        return CGSize(width: size.width.rounded(.up), height: size.height.rounded(.up))
+        // Comme iOS : arrondi au pixel physique supérieur (1/3 pt sur un écran @3x), pas au point entier.
+        let scale = lc.displayScale
+        return CGSize(width: (size.width * scale).rounded(.up) / scale, height: (size.height * scale).rounded(.up) / scale)
     }
 
     override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {

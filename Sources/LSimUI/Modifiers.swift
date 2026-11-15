@@ -224,6 +224,44 @@ extension View {
     }
 }
 
+// MARK: - Identité
+
+struct _IdentityModifier: _PrimitiveModifier {
+    let id: String
+    func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
+        // Un nouvel identifiant = un nouveau chemin : la vue est recréée et son état repart de zéro.
+        content(context.child("id=\(id)"))
+    }
+}
+
+extension View {
+    public func id<ID: Hashable>(_ id: ID) -> some View {
+        modifier(_IdentityModifier(id: "\(id)"))
+    }
+}
+
+// MARK: - Accessibilité
+
+final class MarkerNode: SingleChildNode {
+    let id: String
+    init(_ child: LayoutNode, id: String) {
+        self.id = id
+        super.init(child)
+    }
+
+    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        child.render(in: rect, lc, &list)
+        list.append(.marker(id: id, rect))
+    }
+}
+
+extension View {
+    /// Identifiant d'accessibilité ; LSim l'utilise aussi comme repère de mesure.
+    public func accessibilityIdentifier(_ identifier: String) -> some View {
+        modifier(_NodeModifier { node, _ in MarkerNode(node, id: identifier) })
+    }
+}
+
 // MARK: - Interactions et cycle de vie
 
 struct _TapModifier: _PrimitiveModifier {

@@ -25,6 +25,8 @@ public enum DisplayItem {
     case backdrop(CGRect, blur: CGFloat, tint: RGBA)
     /// Zone interactive (bouton, onTapGesture). Les dernières zones dessinées sont au-dessus.
     case hitRegion(id: String, CGRect)
+    /// Repère de mesure (`accessibilityIdentifier`) : cadre de la vue identifiée.
+    case marker(id: String, CGRect)
     /// Zone défilable : identifiant d'état, zone visible.
     case scrollRegion(id: String, CGRect)
 }
@@ -70,6 +72,11 @@ public struct DisplayList {
         return nil
     }
 
+    /// Repères de mesure (identifiant → cadre).
+    public var markers: [(id: String, rect: CGRect)] {
+        items.compactMap { if case let .marker(id, r) = $0 { (id, r) } else { nil } }
+    }
+
     /// Zone défilable la plus haute sous le point donné.
     public func scrollTarget(_ point: CGPoint) -> String? {
         for item in items.reversed() {
@@ -90,6 +97,8 @@ public final class LayoutContext {
     /// Écran complet et zones sûres : permet aux fonds (List, barres) de s'étendre sous la barre d'état.
     public let screen: CGRect
     public let safeArea: EdgeInsets
+    /// Pixels par point de l'appareil simulé (3 sur les iPhone récents).
+    public var displayScale: CGFloat = 3
 
     public init(measurer: TextMeasurer, colorScheme: ColorScheme, screen: CGRect = .zero, safeArea: EdgeInsets = EdgeInsets()) {
         self.measurer = measurer
