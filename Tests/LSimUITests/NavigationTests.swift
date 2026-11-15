@@ -54,7 +54,8 @@ struct NavRoot: View {
     graph.performAction(ids[2])  // ouvre « item 2 »
     list = renderScreen(NavRoot(), graph: graph)
     #expect(texts(list).contains { $0.0 == "détail 2" })
-    #expect(texts(list).contains { $0.0 == "Racine" })  // libellé du bouton retour
+    // Liquid Glass : le bouton retour est une pastille sans libellé (le titre précédent n'est pas affiché).
+    #expect(!texts(list).contains { $0.0 == "Racine" })
     let back = hitIDs(list).first { $0.hasSuffix("#back") }
     #expect(back != nil)
 

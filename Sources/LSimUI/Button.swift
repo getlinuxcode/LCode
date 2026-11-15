@@ -52,11 +52,21 @@ public struct Button<Label: View>: View, _PrimitiveView {
 
         switch style {
         case .bordered, .borderedProminent:
-            // Mesuré sur iOS 27 : .bordered = fond gris (secondarySystemFill), .borderedProminent = teinte pleine ;
-            // rectangle arrondi de rayon ≈ 7 pt, marges 12 × 7 pt (bouton « + » : 35 × 35 pt).
-            let fill: Color = (style == .borderedProminent && env.isEnabled) ? tint : .secondarySystemFill
-            node = PaddingNode(node, insets: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
-            node = LayerNode(node, layer: [ShapeNode(.roundedRectangle(cornerRadius: 7), color: fill)], alignment: .center, isBackground: true)
+            let prominent = style == .borderedProminent && env.isEnabled
+            if DesignStyle.current == .liquidGlass {
+                // Mesuré sur iOS 27 (Liquid Glass) : capsule de 33,8 pt, teinte adoucie par le verre.
+                var fill: Color = prominent ? tint : .secondarySystemFill
+                if prominent && tint == .accentColor {
+                    fill = Color(light: .rgb255(60, 134, 244), dark: .rgb255(64, 145, 255))
+                }
+                node = PaddingNode(node, insets: EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10))
+                node = LayerNode(node, layer: [ShapeNode(.capsule, color: fill)], alignment: .center, isBackground: true)
+            } else {
+                // Mode compatibilité : rectangle arrondi de 7 pt, marges 12 × 7 pt (bouton « + » : 35 × 35 pt).
+                let fill: Color = prominent ? tint : .secondarySystemFill
+                node = PaddingNode(node, insets: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
+                node = LayerNode(node, layer: [ShapeNode(.roundedRectangle(cornerRadius: 7), color: fill)], alignment: .center, isBackground: true)
+            }
         default:
             break
         }

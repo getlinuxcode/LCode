@@ -8,6 +8,7 @@ import Observation
 /// Variables d'environnement :
 /// - `LSIM_DEVICE`     : `iphone16pro` (défaut) ou `iphonese`
 /// - `LSIM_DARK=1`     : démarre en mode sombre
+/// - `LSIM_DESIGN=compat` : style iOS 18 (apps liées avec un SDK antérieur à iOS 26)
 /// - `LSIM_ZOOM`       : facteur d'échelle de la fenêtre (défaut 1)
 /// - `LSIM_SCREENSHOT` : rend une image PNG dans ce fichier puis quitte (sans fenêtre)
 /// - `LSIM_TAPS`       : touchers à simuler avant la capture, en points écran : `x,y;x,y`
@@ -37,6 +38,7 @@ public final class SimulatorHost {
         let env = ProcessInfo.processInfo.environment
         let device = env["LSIM_DEVICE"].flatMap { DeviceProfile.all[$0.lowercased()] } ?? .iPhone16Pro
         let scheme: ColorScheme = env["LSIM_DARK"] == "1" ? .dark : .light
+        if env["LSIM_DESIGN"] == "compat" { DesignStyle.current = .compatibility }
         let zoom = env["LSIM_ZOOM"].flatMap(Double.init).map { CGFloat($0) } ?? 1
         let host = SimulatorHost(device: device, colorScheme: scheme, zoom: zoom) { graph, environment in
             graph.build(environment: environment, app: app) { _rootView(of: app.body) }

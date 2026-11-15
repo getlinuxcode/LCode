@@ -22,6 +22,26 @@ public enum NavigationMetrics {
     public static var backTitleFont = Font.system(size: 17)
     /// Défilement à partir duquel le grand titre laisse place au titre centré.
     public static var collapseThreshold: CGFloat = 44
+
+    // Liquid Glass (iOS 26+), mesuré sur iOS 27.2.
+    public static var glassBarContentCenterY: CGFloat = 22
+    public static var glassButtonSize: CGFloat = 44
+    public static var glassButtonLeading: CGFloat = 20
+    public static var glassChevronSize = CGSize(width: 10.1, height: 18.2)
+    public static var glassChevronLineWidth: CGFloat = 2.4
+    /// Le chevron n'est pas centré optiquement dans la pastille : décalé vers la gauche.
+    public static var glassChevronOffsetX: CGFloat = -1.8
+    public static var glassBarHeight: CGFloat = 54
+    /// Le grand titre Liquid Glass est un peu plus bas sous la barre.
+    public static var glassLargeTitleTopOffset: CGFloat = 2.7
+
+    static var currentBarHeight: CGFloat {
+        DesignStyle.current == .liquidGlass ? glassBarHeight : barHeight
+    }
+
+    static var contentCenterY: CGFloat {
+        DesignStyle.current == .liquidGlass ? glassBarContentCenterY : barContentCenterY
+    }
 }
 
 /// Pile de navigation persistante (une par NavigationStack).
@@ -124,7 +144,7 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
         if let title = sink.title, large {
             let text = TextNode(title, font: NavigationMetrics.largeTitleFont, color: .primary, alignment: .leading)
             titleNode = FrameNode(
-                PaddingNode(text, insets: EdgeInsets(top: 0, leading: NavigationMetrics.largeTitleLeading, bottom: 0, trailing: NavigationMetrics.largeTitleLeading)),
+                PaddingNode(text, insets: EdgeInsets(top: DesignStyle.current == .liquidGlass ? NavigationMetrics.glassLargeTitleTopOffset : 0, leading: NavigationMetrics.largeTitleLeading, bottom: 0, trailing: NavigationMetrics.largeTitleLeading)),
                 width: .init(max: .infinity), height: .init(fixed: NavigationMetrics.largeTitleHeight), alignment: .topLeading
             )
         }
@@ -180,8 +200,8 @@ final class NavigationNode: LayoutNode {
     }
 
     override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        let bar = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: M.barHeight)
-        var contentRect = CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: rect.height - M.barHeight)
+        let bar = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: M.currentBarHeight)
+        var contentRect = CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: rect.height - bar.height)
         var showInlineTitle = largeTitle == nil
 
         if let largeTitle {
@@ -198,7 +218,7 @@ final class NavigationNode: LayoutNode {
 
         if let scroll {
             // Le contenu défilant occupe tout l'écran et passe sous la barre.
-            scroll.topInset = M.barHeight
+            scroll.topInset = bar.height
             page.render(in: rect, lc, &list)
         } else {
             let s = page.sizeThatFits(ProposedViewSize(contentRect.size), lc)
@@ -211,9 +231,11 @@ final class NavigationNode: LayoutNode {
             list.append(.fade(top, Color.systemGroupedBackground.resolve(in: lc.colorScheme)))
         }
 
-        let centerY = bar.minY + M.barContentCenterY
+        let centerY = bar.minY + M.contentCenterY
         var backWidth: CGFloat = 0
-        if backID != nil {
+        if backID != nil, DesignStyle.current == .liquidGlass {
+            backWidth = M.glassButtonLeading + M.glassButtonSize
+        } else if backID != nil {
             let titleSize = lc.measurer.measure(backTitle, font: M.backTitleFont, maxWidth: nil)
             backWidth = M.backTitleX + titleSize.width
         }
@@ -226,7 +248,21 @@ final class NavigationNode: LayoutNode {
             list.append(.text(title, font, r, Color.primary.resolve(in: lc.colorScheme), .center))
         }
 
-        if let backID {
+        if let backID, DesignStyle.current == .liquidGlass {
+            // Bouton retour Liquid Glass : chevron dans une pastille de verre.
+            let d = M.glassButtonSize
+            let button = CGRect(x: bar.minX + M.glassButtonLeading, y: centerY - d / 2, width: d, height: d)
+            let dark = lc.colorScheme == .dark
+            if backPressed { list.append(.pushOpacity(0.6)) }
+            list.append(.fill(.circle, button.offsetBy(dx: 0, dy: 1.5), RGBA(0, 0, 0, dark ? 0.25 : 0.04)))
+            list.append(.fill(.circle, button, dark ? RGBA(0.17, 0.17, 0.18, 0.96) : RGBA(0.976, 0.976, 0.976, 0.97)))
+            list.append(.stroke(.circle, button.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.18) : RGBA(0, 0, 0, 0.22), lineWidth: 0.5))
+            let c = M.glassChevronSize, w = M.glassChevronLineWidth
+            let chevron = CGRect(x: button.midX - c.width / 2 + w / 2 + M.glassChevronOffsetX, y: button.midY - c.height / 2 + w / 2, width: c.width - w, height: c.height - w)
+            list.append(.chevron(chevron, Color.primary.resolve(in: lc.colorScheme), lineWidth: w, pointingLeft: true))
+            if backPressed { list.append(.popOpacity) }
+            list.append(.hitRegion(id: backID, button))
+        } else if let backID {
             // Bouton retour : chevron + titre de l'écran précédent, dans la teinte de l'app.
             let color = tint.resolve(in: lc.colorScheme)
             if backPressed { list.append(.pushOpacity(0.25)) }

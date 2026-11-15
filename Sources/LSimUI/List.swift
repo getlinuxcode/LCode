@@ -16,21 +16,31 @@ extension Color {
     static let chevronGray = Color(light: .rgb255(60, 60, 67, 0.3), dark: .rgb255(235, 235, 245, 0.3))
 }
 
-/// Mesures du style `.insetGrouped`, relevées sur iPhone 17 Pro Max sous iOS 27.2.
+/// Mesures du style `.insetGrouped`, relevées sur iPhone 17 Pro Max sous iOS 27.2,
+/// en Liquid Glass (SDK ≥ 26) et en mode compatibilité.
 public enum ListMetrics {
-    public static var margin: CGFloat = 20
-    public static var cornerRadius: CGFloat = 10
-    public static var rowMinHeight: CGFloat = 44
-    public static var rowPaddingH: CGFloat = 20
-    public static var rowPaddingV: CGFloat = 8.5
+    static var glass: Bool { DesignStyle.current == .liquidGlass }
+
+    public static var margin: CGFloat { 20 }
+    public static var cornerRadius: CGFloat { glass ? 26 : 10 }
+    public static var rowMinHeight: CGFloat { glass ? 52 : 44 }
+    public static var rowPaddingH: CGFloat { 20 }
+    public static var rowPaddingV: CGFloat { glass ? 15 : 8.5 }
     /// Espace avant la première section (avec / sans en-tête).
-    public static var topInsetWithHeader: CGFloat = 13
-    public static var topInset: CGFloat = 20
-    public static var sectionSpacing: CGFloat = 35
-    public static var headerBottomGap: CGFloat = 6
-    public static var footerTopGap: CGFloat = 7
-    public static var chevronSize = CGSize(width: 7, height: 12)
-    public static var bottomInset: CGFloat = 20
+    public static var topInsetWithHeader: CGFloat { glass ? 8.5 : 13 }
+    public static var topInset: CGFloat { 20 }
+    public static var sectionSpacing: CGFloat { 35 }
+    public static var headerBottomGap: CGFloat { glass ? 10 : 6 }
+    public static var footerTopGap: CGFloat { 7 }
+    /// En-tête de section : majuscules en footnote (compatibilité), casse normale en 17 pt medium (Liquid Glass).
+    public static var headerFont: Font { glass ? .system(size: 17, weight: .medium) : .footnote }
+    public static var headerTextCase: Text.Case? { glass ? nil : .uppercase }
+    /// Le séparateur s'arrête avant le bord droit de la carte en Liquid Glass.
+    public static var separatorTrailingInset: CGFloat { glass ? 20 : 0 }
+    /// Rectangle du tracé du chevron (l'encre déborde de la moitié du trait) et marge droite de son encre.
+    public static var chevronSize: CGSize { glass ? CGSize(width: 4.7, height: 9.5) : CGSize(width: 7, height: 12) }
+    public static var chevronTrailing: CGFloat { glass ? 23 : 20 }
+    public static var bottomInset: CGFloat { 20 }
 }
 
 // MARK: - Défilement
@@ -223,7 +233,7 @@ final class ListContentNode: LayoutNode {
                     list.append(contentsOf: rowItems)
                     if action.isLink {
                         let c = M.chevronSize
-                        let chevron = CGRect(x: rowRect.maxX - M.rowPaddingH - c.width, y: rowRect.midY - c.height / 2, width: c.width, height: c.height)
+                        let chevron = CGRect(x: rowRect.maxX - M.chevronTrailing - 1 - c.width, y: rowRect.midY - c.height / 2, width: c.width, height: c.height)
                         list.append(.chevron(chevron, Color.chevronGray.resolve(in: lc.colorScheme), lineWidth: 2, pointingLeft: false))
                     }
                     list.append(.hitRegion(id: action.id, rowRect))
@@ -231,7 +241,7 @@ final class ListContentNode: LayoutNode {
                     list.append(contentsOf: rowItems)
                 }
                 if index < section.rows.count - 1 {
-                    let line = CGRect(x: separatorX, y: rowRect.maxY - 1.0 / 3.0, width: rowRect.maxX - separatorX, height: 1.0 / 3.0)
+                    let line = CGRect(x: separatorX, y: rowRect.maxY - 1.0 / 3.0, width: rowRect.maxX - M.separatorTrailingInset - separatorX, height: 1.0 / 3.0)
                     list.append(.fill(.rectangle, line, Color.separator.resolve(in: lc.colorScheme)))
                 }
                 y += heights[index]
@@ -311,7 +321,8 @@ public struct Section<Parent: View, Content: View, Footer: View>: View, _Primiti
         textCtx.environment.foregroundColor = textCtx.environment.foregroundColor ?? .secondary
         textCtx.environment.font = textCtx.environment.font ?? .footnote
         var headerCtx = textCtx.child("header")
-        headerCtx.environment.textCase = headerCtx.environment.textCase ?? .uppercase
+        headerCtx.environment.font = context.environment.font ?? ListMetrics.headerFont
+        headerCtx.environment.textCase = headerCtx.environment.textCase ?? ListMetrics.headerTextCase
         let headerNodes = LSimUI._makeNodes(header, headerCtx)
         let footerNodes = LSimUI._makeNodes(footer, textCtx.child("footer"))
         let rows = LSimUI._makeNodes(content, ctx.child("content"))
