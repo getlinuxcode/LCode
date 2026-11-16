@@ -451,9 +451,8 @@ final class TabBarNode: LayoutNode {
         let width = min(screen.width - 2 * M.sideMargin, M.itemWidth * CGFloat(items.count) + 8)
         let bar = CGRect(x: screen.midX - width / 2, y: screen.maxY - M.bottomMargin - M.height, width: width, height: M.height)
         let dark = lc.colorScheme == .dark
-        list.append(.fill(.capsule, bar.offsetBy(dx: 0, dy: 2), RGBA(0, 0, 0, dark ? 0.3 : 0.06)))
-        list.append(.backdrop(bar, blur: 10, tint: dark ? RGBA(0.13, 0.13, 0.14, 0.78) : RGBA(0.98, 0.98, 0.99, 0.78), shape: .capsule))
-        list.append(.stroke(.capsule, bar.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.16) : RGBA(0, 0, 0, 0.1), lineWidth: 0.5))
+        // Barre en vrai verre : le contenu qui passe dessous est réfracté.
+        list.append(.glass(.capsule, bar, Glass.regular.render(lc.colorScheme)))
 
         let itemWidth = (bar.width - 8) / CGFloat(max(items.count, 1))
         for (i, item) in items.enumerated() {

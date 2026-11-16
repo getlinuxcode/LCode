@@ -47,8 +47,11 @@ public struct Color: Hashable, Sendable, ShapeStyle {
         scheme == .light ? light : dark
     }
 
-    /// `.blue.gradient` : dégradé automatique d'iOS (rendu pour l'instant en couleur unie).
-    public var gradient: Color { self }
+    /// `.blue.gradient` : dégradé automatique d'iOS (un peu plus clair en haut).
+    public var gradient: LinearGradient {
+        func lighter(_ c: RGBA) -> RGBA { RGBA(c.r + (1 - c.r) * 0.18, c.g + (1 - c.g) * 0.18, c.b + (1 - c.b) * 0.18, c.a) }
+        return LinearGradient(colors: [Color(light: lighter(light), dark: lighter(dark)), self], startPoint: .top, endPoint: .bottom)
+    }
 
     public func opacity(_ opacity: Double) -> Color {
         var c = self

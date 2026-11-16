@@ -57,6 +57,9 @@ final class ScrollNode: LayoutNode {
     var bottomInset: CGFloat = 0
     /// Marge haute du contenu (le contenu défile sous la barre de navigation).
     var topInset: CGFloat = 0
+    /// Position demandée par `.scrollPosition` : comme sur iOS, y est compté depuis l'état où le grand
+    /// titre est replié (y = 0 : contenu juste sous la barre ; négatif : grand titre en partie déployé).
+    var pendingRequest: CGFloat?
 
     init(id: String, content: LayoutNode, graph: ViewGraph, background: Color?, centerContent: Bool) {
         self.id = id
@@ -87,6 +90,10 @@ final class ScrollNode: LayoutNode {
         let contentSize = content.sizeThatFits(ProposedViewSize(width: rect.width, height: nil), lc)
         let total = topInset + headerSize.height + contentSize.height + bottomInset
         let maxOffset = max(0, total - rect.height)
+        if let request = pendingRequest {
+            graph.setScrollOffsetSilently(id, request.isFinite ? request + headerSize.height : maxOffset)
+            pendingRequest = nil
+        }
         let offset = min(max(0, graph.scrollOffset(id)), maxOffset)
         graph.setScrollOffsetSilently(id, offset)
 
@@ -114,7 +121,8 @@ public struct ScrollView<Content: View>: View, _PrimitiveView {
     }
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
-        let ctx = context.child("ScrollView")
+        var ctx = context.child("ScrollView")
+        ctx.environment.scrollPosition = nil   // la position ne concerne que cette zone, pas les zones imbriquées
         let children = LSimUI._makeNodes(content, ctx)
         if horizontal {
             let stack = StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)
@@ -122,7 +130,20 @@ public struct ScrollView<Content: View>: View, _PrimitiveView {
             return [HorizontalScrollNode(id: ctx.path + "#scroll", content: stack, graph: context.graph)]
         }
         let stack = StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: children)
-        return [ScrollNode(id: ctx.path + "#scroll", content: stack, graph: context.graph, background: nil, centerContent: true)]
+        let id = ctx.path + "#scroll"
+        var pending: CGFloat?
+        // `.scrollPosition($position)` : chaque nouvelle demande déplace le contenu une fois.
+        if let position = context.environment.scrollPosition {
+            let applied = context.graph.persistent(id + "#request") { AppliedScrollRequest() }
+            let request = position.wrappedValue
+            if request.generation != applied.generation, let y = request.requestedY {
+                applied.generation = request.generation
+                pending = y
+            }
+        }
+        let node = ScrollNode(id: id, content: stack, graph: context.graph, background: nil, centerContent: true)
+        node.pendingRequest = pending
+        return [node]
     }
 }
 

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 
 // Catalogue de calibration : le MÊME code s'exécute sur iPhone (vrai SwiftUI) et dans LSim.
@@ -39,6 +40,18 @@ enum Catalog {
         pages.append(CatalogPage(id: "image.styles") { AnyView(ImageStylesPage()) })
         pages.append(CatalogPage(id: "image.scales") { AnyView(ImageScalesPage()) })
         pages.append(CatalogPage(id: "image.resizable") { AnyView(ImageResizablePage()) })
+        if #available(iOS 26, *) {
+            pages.append(CatalogPage(id: "glass.refraction") { AnyView(GlassRefractionPage(background: .checker)) })
+            // Fonds codés : mesure directe du champ de réfraction et de la lumière du verre.
+            for (name, bg) in [("low", GlassBackground.low), ("high", .high),
+                               ("xcoarse", .rampX(.coarse)), ("xsin", .rampX(.sin)), ("xcos", .rampX(.cos)),
+                               ("ycoarse", .rampY(.coarse)), ("ysin", .rampY(.sin)), ("ycos", .rampY(.cos)),
+                               ("xsin64", .rampX(.sin64)), ("xcos64", .rampX(.cos64)),
+                               ("ysin64", .rampY(.sin64)), ("ycos64", .rampY(.cos64))] {
+                pages.append(CatalogPage(id: "glass.field.\(name)") { AnyView(GlassRefractionPage(background: bg)) })
+            }
+            pages += NavigationCatalog.pages
+        }
         return pages
     }
 }
@@ -230,6 +243,113 @@ struct ImageResizablePage: View {
             .calibrate("template.stack")
         }
         .padding()
+    }
+}
+
+/// Damier contrasté : rend la réfraction du verre visible dans toutes les directions.
+struct Checkerboard: View {
+    let columns: Int
+    let rows: Int
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(0..<rows, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<columns, id: \.self) { column in
+                        ((row + column) % 2 == 0 ? Color.blue : Color.yellow)
+                            .frame(width: 14, height: 14)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Fond posé derrière les formes de verre.
+/// Les dégradés codent la position : gris = position dans le fond. Une rampe grossière sur toute la
+/// largeur lève l'ambiguïté ; deux ondes en quadrature (sinus, cosinus, période 16 pt) donnent la position
+/// fine par leur phase, que le flou du verre ne déplace pas (il ne fait qu'atténuer le contraste).
+enum GlassBackground {
+    case checker, low, high
+    case rampX(Ramp)
+    case rampY(Ramp)
+}
+
+/// Rampe grossière, ou onde de 16 pt (sin, cos), ou onde intermédiaire de 64 pt (lève l'ambiguïté des 16 pt).
+enum Ramp {
+    case coarse, sin, cos, sin64, cos64
+    var period: Double { self == .sin64 || self == .cos64 ? 64 : 16 }
+    var isSine: Bool { self == .sin || self == .sin64 }
+}
+
+struct CodedBackground: View {
+    let kind: GlassBackground
+    let width: Int
+    let height: Int
+
+    /// Niveaux de gris bornés (15 % à 70 %) : rien ne sature à travers le verre, qui éclaircit ou assombrit.
+    static let lowLevel = 0.15, highLevel = 0.70
+    static func gray(_ v: Double) -> Color {
+        let g = lowLevel + (highLevel - lowLevel) * v
+        return Color(red: g, green: g, blue: g)
+    }
+
+    /// Arrêts de dégradé : rampe unique, ou onde 0,5 + 0,5·sin/cos (2π·x / 16 pt), 32 arrêts par période.
+    static func stops(length: Int, ramp: Ramp) -> [Gradient.Stop] {
+        guard ramp != .coarse else { return [.init(color: gray(0), location: 0), .init(color: gray(1), location: 1)] }
+        let count = Int(Double(length) / ramp.period * 32)
+        return (0...count).map { i in
+            let x = Double(i) * Double(length) / Double(count)
+            let phase = 2 * Double.pi * x / ramp.period
+            let v = ramp.isSine ? Foundation.sin(phase) : Foundation.cos(phase)
+            return .init(color: gray(0.5 + 0.5 * v), location: CGFloat(x / Double(length)))
+        }
+    }
+
+    var body: some View {
+        switch kind {
+        case .checker:
+            Checkerboard(columns: width / 14, rows: height / 14)
+        case .low:
+            Self.gray(0).frame(width: CGFloat(width), height: CGFloat(height))
+        case .high:
+            Self.gray(1).frame(width: CGFloat(width), height: CGFloat(height))
+        case let .rampX(ramp):
+            LinearGradient(stops: Self.stops(length: width, ramp: ramp), startPoint: .leading, endPoint: .trailing)
+                .frame(width: CGFloat(width), height: CGFloat(height))
+        case let .rampY(ramp):
+            LinearGradient(stops: Self.stops(length: height, ramp: ramp), startPoint: .top, endPoint: .bottom)
+                .frame(width: CGFloat(width), height: CGFloat(height))
+        }
+    }
+}
+
+/// Formes de verre posées sur un fond (damier, ou fonds codés pour mesurer la réfraction).
+@available(iOS 26, *)
+struct GlassRefractionPage: View {
+    let background: GlassBackground
+
+    var body: some View {
+        VStack(spacing: 14) {
+            PageTitle(text: "Liquid Glass")
+            sample("glass.capsule", width: 240, height: 64) { $0.glassEffect(.regular, in: Capsule()) }
+            HStack(spacing: 14) {
+                sample("glass.circle", width: 92, height: 92, board: (126, 126)) { $0.glassEffect(.regular, in: Circle()) }
+                sample("glass.rounded", width: 180, height: 92, board: (224, 126)) { $0.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 26)) }
+            }
+            sample("glass.clear", width: 240, height: 64) { $0.glassEffect(.clear, in: Capsule()) }
+            sample("glass.tinted", width: 240, height: 64) { $0.glassEffect(.regular.tint(.blue), in: Capsule()) }
+        }
+        .padding()
+    }
+
+    func sample<V: View>(_ id: String, width: CGFloat, height: CGFloat, board: (Int, Int) = (308, 98),
+                         glass: (AnyView) -> V) -> some View {
+        ZStack {
+            CodedBackground(kind: background, width: board.0, height: board.1)
+                .calibrate("board." + id)
+            glass(AnyView(Color.clear.frame(width: width, height: height)))
+                .calibrate(id)
+        }
     }
 }
 

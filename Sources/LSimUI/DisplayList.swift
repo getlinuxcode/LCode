@@ -25,6 +25,13 @@ public enum DisplayItem {
     case fade(CGRect, RGBA)
     /// Matière : floute ce qui est déjà dessiné dans la zone, puis applique un voile coloré.
     case backdrop(CGRect, blur: CGFloat, tint: RGBA, shape: ShapeKind = .rectangle)
+    /// Effet de bord de défilement mesuré : flou progressif, transmission et voile ligne par ligne.
+    /// Le second rectangle situe la table (son y = 0 est en haut de ce rectangle, décalé de `shift`).
+    case scrollEdge(CGRect, ScrollEdgeTable, shift: CGFloat)
+    /// Dégradé linéaire dans une forme : couleurs, positions (0…1), points de départ et d'arrivée.
+    case linearGradient(ShapeKind, CGRect, [RGBA], [CGFloat], CGPoint, CGPoint)
+    /// Liquid Glass : réfraction, flou, saturation, voile et liseré sur ce qui est déjà dessiné.
+    case glass(ShapeKind, CGRect, GlassRender)
     /// Zone interactive (bouton, onTapGesture). Les dernières zones dessinées sont au-dessus.
     case hitRegion(id: String, CGRect)
     /// Repère de mesure (`accessibilityIdentifier`) : cadre de la vue identifiée.

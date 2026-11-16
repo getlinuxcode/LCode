@@ -1,7 +1,120 @@
 {
  "colorScheme": "light",
  "device": "iPhone18,2",
- "markers": [],
+ "markers": [
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.extraLarge.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 585.3333333333334
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.extraLarge.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 585.3333333333334
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.extraLarge.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 585.3333333333334
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.large.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 543
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.large.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 543
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.large.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 543
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.mini.destructive",
+   "width": 71.33333333333331,
+   "x": 187.66666666666669,
+   "y": 420.66666666666663
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.mini.disabled",
+   "width": 42.666666666666686,
+   "x": 271,
+   "y": 420.66666666666663
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.mini.normal",
+   "width": 49.33333333333334,
+   "x": 126.33333333333334,
+   "y": 420.66666666666663
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.regular.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 500.66666666666663
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.regular.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 500.66666666666663
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.automatic.regular.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 500.66666666666663
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.small.destructive",
+   "width": 71.33333333333331,
+   "x": 187.66666666666669,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.small.disabled",
+   "width": 42.666666666666686,
+   "x": 271,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 18,
+   "id": "button.automatic.small.normal",
+   "width": 49.33333333333334,
+   "x": 126.33333333333334,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 142.66666666666669,
+   "x": 148.66666666666669,
+   "y": 378.3333333333333
+  }
+ ],
  "page": "button.automatic",
  "screen": {
   "height": 956,

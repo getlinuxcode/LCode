@@ -157,8 +157,21 @@ struct CairoRenderer {
 
     func fill(_ kind: ShapeKind, _ r: CGRect, _ color: RGBA) {
         setColor(color)
-        path(kind, r)
+        // Comme Core Animation, les rectangles pleins sont alignés sur les pixels de l'écran :
+        // deux aplats juxtaposés ne laissent pas transparaître le fond entre eux.
+        path(kind, kind == .rectangle ? snapped(r) : r)
         cairo_fill(cr)
+    }
+
+    /// Rectangle arrondi aux pixels de l'écran (dans l'espace de l'utilisateur).
+    func snapped(_ r: CGRect) -> CGRect {
+        var x0 = Double(r.minX), y0 = Double(r.minY), x1 = Double(r.maxX), y1 = Double(r.maxY)
+        cairo_user_to_device(cr, &x0, &y0)
+        cairo_user_to_device(cr, &x1, &y1)
+        x0.round(); y0.round(); x1.round(); y1.round()
+        cairo_device_to_user(cr, &x0, &y0)
+        cairo_device_to_user(cr, &x1, &y1)
+        return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
     }
 
     func drawText(_ string: String, font: Font, at origin: CGPoint, width: CGFloat?, color: RGBA, alignment: TextAlignment) {
@@ -218,6 +231,19 @@ struct CairoRenderer {
                 cairo_pattern_destroy(gradient)
             case let .symbol(name, font, scale, rect, color):
                 drawSymbol(name, font: font, scale: scale, in: rect, color: color)
+            case let .linearGradient(shape, rect, colors, locations, p0, p1):
+                let pattern = cairo_pattern_create_linear(p0.x, p0.y, p1.x, p1.y)
+                for (c, l) in zip(colors, locations) {
+                    cairo_pattern_add_color_stop_rgba(pattern, Double(l), c.r, c.g, c.b, c.a)
+                }
+                cairo_set_source(cr, pattern)
+                path(shape, shape == .rectangle ? snapped(rect) : rect)
+                cairo_fill(cr)
+                cairo_pattern_destroy(pattern)
+            case let .glass(shape, rect, glass):
+                drawGlass(shape, rect, glass)
+            case let .scrollEdge(rect, table, shift):
+                drawScrollEdge(rect, table, shift: shift)
             case let .backdrop(rect, blur, tint, shape):
                 blurRegion(rect, sigma: blur, shape: shape)
                 setColor(tint)

@@ -5,7 +5,7 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image, ImageChops, ImageStat
+from PIL import Image, ImageChops, ImageFilter, ImageStat
 
 DEVICES = {"iPhone18,2": "iphone17promax"}
 
@@ -74,16 +74,23 @@ def compare_page(ios_meta, ios_png, lsim_meta, lsim_png):
     for m in ios_meta["markers"]:
         o = lsim.get(m["id"])
         if o is None:
-            rows.append({"id": m["id"], "missing": True, "geo": 99.0, "geoSum": 99.0, "pix": 99.0})
+            rows.append({"id": m["id"], "missing": True, "geo": 99.0, "geoSum": 99.0, "pix": 99.0, "edge": 99.0})
             continue
         d = {k: o[k] - m[k] for k in ("x", "y", "width", "height")}
         rect = (m["x"], m["y"], m["width"], m["height"])
         pix = 0.0
+        edge = 0.0
         if has_pixels:
-            diff = ImageChops.difference(crop(a_img, rect, scale), crop(b_img, rect, scale))
+            ca, cb = crop(a_img, rect, scale), crop(b_img, rect, scale)
+            diff = ImageChops.difference(ca, cb)
             pix = sum(ImageStat.Stat(diff).mean) / 3
+            # Structure : écart entre les cartes de contours (un rendu qui efface le motif est pénalisé,
+            # même si sa couleur moyenne est proche).
+            ea = ca.convert("L").filter(ImageFilter.FIND_EDGES)
+            eb = cb.convert("L").filter(ImageFilter.FIND_EDGES)
+            edge = ImageStat.Stat(ImageChops.difference(ea, eb)).mean[0]
         rows.append({"id": m["id"], "d": d, "geo": max(abs(v) for v in d.values()),
-                     "geoSum": sum(abs(v) for v in d.values()), "pix": pix,
+                     "geoSum": sum(abs(v) for v in d.values()), "pix": pix, "edge": edge,
                      "ios": m, "lsim": o})
     return rows
 

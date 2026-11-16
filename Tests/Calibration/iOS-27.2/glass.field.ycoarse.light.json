@@ -1,0 +1,90 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 98,
+   "id": "board.glass.capsule",
+   "width": 308,
+   "x": 66,
+   "y": 278.1666666666667
+  },
+  {
+   "height": 126.00000000000006,
+   "id": "board.glass.circle",
+   "width": 126,
+   "x": 38,
+   "y": 390.1666666666667
+  },
+  {
+   "height": 98,
+   "id": "board.glass.clear",
+   "width": 308,
+   "x": 66,
+   "y": 530.1666666666667
+  },
+  {
+   "height": 126.00000000000006,
+   "id": "board.glass.rounded",
+   "width": 224,
+   "x": 178,
+   "y": 390.1666666666667
+  },
+  {
+   "height": 98,
+   "id": "board.glass.tinted",
+   "width": 308,
+   "x": 66,
+   "y": 642.1666666666667
+  },
+  {
+   "height": 64,
+   "id": "glass.capsule",
+   "width": 240,
+   "x": 100,
+   "y": 295.1666666666667
+  },
+  {
+   "height": 92,
+   "id": "glass.circle",
+   "width": 92,
+   "x": 55,
+   "y": 407.1666666666667
+  },
+  {
+   "height": 64,
+   "id": "glass.clear",
+   "width": 240,
+   "x": 100,
+   "y": 547.1666666666667
+  },
+  {
+   "height": 92,
+   "id": "glass.rounded",
+   "width": 180,
+   "x": 200,
+   "y": 407.1666666666667
+  },
+  {
+   "height": 64,
+   "id": "glass.tinted",
+   "width": 240,
+   "x": 100,
+   "y": 659.1666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 96.66666666666669,
+   "x": 171.66666666666669,
+   "y": 243.83333333333337
+  }
+ ],
+ "page": "glass.field.ycoarse",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

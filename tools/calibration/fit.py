@@ -26,7 +26,7 @@ import calib  # noqa: E402
 STYLES = ["automatic", "plain", "bordered", "borderedProminent", "glass", "glassProminent"]
 SIZES = ["mini", "small", "regular", "large", "extraLarge"]
 FILLED = ["bordered", "borderedProminent", "glass", "glassProminent"]
-W_GEO, W_PIX = 3.0, 1.0
+W_GEO, W_PIX, W_EDGE = 3.0, 1.0, 2.0
 
 
 class Fitter:
@@ -61,7 +61,7 @@ class Fitter:
             for r in calib.compare_page(ios["meta"], ios["png"], meta, png):
                 r["page"], r["scheme"] = key
                 rows.append(r)
-        score = sum(W_GEO * r["geoSum"] + W_PIX * r["pix"] for r in rows)
+        score = sum(W_GEO * r["geoSum"] + W_PIX * r["pix"] + W_EDGE * r.get("edge", 0) for r in rows)
         return score, rows
 
     def search(self, label, pages, path, candidates):
@@ -257,28 +257,59 @@ class Fitter:
                 self.search("images", ["image.scales"], ["imageSettings", key],
                             [round(v + d, 3) for d in (-0.12, -0.06, -0.03, -0.01, 0.01, 0.03, 0.06, 0.12)])
 
+    GLASS_FALLBACK = {
+        "regular": {"blur": 2.5, "refraction": 6, "bezel": 10, "exponent": 2, "saturation": 1.25, "brightness": 1.03,
+                    "tintLight": [1, 1, 1, 0.55], "tintDark": [0.11, 0.11, 0.12, 0.55], "rimLight": 0.55, "rimDark": 0.3,
+                    "rimWidth": 1.2, "shadowSide": 0.06, "shadowLight": 0.06, "shadowDark": 0.3, "shadowOffset": 2},
+        "clear": {"blur": 0.5, "refraction": 7, "bezel": 10, "exponent": 2, "saturation": 1.1, "brightness": 1.0,
+                  "tintLight": [1, 1, 1, 0.12], "tintDark": [0, 0, 0, 0.15], "rimLight": 0.6, "rimDark": 0.35,
+                  "rimWidth": 1.2, "shadowSide": 0.05, "shadowLight": 0.05, "shadowDark": 0.25, "shadowOffset": 2},
+    }
+
     def fit_glass(self):
-        pages = ["button.glass", "button.glassProminent"]
-        b = self.profile["button"]
-        for _ in range(2):
-            for key in ("glassRimAlphaLight", "glassRimAlphaDark", "glassShadowAlphaLight", "glassShadowAlphaDark"):
-                v = b[key]
-                cands = sorted({round(max(0, min(1, v + d)), 3) for d in (-0.12, -0.06, -0.03, 0, 0.03, 0.06, 0.12)})
-                self.search("verre", pages, ["button", key], cands)
-            for scheme in ("light", "dark"):
-                for name in ("glassFill", "glassStroke"):
-                    color = b[name][scheme]
-                    for i, step in ((0, 0.02), (3, 0.04)):  # luminosité (r=g=b), puis opacité
-                        cands = []
-                        for d in (-2, -1, 1, 2):
-                            c = list(color)
-                            if i == 0:
-                                c[0] = c[1] = c[2] = round(max(0, min(1, color[0] + d * step)), 4)
-                            else:
-                                c[3] = round(max(0, min(1, color[3] + d * step)), 4)
-                            cands.append({**b[name], scheme: c})
-                        self.search("verre", pages, ["button", name], [b[name]] + cands)
-                        color = b[name][scheme]
+        """Liquid Glass : recherche par motifs (grands pas d'abord, puis divisés par deux) sur les pixels.
+
+        Le vrai verre peut être loin des valeurs de départ (lentille couvrant toute la forme, aucun flou),
+        d'où des pas initiaux larges.
+        """
+        if not any(k[0] == "glass.refraction" for k in self.ios):
+            print("  (pas de page de réfraction dans cette série : verre inchangé)")
+            return
+        settings = self.profile.setdefault("glassSettings", copy.deepcopy(self.GLASS_FALLBACK))
+        if all(settings.get(v, {}).get("tableLight") for v in ("regular", "clear")):
+            print("  (verre mesuré par glassfield.py : tables prioritaires, réglage paramétrique sauté)")
+            return
+        start_steps = {"refraction": 8, "bezel": 10, "curvature": 0.25, "maxShift": 1.5, "blur": 1.0,
+                       "saturation": 0.3, "brightness": 0.1, "rimLight": 0.25, "rimDark": 0.25, "rimWidth": 1.5,
+                       "shadowSide": 0.08, "edgeLineLight": 0.3, "edgeLineDark": 0.3, "shadowLight": 0.04,
+                       "shadowDark": 0.1, "tintA": 0.2, "tintV": 0.15}
+        bounds = {"refraction": (-40, 60), "bezel": (1, 60), "curvature": (0, 0.999), "maxShift": (0.2, 8),
+                  "blur": (0, 8), "saturation": (0.3, 2.5), "brightness": (0.5, 1.6), "rimLight": (0, 1),
+                  "rimDark": (0, 1), "rimWidth": (0.2, 8), "shadowSide": (0, 0.6), "edgeLineLight": (0, 1),
+                  "edgeLineDark": (0, 1), "shadowLight": (0, 0.4), "shadowDark": (0, 0.6)}
+        for variant in ("regular", "clear"):
+            for key, default in (("curvature", 0.9), ("maxShift", 3), ("edgeLineLight", 0.5), ("edgeLineDark", 0.35)):
+                settings[variant].setdefault(key, default)
+        for variant, pages in (("clear", ["glass.refraction"]), ("regular", ["glass.refraction", "button.glass"])):
+            params = settings[variant]
+            steps = dict(start_steps)
+            for _ in range(5):
+                for key in [k for k in start_steps if k not in ("tintA", "tintV")]:
+                    lo, hi = bounds[key]
+                    v, st = params[key], steps[key]
+                    self.search(f"verre {variant}", pages, ["glassSettings", variant, key],
+                                [round(min(hi, max(lo, v + d)), 3) for d in (-st, st)])
+                if variant == "regular":
+                    v = params.get("tintStrength", 0.75)
+                    self.search(f"verre {variant}", ["glass.refraction"], ["glassSettings", variant, "tintStrength"],
+                                [round(min(1, max(0, v + d)), 3) for d in (-steps["tintA"], steps["tintA"])])
+                for key in ("tintLight", "tintDark"):
+                    t = params[key]
+                    a, g = steps["tintA"], steps["tintV"]
+                    cands = [t[:3] + [round(min(1, max(0, t[3] + d)), 3)] for d in (-a, a)]
+                    cands += [[round(min(1, max(0, c + d)), 3) for c in t[:3]] + [t[3]] for d in (-g, g)]
+                    self.search(f"verre {variant}", pages, ["glassSettings", variant, key], cands)
+                steps = {k: v / 2 for k, v in steps.items()}
 
     # --- Rapport ------------------------------------------------------------------------------------
 
@@ -314,6 +345,8 @@ def main():
     parser.add_argument("--lsim", default=".build/debug/CatalogExample")
     parser.add_argument("--profile", default="Sources/LSimUI/Profiles/iOS-27.2.json")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--etapes", default="couches,comportements,approche,tailles,images,verre",
+                        help="étapes à exécuter (ex. : --etapes verre)")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -322,9 +355,15 @@ def main():
     _, before = fitter.evaluate(fitter.profile, all_pages)
     print("avant :", fitter.summary(before), flush=True)
 
-    for step, fn in (("lecture des couches", fitter.read_layers), ("comportements", fitter.fit_behaviours),
-                     ("approche du texte", fitter.fit_tracking), ("tailles et marges", fitter.fit_sizes),
-                     ("images", fitter.fit_image), ("matière du verre", fitter.fit_glass)):
+    wanted = set(args.etapes.split(","))
+    for key, step, fn in (("couches", "lecture des couches", fitter.read_layers),
+                          ("comportements", "comportements", fitter.fit_behaviours),
+                          ("approche", "approche du texte", fitter.fit_tracking),
+                          ("tailles", "tailles et marges", fitter.fit_sizes),
+                          ("images", "images", fitter.fit_image),
+                          ("verre", "matière du verre", fitter.fit_glass)):
+        if key not in wanted:
+            continue
         fn()
         print(f"  {step} : terminé ({fitter.evals} évaluations, {time.time() - t0:.0f} s)", flush=True)
 

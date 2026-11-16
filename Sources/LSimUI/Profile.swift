@@ -12,6 +12,11 @@ public struct DesignProfile: Codable, Sendable {
     /// Optionnel pour rester compatible avec les profils plus anciens.
     public var imageSettings: ImageProfile?
     public var image: ImageProfile { imageSettings ?? .fallback }
+    /// Matériau Liquid Glass (optionnel pour rester compatible avec les profils plus anciens).
+    public var glassSettings: GlassProfile?
+    public var glass: GlassProfile { glassSettings ?? .fallback }
+    /// Barre de navigation mesurée (effet de bord de défilement…), optionnelle.
+    public var navigation: NavigationProfile?
 
     /// Chargé une seule fois, de façon sûre entre fils (initialisation paresseuse d'un `static let`).
     private static let embedded: DesignProfile = load()
@@ -239,4 +244,25 @@ extension DesignProfile {
         p.button.defaultShape = "roundedRectangle"
         return p
     }()
+}
+
+/// Mesures de la barre de navigation Liquid Glass.
+public struct NavigationProfile: Codable, Sendable {
+    public var edgeLight: ScrollEdgeTable?
+    public var edgeDark: ScrollEdgeTable?
+}
+
+/// Effet de bord de défilement sous la barre, ligne par ligne : sur fond gris, sortie = α·fond + β, avec
+/// un flou d'écart-type `blur` (points). `y` : points depuis le haut de l'écran de mesure, dont la barre
+/// se termine à `referenceBarBottom`.
+public struct ScrollEdgeTable: Codable, Sendable, Hashable {
+    public var y: [Double]
+    public var alpha: [Double]
+    public var beta: [[Double]]
+    public var blur: [Double]
+    public var referenceBarBottom: Double?
+
+    public func value(_ column: [Double], at x: Double) -> Double {
+        GlassTable(relative: false, d: y, shift: [], alpha: [], betaTop: [], betaBottom: []).value(column, at: x)
+    }
 }

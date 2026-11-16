@@ -21,8 +21,17 @@ def safe(name: str) -> str:
 
 class Handler(BaseHTTPRequestHandler):
     out_dir = "Calibration"
+    want_symbols = True
 
     def do_GET(self):
+        if self.path == "/config":
+            # L'app demande si elle doit exporter les SF Symbols (long : 8 600 dessins).
+            body = json.dumps({"symbols": self.want_symbols}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"LCode calibration receiver\n")

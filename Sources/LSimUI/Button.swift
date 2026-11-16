@@ -200,19 +200,12 @@ final class GlassShapeNode: LayoutNode {
     }
 
     override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        let dark = lc.colorScheme == .dark
-        let p = profile
-        list.append(.fill(shape, rect.offsetBy(dx: 0, dy: 1.5), RGBA(0, 0, 0, dark ? p.glassShadowAlphaDark : p.glassShadowAlphaLight)))
+        // Vrai matériau Liquid Glass ; un verre « proéminent » est entièrement teinté.
+        var glass = Glass.regular.render(lc.colorScheme)
         if let tint {
-            list.append(.fill(shape, rect, tint.resolve(in: lc.colorScheme)))
-            list.append(.stroke(shape, rect.insetBy(dx: 0.75, dy: 0.75), RGBA(1, 1, 1, dark ? p.glassRimAlphaDark : p.glassRimAlphaLight), lineWidth: 1))
-            // Le reflet est découpé à la forme (sinon un rectangle apparaît autour de la capsule).
-            list.append(.pushClip(shape, rect))
-            list.append(.fade(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.5), RGBA(1, 1, 1, 0.08)))
-            list.append(.popClip)
-        } else {
-            list.append(.fill(shape, rect, p.glassFill.color.resolve(in: lc.colorScheme)))
-            list.append(.stroke(shape, rect.insetBy(dx: 0.25, dy: 0.25), p.glassStroke.color.resolve(in: lc.colorScheme), lineWidth: 0.5))
+            let t = tint.resolve(in: lc.colorScheme)
+            glass.tint = RGBA(t.r, t.g, t.b, 1)
         }
+        list.append(.glass(shape, rect, glass))
     }
 }

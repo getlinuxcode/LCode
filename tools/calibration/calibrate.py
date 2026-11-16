@@ -126,6 +126,8 @@ def main():
     parser.add_argument("--run", help="réutiliser une série déjà reçue")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--symboles", action="store_true",
+                        help="refaire l'export des SF Symbols (automatique si la table locale manque)")
     args = parser.parse_args()
     os.chdir(ROOT)
     t0 = time.time()
@@ -141,7 +143,9 @@ def main():
             # L'USB s'il est branché (plus rapide), sinon le Wi-Fi : évite la question de xtool.
             transport = "--usb" if usb_connected() or not connection else "--network"
             sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
-        step("Réception des mesures")
+        table = os.path.expanduser("~/.local/share/lcode/symbols/iOS-27.2.json")
+        receiver.Handler.want_symbols = args.symboles or not os.path.exists(table)
+        step("Réception des mesures" + (" (avec export des SF Symbols)" if receiver.Handler.want_symbols else ""))
         run = receive(args.port, os.path.join(ROOT, "Calibration"), args.timeout)
         print(f"Série reçue : {run}")
 
@@ -155,6 +159,15 @@ def main():
 
     step("Ajustement automatique du profil")
     sh(f"python3 -I tools/calibration/fit.py '{run}'")
+
+    # Mesures directes (fonds codés) : verre et effet de bord de la barre de navigation.
+    venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
+    if glob.glob(os.path.join(run, "ios", "glass.field.low.*.json")):
+        step("Verre Liquid Glass mesuré (fonds codés)")
+        sh(f"'{venv}' -I tools/calibration/glassfield.py '{run}' --write")
+    if glob.glob(os.path.join(run, "ios", "nav.edge.low.*.json")):
+        step("Barre de navigation mesurée (effet de bord de défilement)")
+        sh(f"'{venv}' -I tools/calibration/navfield.py '{run}' --write")
 
     step("Recompilation de LSim avec le nouveau profil")
     sh("swift build --product CatalogExample")

@@ -18,7 +18,8 @@ let package = Package(
             pkgConfig: "gtk4",
             providers: [.apt(["libgtk-4-dev"])]
         ),
-        .target(name: "LSimHost", dependencies: ["LSimUI", "CGtk"], swiftSettings: v5),
+        // Optimisé même en debug : le rendu du verre et du flou se calcule pixel par pixel.
+        .target(name: "LSimHost", dependencies: ["LSimUI", "CGtk"], swiftSettings: v5 + [.unsafeFlags(["-O"])]),
         .target(name: "SwiftUI", dependencies: ["LSimUI", "LSimHost"], swiftSettings: v5),
         // Cœur de l'IDE : projets xtool, génération et lancement du simulateur.
         .target(name: "LCodeKit", swiftSettings: v5),

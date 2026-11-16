@@ -35,8 +35,11 @@ enum CalibrationRunner {
         }
         guard let window = keyWindow() else { return }
         let runID = ISO8601DateFormatter().string(from: Date())
-        // D'abord les SF Symbols : noms fournis par iOS + rendu de chacun (appariés aux glyphes de la police sur le PC).
-        await exportSymbols(server: server, runID: runID, status: status)
+        // D'abord les SF Symbols, si le PC les demande : noms fournis par iOS + rendu de chacun
+        // (appariés aux glyphes de la police sur le PC).
+        if await wantsSymbols(server) {
+            await exportSymbols(server: server, runID: runID, status: status)
+        }
         for scheme in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = scheme
             for index in 0..<pageCount {
@@ -129,6 +132,13 @@ enum CalibrationRunner {
         let metrics = [Double(image.size.width), Double(image.size.height), Double(insets.top), Double(insets.left),
                        Double(insets.bottom), Double(insets.right), Double(image.baselineOffsetFromBottom ?? 0)]
         return (Data(pixels), metrics)
+    }
+
+    static func wantsSymbols(_ server: String) async -> Bool {
+        guard let url = URL(string: server + "/config"),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return true }
+        return json["symbols"] as? Bool ?? true
     }
 
     static func exportSymbols(server: String, runID: String, status: @escaping (String) -> Void) async {

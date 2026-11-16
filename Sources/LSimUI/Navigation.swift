@@ -69,8 +69,18 @@ public final class NavigationModel {
     func pop() {
         guard !path.isEmpty else { return }
         path.removeLast()
+        onPop?()
         graph?.invalidate()
     }
+
+    /// Ajout sans nouveau rendu (pile initiale d'une NavigationStack liée).
+    func pushSilently(_ entry: Entry) {
+        nextID += 1
+        path.append((nextID, entry))
+    }
+
+    var didSyncPath = false
+    var onPop: (() -> Void)?
 }
 
 /// Informations remontées par l'écran affiché vers sa NavigationStack (titre, mode).
@@ -100,14 +110,44 @@ private struct NavigationKey: EnvironmentKey { static let defaultValue: Navigati
 private struct TitleSinkKey: EnvironmentKey { static let defaultValue: NavigationTitleSink? = nil }
 private struct InListKey: EnvironmentKey { static let defaultValue = false }
 
+// MARK: - NavigationPath
+
+/// Pile de valeurs hétérogènes pour `NavigationStack(path:)`.
+public struct NavigationPath {
+    var elements: [(Any, ObjectIdentifier)] = []
+    public init() {}
+    public init<S: Sequence>(_ elements: S) where S.Element: Hashable {
+        self.elements = elements.map { ($0, ObjectIdentifier(S.Element.self)) }
+    }
+    public var count: Int { elements.count }
+    public var isEmpty: Bool { elements.isEmpty }
+    public mutating func append<V: Hashable>(_ value: V) { elements.append((value, ObjectIdentifier(V.self))) }
+    public mutating func removeLast(_ k: Int = 1) { elements.removeLast(k) }
+}
+
 // MARK: - NavigationStack
 
 public struct NavigationStack<Root: View>: View, _PrimitiveView {
     public typealias Body = Never
     let root: Root
+    /// Pile pilotée par le code (`NavigationStack(path: $path)`) : valeurs initiales et retour.
+    let boundPath: (values: () -> [(Any, ObjectIdentifier)], pop: () -> Void)?
 
     public init(@ViewBuilder root: () -> Root) {
         self.root = root()
+        boundPath = nil
+    }
+
+    public init<D: Hashable>(path: Binding<[D]>, @ViewBuilder root: () -> Root) {
+        self.root = root()
+        boundPath = (values: { path.wrappedValue.map { ($0, ObjectIdentifier(D.self)) } },
+                     pop: { if !path.wrappedValue.isEmpty { path.wrappedValue.removeLast() } })
+    }
+
+    public init(path: Binding<NavigationPath>, @ViewBuilder root: () -> Root) {
+        self.root = root()
+        boundPath = (values: { path.wrappedValue.elements },
+                     pop: { if !path.wrappedValue.isEmpty { path.wrappedValue.removeLast() } })
     }
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
@@ -119,6 +159,22 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
         var pageCtx = ctx
         pageCtx.environment.navigation = model
         pageCtx.environment.navigationTitleSink = sink
+
+        // Pile liée : écrans initiaux (la racine est construite une fois pour déclarer ses destinations).
+        if let boundPath {
+            model.onPop = boundPath.pop
+            if !model.didSyncPath {
+                model.didSyncPath = true
+                let values = boundPath.values()
+                if !values.isEmpty {
+                    var rootCtx = pageCtx
+                    rootCtx.path = ctx.path + "/root"
+                    rootCtx.environment.navigationTitleSink = NavigationTitleSink()
+                    _ = LSimUI._makeNodes(root, rootCtx)
+                    for value in values { model.pushSilently(.value(value.0, value.1)) }
+                }
+            }
+        }
 
         // Seul l'écran du dessus est construit ; l'état des écrans masqués est conservé.
         let rootPath = ctx.path + "/root"
@@ -241,7 +297,13 @@ final class NavigationNode: LayoutNode {
         if let scroll, scroll.offset > 0 {
             let top = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: bar.maxY - lc.screen.minY)
             let dark = lc.colorScheme == .dark
-            if DesignStyle.current == .liquidGlass {
+            let measured = dark ? DesignProfile.current.navigation?.edgeDark : DesignProfile.current.navigation?.edgeLight
+            if DesignStyle.current == .liquidGlass, let measured, let last = measured.y.last {
+                // Mesuré sur iPhone, ligne par ligne (flou progressif, voile) ; recalé sur la base de la barre.
+                let shift = bar.maxY - lc.screen.minY - CGFloat(measured.referenceBarBottom ?? Double(bar.maxY - lc.screen.minY))
+                let zone = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: CGFloat(last) + shift)
+                list.append(.scrollEdge(zone, measured, shift: shift))
+            } else if DesignStyle.current == .liquidGlass {
                 // Mesuré sur iOS 27 : flou ≈ 5 pt, voile blanc ≈ 65 %, filet à la base de la barre.
                 let tint = dark ? RGBA(0.07, 0.07, 0.08, 0.72) : RGBA(0.99, 0.99, 1.0, 0.68)
                 list.append(.backdrop(top, blur: M.glassMaterialBlur, tint: tint))
@@ -290,9 +352,8 @@ final class NavigationNode: LayoutNode {
             let button = CGRect(x: bar.minX + M.glassButtonLeading, y: centerY - d / 2, width: d, height: d)
             let dark = lc.colorScheme == .dark
             if backPressed { list.append(.pushOpacity(0.6)) }
-            list.append(.fill(.circle, button.offsetBy(dx: 0, dy: 1.5), RGBA(0, 0, 0, dark ? 0.25 : 0.04)))
-            list.append(.fill(.circle, button, dark ? RGBA(0.17, 0.17, 0.18, 0.96) : RGBA(0.976, 0.976, 0.976, 0.97)))
-            list.append(.stroke(.circle, button.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.18) : RGBA(0, 0, 0, 0.22), lineWidth: 0.5))
+            _ = dark
+            list.append(.glass(.circle, button, Glass.regular.render(lc.colorScheme)))
             let c = M.glassChevronSize, w = M.glassChevronLineWidth
             let chevron = CGRect(x: button.midX - c.width / 2 + w / 2 + M.glassChevronOffsetX, y: button.midY - c.height / 2 + w / 2, width: c.width - w, height: c.height - w)
             list.append(.chevron(chevron, Color.primary.resolve(in: lc.colorScheme), lineWidth: w, pointingLeft: true))
