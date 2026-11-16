@@ -1,0 +1,20 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 956,
+   "id": "board.nav.button",
+   "width": 440,
+   "x": 0,
+   "y": 0
+  }
+ ],
+ "page": "nav.button.ycos",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

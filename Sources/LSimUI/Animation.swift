@@ -31,10 +31,10 @@ public struct Animation: Equatable, Sendable {
     public static func timingCurve(_ c0x: Double, _ c0y: Double, _ c1x: Double, _ c1y: Double, duration: Double = 0.35) -> Animation {
         Animation(curve: .bezier(c0x, c0y, c1x, c1y, duration: duration))
     }
-    public static let linear = linear(duration: 0.35)
-    public static let easeIn = easeIn(duration: 0.35)
-    public static let easeOut = easeOut(duration: 0.35)
-    public static let easeInOut = easeInOut(duration: 0.35)
+    public static var linear: Animation { preset("linear", linear(duration: 0.35)) }
+    public static var easeIn: Animation { preset("easeIn", easeIn(duration: 0.35)) }
+    public static var easeOut: Animation { preset("easeOut", easeOut(duration: 0.35)) }
+    public static var easeInOut: Animation { preset("easeInOut", easeInOut(duration: 0.35)) }
 
     // Ressorts (iOS 17+).
     public static func spring(response: Double = 0.5, dampingFraction: Double = 0.825, blendDuration: Double = 0) -> Animation {
@@ -56,13 +56,28 @@ public struct Animation: Equatable, Sendable {
     public static func snappy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation { spring(duration: duration, bounce: 0.15 + extraBounce) }
     public static func bouncy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation { spring(duration: duration, bounce: 0.3 + extraBounce) }
 
-    public static let spring = spring(response: 0.5, dampingFraction: 0.825)
-    public static let interactiveSpring = interactiveSpring()
-    public static let smooth = smooth()
-    public static let snappy = snappy()
-    public static let bouncy = bouncy()
-    /// iOS 17+ : l'animation par défaut est un ressort sans rebond (à confirmer par la mesure sur iPhone).
-    public static let `default` = spring(duration: 0.55, bounce: 0)
+    /// Préréglages : valeurs mesurées sur iPhone (profil de design), sinon valeurs documentées par Apple.
+    static func preset(_ name: String, _ fallback: Animation) -> Animation {
+        guard let setting = DesignProfile.current.animations?[name] else { return fallback }
+        if let s = setting.spring { return Animation(curve: .spring(response: s.response, damping: s.damping)) }
+        if let duration = setting.duration {
+            switch setting.bezier {
+            case "linear": return .linear(duration: duration)
+            case "easeIn": return .easeIn(duration: duration)
+            case "easeOut": return .easeOut(duration: duration)
+            default: return .easeInOut(duration: duration)
+            }
+        }
+        return fallback
+    }
+
+    public static var spring: Animation { preset("spring", spring(response: 0.5, dampingFraction: 0.825)) }
+    public static var interactiveSpring: Animation { preset("interactiveSpring", interactiveSpring()) }
+    public static var smooth: Animation { preset("smooth", smooth()) }
+    public static var snappy: Animation { preset("snappy", snappy()) }
+    public static var bouncy: Animation { preset("bouncy", bouncy()) }
+    /// iOS 17+ : ressort sans rebond (mesuré sur iPhone : identique à .spring et .smooth).
+    public static var `default`: Animation { preset("default", spring(duration: 0.55, bounce: 0)) }
 
     public func speed(_ speed: Double) -> Animation { var a = self; a.speed = speed; return a }
     public func delay(_ delay: Double) -> Animation { var a = self; a.delay = delay; return a }

@@ -17,6 +17,8 @@ public struct DesignProfile: Codable, Sendable {
     public var glass: GlassProfile { glassSettings ?? .fallback }
     /// Barre de navigation mesurée (effet de bord de défilement…), optionnelle.
     public var navigation: NavigationProfile?
+    /// Courbes des préréglages d'animation mesurées sur iPhone (default, spring, smooth, snappy, bouncy…).
+    public var animations: [String: AnimationSetting]?
 
     /// Chargé une seule fois, de façon sûre entre fils (initialisation paresseuse d'un `static let`).
     private static let embedded: DesignProfile = load()
@@ -265,4 +267,14 @@ public struct ScrollEdgeTable: Codable, Sendable, Hashable {
     public func value(_ column: [Double], at x: Double) -> Double {
         GlassTable(relative: false, d: y, shift: [], alpha: [], betaTop: [], betaBottom: []).value(column, at: x)
     }
+}
+
+/// Préréglage d'animation mesuré : ressort (réponse, amortissement) ou courbe de Bézier nommée et durée.
+public struct AnimationSetting: Codable, Sendable {
+    public struct Spring: Codable, Sendable { public var response: Double; public var damping: Double }
+    public var spring: Spring?
+    public var bezier: String?
+    public var duration: Double?
+    /// Délai entre la transaction et le premier mouvement à l'écran (s), mesuré ; non appliqué.
+    public var lag: Double?
 }

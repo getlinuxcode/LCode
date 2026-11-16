@@ -1,0 +1,20 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 952,
+   "id": "board.nav.button",
+   "width": 434,
+   "x": 3,
+   "y": 0
+  }
+ ],
+ "page": "nav.button.checker",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

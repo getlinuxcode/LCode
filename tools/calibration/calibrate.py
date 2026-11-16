@@ -187,6 +187,9 @@ def main():
     if glob.glob(os.path.join(run, "ios", "nav.edge.low.*.json")):
         step("Barre de navigation mesurée (effet de bord de défilement)")
         sh(f"'{venv}' -I tools/calibration/navfield.py '{run}' --write")
+    if glob.glob(os.path.join(run, "ios", "anim.default.*.json")):
+        step("Courbes d'animation mesurées (image par image)")
+        sh(f"'{venv}' -I tools/calibration/animfield.py '{run}' --write")
 
     step("Recompilation de LSim avec le nouveau profil")
     sh("swift build --product CatalogExample")

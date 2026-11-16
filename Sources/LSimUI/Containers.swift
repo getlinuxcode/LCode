@@ -420,14 +420,23 @@ extension TabView where SelectionValue == Int {
     }
 }
 
-/// Mesures de la barre d'onglets iOS 26 (estimations à calibrer).
+/// Barre d'onglets Liquid Glass, mesurée sur iPhone 17 Pro Max (iOS 27.2, couches Core Animation).
 public enum TabBarMetrics {
     public static var height: CGFloat = 62
     public static var bottomMargin: CGFloat = 21
     public static var sideMargin: CGFloat = 21
-    public static var itemWidth: CGFloat = 94
-    public static var iconSize: CGFloat = 24
-    public static var labelFont = Font.system(size: 10, weight: .medium)
+    /// Pas entre deux onglets à largeur naturelle ; un onglet est 9,5 % plus large que le pas (ils se
+    /// chevauchent légèrement) : 94 pt tous les 86 pt.
+    public static var itemPitch: CGFloat = 86
+    public static var itemOverlap: CGFloat = 0.095
+    public static var inset: CGFloat = 4
+    /// Au-delà de 85 % de la largeur disponible, la barre prend toute la largeur (4 onglets : 398 pt).
+    public static var fullWidthThreshold: CGFloat = 0.85
+    public static var iconTop: CGFloat = 6
+    public static var iconHeight: CGFloat = 28
+    public static var iconFont = Font.system(size: 22, weight: .medium)
+    public static var labelTop: CGFloat = 35
+    public static var labelFont = Font.system(size: 10, weight: .semibold)
 }
 
 /// Contenu plein écran + barre d'onglets flottante en verre.
@@ -453,33 +462,47 @@ final class TabBarNode: LayoutNode {
         p.replacingUnspecifiedDimensions(by: CGSize(width: 375, height: 600))
     }
 
-    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let s = page.sizeThatFits(ProposedViewSize(rect.size), lc)
         page.render(in: s.width >= rect.width - 0.5 && s.height >= rect.height - 0.5 ? rect : Alignment.center.place(s, in: rect), lc, &list)
 
         let screen = lc.screen == .zero ? rect : lc.screen
-        let width = min(screen.width - 2 * M.sideMargin, M.itemWidth * CGFloat(items.count) + 8)
+        let n = CGFloat(max(items.count, 1))
+        let maxWidth = screen.width - 2 * M.sideMargin
+        var pitch = M.itemPitch
+        var width = 2 * M.inset + pitch * (n + M.itemOverlap)
+        if width > maxWidth * M.fullWidthThreshold {
+            width = maxWidth
+            pitch = (width - 2 * M.inset) / (n + M.itemOverlap)
+        }
+        let itemWidth = pitch * (1 + M.itemOverlap)
         let bar = CGRect(x: screen.midX - width / 2, y: screen.maxY - M.bottomMargin - M.height, width: width, height: M.height)
         let dark = lc.colorScheme == .dark
         // Barre en vrai verre : le contenu qui passe dessous est réfracté.
         list.append(.glass(.capsule, bar, Glass.regular.render(lc.colorScheme)))
 
-        let itemWidth = (bar.width - 8) / CGFloat(max(items.count, 1))
         for (i, item) in items.enumerated() {
-            let cell = CGRect(x: bar.minX + 4 + CGFloat(i) * itemWidth, y: bar.minY + 4, width: itemWidth, height: bar.height - 8)
+            let cell = CGRect(x: bar.minX + M.inset + CGFloat(i) * pitch, y: bar.minY + M.inset, width: itemWidth, height: bar.height - 2 * M.inset)
             if i == selected {
-                list.append(.fill(.capsule, cell, dark ? RGBA(1, 1, 1, 0.12) : RGBA(0, 0, 0, 0.06)))
+                // Pastille de sélection : verre sur le verre (capsule de rayon 27 sur le cadre de l'onglet),
+                // plus dépolie en clair, plus sombre en sombre.
+                // Flou large (les couleurs du fond se mélangent), puis voile clair ou sombre.
+                list.append(.backdrop(cell, blur: 5, tint: dark ? RGBA(0, 0.04, 0, 0.3) : RGBA(0.9, 0.92, 0.93, 0.22), shape: .capsule))
             }
-            let color = (i == selected ? tint : Color.primary).resolve(in: lc.colorScheme)
+            var color = (i == selected ? tint : Color.primary).resolve(in: lc.colorScheme)
+            // Onglet sélectionné en sombre : teinte éclaircie (plus lisible sur la pastille sombre).
+            if i == selected && dark { color = RGBA(color.r + (1 - color.r) * 0.3, color.g + (1 - color.g) * 0.3, color.b + (1 - color.b) * 0.3, color.a) }
             if pressed == ids[i] { list.append(.pushOpacity(0.5)) }
             if let symbol = item.symbol {
-                let iconFont = Font.system(size: 19, weight: .medium)
-                let icon = CGRect(x: cell.midX - 14, y: cell.minY + 6, width: 28, height: M.iconSize)
-                list.append(.symbol(symbol, iconFont, .medium, icon, color))
+                let size = lc.measurer.measureSymbol(symbol, font: M.iconFont, scale: .medium)
+                let w = size.map { $0.size.width } ?? M.iconHeight
+                let h = size.map { $0.size.height } ?? M.iconHeight
+                let icon = CGRect(x: cell.midX - w / 2, y: cell.minY + M.iconTop + (M.iconHeight - h) / 2, width: w, height: h)
+                list.append(.symbol(symbol, M.iconFont, .medium, icon, color))
             }
             let label = lc.measurer.measure(item.title, font: M.labelFont, maxWidth: nil)
             list.append(.text(item.title, M.labelFont,
-                              CGRect(x: cell.midX - label.width / 2, y: cell.maxY - 8 - label.height, width: label.width, height: label.height),
+                              CGRect(x: cell.midX - label.width / 2, y: cell.minY + M.labelTop, width: label.width, height: label.height),
                               color, .center))
             if pressed == ids[i] { list.append(.popOpacity) }
             list.append(.hitRegion(id: ids[i], cell))

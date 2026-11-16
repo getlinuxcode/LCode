@@ -1,0 +1,20 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 1190,
+   "id": "tab.content.0",
+   "width": 434,
+   "x": 3,
+   "y": 62
+  }
+ ],
+ "page": "tab.bar.3",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}
