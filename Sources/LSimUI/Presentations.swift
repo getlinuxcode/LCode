@@ -67,6 +67,10 @@ struct _ToolbarModifier<C: View>: _PrimitiveModifier {
             var ctx = context.child("toolbar")
             // iOS 26 : boutons de barre monochromes, dans des pastilles de verre.
             ctx.environment.foregroundColor = ctx.environment.foregroundColor ?? .primary
+            // Mesuré sur iPhone (iOS 27.2) : symboles de barre en échelle large
+            // (« + » de 17,7 pt d’encre).
+            ctx.environment.imageScale = .large
+            ctx.environment.font = ctx.environment.font ?? .system(size: 17, weight: .regular)
             ctx.environment.isInList = false
             for node in LSimUI._makeNodes(content, ctx) {
                 let item = node as? ToolbarItemNode
@@ -99,7 +103,8 @@ final class BarButtonNode: SingleChildNode {
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let s = child.sizeThatFits(.unspecified, lc)
-        return CGSize(width: max(Self.size, s.width + 24), height: Self.size)
+        // Un symbole tient dans un cercle de 44 pt (mesuré sur iPhone) ; un libellé élargit la capsule.
+        return CGSize(width: max(Self.size, s.width + 20), height: Self.size)
     }
 
     override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {

@@ -1,0 +1,20 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 1800,
+   "id": "nav.content",
+   "width": 440,
+   "x": 0,
+   "y": -536
+  }
+ ],
+ "page": "nav.edge.xsin",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

@@ -51,6 +51,7 @@ enum Catalog {
                 pages.append(CatalogPage(id: "glass.field.\(name)") { AnyView(GlassRefractionPage(background: bg)) })
             }
             pages += NavigationCatalog.pages
+            pages += TabCatalog.pages
         }
         return pages
     }
@@ -338,6 +339,11 @@ struct GlassRefractionPage: View {
             }
             sample("glass.clear", width: 240, height: 64) { $0.glassEffect(.clear, in: Capsule()) }
             sample("glass.tinted", width: 240, height: 64) { $0.glassEffect(.regular.tint(.blue), in: Capsule()) }
+            // Petites formes, à la taille des boutons de barre (cercle de 44 pt, capsule de 44 pt de haut).
+            HStack(spacing: 14) {
+                sample("glass.small", width: 44, height: 44, board: (78, 78)) { $0.glassEffect(.regular, in: Circle()) }
+                sample("glass.pill", width: 110, height: 44, board: (144, 78)) { $0.glassEffect(.regular, in: Capsule()) }
+            }
         }
         .padding()
     }

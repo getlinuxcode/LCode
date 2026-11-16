@@ -250,6 +250,7 @@ final class TabCollector {
         let title: String
         let systemImage: String?
         let value: AnyHashable?
+        var isSearch = false
         let build: (BuildContext) -> [LayoutNode]
     }
     var items: [Item] = []
@@ -270,12 +271,13 @@ public struct Tab<Value: Hashable, Content: View>: View, _PrimitiveView {
     let title: String
     let systemImage: String?
     let value: Value?
+    var role: TabRole?
     let content: Content
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         let content = self.content
         context.environment.tabCollector?.items.append(.init(
-            title: title, systemImage: systemImage, value: value.map { AnyHashable($0) },
+            title: title, systemImage: systemImage, value: value.map { AnyHashable($0) }, isSearch: role == .search,
             build: { LSimUI._makeNodes(content, $0) }))
         return []
     }
@@ -303,9 +305,17 @@ extension Tab {
     }
 }
 
-extension Tab where Value == Never, Content == EmptyView {
+extension Tab where Value == Never {
     public init<S: StringProtocol>(_ title: S, systemImage: String, role: TabRole?, @ViewBuilder content: () -> Content) {
         self.init(title, systemImage: systemImage, content: content)
+        self.role = role
+    }
+}
+
+extension Tab {
+    public init<S: StringProtocol>(_ title: S, systemImage: String, value: Value, role: TabRole?, @ViewBuilder content: () -> Content) {
+        self.init(title, systemImage: systemImage, value: value, content: content)
+        self.role = role
     }
 }
 

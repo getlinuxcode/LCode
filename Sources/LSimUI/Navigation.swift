@@ -27,10 +27,11 @@ public enum NavigationMetrics {
     public static var glassBarContentCenterY: CGFloat = 22
     public static var glassButtonSize: CGFloat = 44
     public static var glassButtonLeading: CGFloat = 20
-    public static var glassChevronSize = CGSize(width: 10.1, height: 18.2)
-    public static var glassChevronLineWidth: CGFloat = 2.4
+    /// Mesuré sur iPhone : encre de 11 × 18,7 pt (même surface d’encre).
+    public static var glassChevronSize = CGSize(width: 11.0, height: 18.7)
+    public static var glassChevronLineWidth: CGFloat = 2.6
     /// Le chevron n'est pas centré optiquement dans la pastille : décalé vers la gauche.
-    public static var glassChevronOffsetX: CGFloat = -1.8
+    public static var glassChevronOffsetX: CGFloat = -1.5
     public static var glassBarHeight: CGFloat = 54
     /// Rayon du flou de la matière de barre (écart-type, en points).
     public static var glassMaterialBlur: CGFloat = 5

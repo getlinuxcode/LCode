@@ -30,6 +30,8 @@ SHAPES = {  # repère → (variante, forme, rayon de coin en points ou None = de
     "glass.rounded": ("regular", 26.0),
     "glass.clear": ("clear", None),
     "glass.tinted": ("tinted", None),
+    "glass.small": ("regular", "circle"),   # taille d'un bouton de barre
+    "glass.pill": ("regular", None),
 }
 LIGHT = np.array([-0.55, -0.835])
 TINT = {"light": np.array([0, 136, 255]) / 255, "dark": np.array([0, 145, 255]) / 255}  # .blue de la page
@@ -260,8 +262,10 @@ def main():
         if pages is None:
             print(f"{scheme} : pages à fonds codés absentes")
             continue
-        samples = {ident: measure(pages, ident) for ident in SHAPES}
-        regular = [samples[i] for i in ("glass.capsule", "glass.circle", "glass.rounded")]
+        present = {m["id"] for m in pages["low"][0]["markers"]}
+        samples = {ident: measure(pages, ident) for ident in SHAPES if ident in present}
+        regular = [samples[i] for i in ("glass.capsule", "glass.circle", "glass.rounded", "glass.small", "glass.pill")
+                   if i in samples]
         abs_spread, rel_spread = spread(regular, False, 1.0), spread(regular, True, 0.05)
         # Relatif par défaut (le décalage suit la taille de la forme), sauf net avantage de l'absolu.
         relative = rel_spread < abs_spread * 1.25
