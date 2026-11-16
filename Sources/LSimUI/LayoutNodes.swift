@@ -22,6 +22,8 @@ open class LayoutNode {
     /// Axe d'expansion d'un Spacer / Divider (défini par la pile parente).
     var stackAxis: Axis?
     var isSpacer: Bool { false }
+    /// Une image (éventuellement enveloppée de modificateurs) : SwiftUI l'espace différemment.
+    var isImage: Bool { (self as? SingleChildNode)?.child.isImage ?? false }
 }
 
 // MARK: - Feuilles
@@ -134,22 +136,20 @@ final class StackNode: LayoutNode {
 
     private func totalSpacing() -> CGFloat {
         guard children.count > 1 else { return 0 }
-        var total: CGFloat = 0
-        for i in 1..<children.count {
-            if let spacing {
-                total += spacing
-            } else if !(children[i - 1].isSpacer || children[i].isSpacer) {
-                // Pas d'espacement implicite autour d'un Spacer.
-                total += Self.defaultSpacing
-            }
-        }
-        return total
+        return (1..<children.count).reduce(0) { $0 + spacing(before: $1) }
     }
 
     private func spacing(before index: Int) -> CGFloat {
         guard index > 0 else { return 0 }
         if let spacing { return spacing }
-        return (children[index - 1].isSpacer || children[index].isSpacer) ? 0 : Self.defaultSpacing
+        return Self.defaultSpacing(between: children[index - 1], and: children[index])
+    }
+
+    /// Espacement par défaut entre deux voisins (SwiftUI l'adapte selon les types de vues).
+    static func defaultSpacing(between a: LayoutNode, and b: LayoutNode) -> CGFloat {
+        if a.isSpacer || b.isSpacer { return 0 }
+        if a.isImage || b.isImage, let s = DesignProfile.current.image.stackSpacing { return CGFloat(s) }
+        return defaultSpacing
     }
 
     /// Répartit la taille le long de l'axe entre les enfants (algorithme de SwiftUI).

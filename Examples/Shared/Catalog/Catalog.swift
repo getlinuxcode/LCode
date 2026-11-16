@@ -36,6 +36,9 @@ enum Catalog {
         pages.append(CatalogPage(id: "button.tints") { AnyView(ButtonTintsPage()) })
         pages.append(CatalogPage(id: "text.regular") { AnyView(TextStylesPage(weight: .regular, name: "regular")) })
         pages.append(CatalogPage(id: "text.semibold") { AnyView(TextStylesPage(weight: .semibold, name: "semibold")) })
+        pages.append(CatalogPage(id: "image.styles") { AnyView(ImageStylesPage()) })
+        pages.append(CatalogPage(id: "image.scales") { AnyView(ImageScalesPage()) })
+        pages.append(CatalogPage(id: "image.resizable") { AnyView(ImageResizablePage()) })
         return pages
     }
 }
@@ -149,6 +152,87 @@ struct TextStylesPage: View {
     }
 }
 
+/// Symboles fréquents, dessinés à différents styles typographiques.
+enum SymbolSamples {
+    static let names = ["globe", "checkmark.circle.fill", "star.fill", "plus", "gear", "heart", "chevron.right"]
+}
+
+struct ImageStylesPage: View {
+    static let styles: [(String, Font)] = [
+        ("largeTitle", .largeTitle), ("title2", .title2), ("body", .body), ("footnote", .footnote), ("caption", .caption),
+    ]
+
+    var body: some View {
+        VStack(spacing: 18) {
+            PageTitle(text: "Image — styles")
+            ForEach(Self.styles, id: \.0) { styleName, font in
+                HStack(spacing: 14) {
+                    ForEach(SymbolSamples.names, id: \.self) { name in
+                        Image(systemName: name)
+                            .font(font)
+                            .calibrate("image.\(styleName).\(name)")
+                    }
+                }
+            }
+        }
+        .padding()
+    }
+}
+
+struct ImageScalesPage: View {
+    static let scales: [(String, Image.Scale)] = [("small", .small), ("medium", .medium), ("large", .large)]
+    static let styles: [(String, Font)] = [("title2", .title2), ("body", .body), ("caption", .caption)]
+
+    var body: some View {
+        VStack(spacing: 18) {
+            PageTitle(text: "Image — échelles")
+            ForEach(Self.styles, id: \.0) { styleName, font in
+                ForEach(Self.scales, id: \.0) { scaleName, scale in
+                    HStack(spacing: 14) {
+                        ForEach(SymbolSamples.names.prefix(5), id: \.self) { name in
+                            Image(systemName: name)
+                                .font(font)
+                                .imageScale(scale)
+                                .calibrate("imageScale.\(styleName).\(scaleName).\(name)")
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+    }
+}
+
+struct ImageResizablePage: View {
+    var body: some View {
+        VStack(spacing: 22) {
+            PageTitle(text: "Image — redimensionnable")
+            HStack(spacing: 16) {
+                Image(systemName: "star.fill").resizable().scaledToFit().frame(width: 60, height: 30)
+                    .calibrate("resizable.fit.wide")
+                Image(systemName: "star.fill").resizable().scaledToFit().frame(width: 30, height: 60)
+                    .calibrate("resizable.fit.tall")
+                Image(systemName: "globe").resizable().frame(width: 80, height: 50)
+                    .calibrate("resizable.stretch")
+                Image(systemName: "heart").resizable().scaledToFill().frame(width: 50, height: 50)
+                    .calibrate("resizable.fill")
+            }
+            // Ligne exacte du modèle de `xtool new`.
+            VStack {
+                Image(systemName: "globe")
+                    .imageScale(.large)
+                    .foregroundStyle(.tint)
+                    .calibrate("template.globe")
+                Text("Hello, world!")
+                    .calibrate("template.text")
+            }
+            .padding()
+            .calibrate("template.stack")
+        }
+        .padding()
+    }
+}
+
 // MARK: - Application
 
 @main
@@ -173,7 +257,7 @@ struct CatalogRoot: View {
     var body: some View {
         let pages = Catalog.pages
         ZStack {
-            if page < pages.count {
+            if page >= 0 && page < pages.count {
                 // Nouvelle identité à chaque page : sinon SwiftUI réutilise la vue précédente
                 // et onGeometryChange ne se redéclenche pas pour des cadres identiques.
                 pages[page].content().id(page)

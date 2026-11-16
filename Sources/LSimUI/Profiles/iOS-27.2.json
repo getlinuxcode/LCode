@@ -148,6 +148,14 @@
     "tintFillAlphaDark": 0.25,
     "tintFillAlphaLight": 0.18
   },
+  "imageSettings": {
+    "paddingH": 0,
+    "paddingV": 0.0901,
+    "scaleLarge": 1.27,
+    "scaleMedium": 1,
+    "scaleSmall": 0.79,
+    "stackSpacing": 0.07
+  },
   "name": "iOS 27.2 — iPhone 17 Pro Max",
   "text": {
     "largeSizeTracking": 0.37,

@@ -1,0 +1,335 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 25.66666666666663,
+   "id": "imageScale.body.large.checkmark.circle.fill",
+   "width": 25.666666666666657,
+   "x": 166.16666666666666,
+   "y": 556.3333333333333
+  },
+  {
+   "height": 28.66666666666663,
+   "id": "imageScale.body.large.gear",
+   "width": 28.666666666666686,
+   "x": 284.8333333333333,
+   "y": 554.8333333333333
+  },
+  {
+   "height": 25.66666666666663,
+   "id": "imageScale.body.large.globe",
+   "width": 25.666666666666657,
+   "x": 126.5,
+   "y": 556.3333333333333
+  },
+  {
+   "height": 21.66666666666663,
+   "id": "imageScale.body.large.plus",
+   "width": 23,
+   "x": 247.83333333333331,
+   "y": 558.3333333333333
+  },
+  {
+   "height": 26.66666666666663,
+   "id": "imageScale.body.large.star.fill",
+   "width": 28,
+   "x": 205.83333333333331,
+   "y": 555.8333333333333
+  },
+  {
+   "height": 19.66666666666663,
+   "id": "imageScale.body.medium.checkmark.circle.fill",
+   "width": 19.666666666666657,
+   "x": 175,
+   "y": 515.9999999999999
+  },
+  {
+   "height": 22,
+   "id": "imageScale.body.medium.gear",
+   "width": 22,
+   "x": 276.66666666666663,
+   "y": 514.8333333333333
+  },
+  {
+   "height": 19.66666666666663,
+   "id": "imageScale.body.medium.globe",
+   "width": 19.666666666666657,
+   "x": 141.33333333333334,
+   "y": 515.9999999999999
+  },
+  {
+   "height": 16.66666666666663,
+   "id": "imageScale.body.medium.plus",
+   "width": 17.99999999999997,
+   "x": 244.66666666666666,
+   "y": 517.4999999999999
+  },
+  {
+   "height": 20.66666666666663,
+   "id": "imageScale.body.medium.star.fill",
+   "width": 22,
+   "x": 208.66666666666666,
+   "y": 515.4999999999999
+  },
+  {
+   "height": 15.666666666666686,
+   "id": "imageScale.body.small.checkmark.circle.fill",
+   "width": 15.666666666666657,
+   "x": 181.33333333333334,
+   "y": 480.33333333333326
+  },
+  {
+   "height": 17.333333333333314,
+   "id": "imageScale.body.small.gear",
+   "width": 17.333333333333314,
+   "x": 271,
+   "y": 479.49999999999994
+  },
+  {
+   "height": 15.666666666666686,
+   "id": "imageScale.body.small.globe",
+   "width": 15.666666666666657,
+   "x": 151.66666666666669,
+   "y": 480.33333333333326
+  },
+  {
+   "height": 13,
+   "id": "imageScale.body.small.plus",
+   "width": 14.333333333333343,
+   "x": 242.66666666666666,
+   "y": 481.66666666666663
+  },
+  {
+   "height": 16.333333333333314,
+   "id": "imageScale.body.small.star.fill",
+   "width": 17.666666666666657,
+   "x": 211,
+   "y": 479.99999999999994
+  },
+  {
+   "height": 18,
+   "id": "imageScale.caption.large.checkmark.circle.fill",
+   "width": 18,
+   "x": 178,
+   "y": 666.1666666666665
+  },
+  {
+   "height": 20,
+   "id": "imageScale.caption.large.gear",
+   "width": 20,
+   "x": 274,
+   "y": 665.1666666666665
+  },
+  {
+   "height": 18,
+   "id": "imageScale.caption.large.globe",
+   "width": 18,
+   "x": 146,
+   "y": 666.1666666666665
+  },
+  {
+   "height": 15.333333333333371,
+   "id": "imageScale.caption.large.plus",
+   "width": 16.333333333333343,
+   "x": 243.66666666666666,
+   "y": 667.4999999999999
+  },
+  {
+   "height": 18.66666666666663,
+   "id": "imageScale.caption.large.star.fill",
+   "width": 19.666666666666657,
+   "x": 210,
+   "y": 665.8333333333331
+  },
+  {
+   "height": 14,
+   "id": "imageScale.caption.medium.checkmark.circle.fill",
+   "width": 14,
+   "x": 184.33333333333334,
+   "y": 632.3333333333333
+  },
+  {
+   "height": 15.666666666666629,
+   "id": "imageScale.caption.medium.gear",
+   "width": 15.666666666666686,
+   "x": 268,
+   "y": 631.4999999999999
+  },
+  {
+   "height": 14,
+   "id": "imageScale.caption.medium.globe",
+   "width": 14,
+   "x": 156.33333333333334,
+   "y": 632.3333333333333
+  },
+  {
+   "height": 12,
+   "id": "imageScale.caption.medium.plus",
+   "width": 12.333333333333343,
+   "x": 241.66666666666669,
+   "y": 633.3333333333333
+  },
+  {
+   "height": 14.666666666666629,
+   "id": "imageScale.caption.medium.star.fill",
+   "width": 15.333333333333343,
+   "x": 212.33333333333334,
+   "y": 631.9999999999999
+  },
+  {
+   "height": 11,
+   "id": "imageScale.caption.small.checkmark.circle.fill",
+   "width": 11,
+   "x": 188.5,
+   "y": 601.9999999999999
+  },
+  {
+   "height": 12,
+   "id": "imageScale.caption.small.gear",
+   "width": 12,
+   "x": 264.5,
+   "y": 601.4999999999999
+  },
+  {
+   "height": 11,
+   "id": "imageScale.caption.small.globe",
+   "width": 11,
+   "x": 163.5,
+   "y": 601.9999999999999
+  },
+  {
+   "height": 9,
+   "id": "imageScale.caption.small.plus",
+   "width": 10.333333333333343,
+   "x": 240.16666666666666,
+   "y": 602.9999999999999
+  },
+  {
+   "height": 11.333333333333371,
+   "id": "imageScale.caption.small.star.fill",
+   "width": 12.666666666666657,
+   "x": 213.5,
+   "y": 601.8333333333333
+  },
+  {
+   "height": 32.666666666666686,
+   "id": "imageScale.title2.large.checkmark.circle.fill",
+   "width": 32.66666666666666,
+   "x": 154.66666666666666,
+   "y": 426.99999999999994
+  },
+  {
+   "height": 36.333333333333314,
+   "id": "imageScale.title2.large.gear",
+   "width": 36.333333333333314,
+   "x": 295.66666666666663,
+   "y": 425.16666666666663
+  },
+  {
+   "height": 32.666666666666686,
+   "id": "imageScale.title2.large.globe",
+   "width": 32.66666666666666,
+   "x": 108,
+   "y": 426.99999999999994
+  },
+  {
+   "height": 27.333333333333314,
+   "id": "imageScale.title2.large.plus",
+   "width": 30,
+   "x": 251.66666666666663,
+   "y": 429.66666666666663
+  },
+  {
+   "height": 34,
+   "id": "imageScale.title2.large.star.fill",
+   "width": 36.333333333333314,
+   "x": 201.33333333333331,
+   "y": 426.3333333333333
+  },
+  {
+   "height": 26,
+   "id": "imageScale.title2.medium.checkmark.circle.fill",
+   "width": 26,
+   "x": 165.66666666666669,
+   "y": 379.66666666666663
+  },
+  {
+   "height": 29,
+   "id": "imageScale.title2.medium.gear",
+   "width": 29,
+   "x": 285.33333333333337,
+   "y": 378.16666666666663
+  },
+  {
+   "height": 26,
+   "id": "imageScale.title2.medium.globe",
+   "width": 26.000000000000014,
+   "x": 125.66666666666667,
+   "y": 379.66666666666663
+  },
+  {
+   "height": 22,
+   "id": "imageScale.title2.medium.plus",
+   "width": 23.333333333333343,
+   "x": 248.00000000000003,
+   "y": 381.66666666666663
+  },
+  {
+   "height": 27,
+   "id": "imageScale.title2.medium.star.fill",
+   "width": 28.333333333333343,
+   "x": 205.66666666666669,
+   "y": 379.16666666666663
+  },
+  {
+   "height": 21,
+   "id": "imageScale.title2.small.checkmark.circle.fill",
+   "width": 21,
+   "x": 174,
+   "y": 338.16666666666663
+  },
+  {
+   "height": 23,
+   "id": "imageScale.title2.small.gear",
+   "width": 23,
+   "x": 278,
+   "y": 337.16666666666663
+  },
+  {
+   "height": 21,
+   "id": "imageScale.title2.small.globe",
+   "width": 21,
+   "x": 139,
+   "y": 338.16666666666663
+  },
+  {
+   "height": 17.666666666666686,
+   "id": "imageScale.title2.small.plus",
+   "width": 18.333333333333343,
+   "x": 245.66666666666666,
+   "y": 339.8333333333333
+  },
+  {
+   "height": 21.666666666666686,
+   "id": "imageScale.title2.small.star.fill",
+   "width": 22.666666666666657,
+   "x": 209,
+   "y": 337.8333333333333
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 138,
+   "x": 151,
+   "y": 298.8333333333333
+  }
+ ],
+ "page": "image.scales",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

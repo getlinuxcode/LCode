@@ -28,7 +28,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"LCode calibration receiver\n")
 
     def do_POST(self):
-        if self.path != "/upload":
+        if self.path not in ("/upload", "/symbols"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -41,6 +41,20 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400)
             return
         run = safe(payload.get("run", "run"))
+        if self.path == "/symbols":
+            folder = os.path.join(self.out_dir, run, "symbols")
+            os.makedirs(folder, exist_ok=True)
+            name = "info.json" if payload.get("kind") == "info" else f"batch-{int(payload.get('start', 0)):05d}.json"
+            with open(os.path.join(folder, name), "w") as f:
+                json.dump(payload, f)
+            if payload.get("kind") == "info":
+                print(f"symboles : {payload.get('count')} noms fournis par iOS ({payload.get('info', {}).get('source', 'source introuvable')})", flush=True)
+            else:
+                print(f"symboles : lot {payload.get('start')} / {payload.get('total')} ({len(payload.get('symbols', []))} rendus)", flush=True)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+            return
         page = safe(payload.get("page", "page"))
         scheme = safe(payload.get("colorScheme", "light"))
         folder = os.path.join(self.out_dir, run, "ios")

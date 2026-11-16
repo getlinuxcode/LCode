@@ -34,7 +34,7 @@ public struct Text: View, _PrimitiveView, Equatable {
         var resolved = font ?? env.font ?? .body
         if let w = weight ?? env.fontWeight { resolved.weight = w }
         if isItalic || env.isItalic { resolved.isItalic = true }
-        var fg = color ?? env.foregroundColor ?? .primary
+        var fg = (color ?? env.foregroundColor ?? .primary).resolvingTint(env)
         if !env.isEnabled { fg = .tertiaryLabel }
         var string = content
         switch env.textCase {

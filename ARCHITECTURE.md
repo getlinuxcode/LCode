@@ -109,6 +109,29 @@ Pièges connus : les captures d'iPhone sont en Display P3 (convertir avant de co
 affiche l'app en mode compatibilité ; `xtool launch` ne fonctionne pas sur iOS 27 (lancer l'app
 à la main).
 
+## Lancer un projet : `lcode run`
+
+```bash
+swift build --product lcode
+.build/debug/lcode run <projet xtool>            # simulateur LSim
+.build/debug/lcode run <projet xtool> --device   # iPhone branché, via xtool
+```
+
+`LCodeKit` lit le projet (`swift package dump-package`), puis génère `<projet>/.lcode/simulateur/` :
+un paquet dont les cibles sont des **liens** vers les sources du projet, compilées pour Linux contre
+le module `SwiftUI` de LCode (LSimUI + LSimHost). Modifier le projet modifie donc le simulateur.
+Limites actuelles : paquets externes et ressources non pris en charge (signalés au lancement).
+
+### Couverture de l'API — sonde
+
+`Examples/iOS/Sonde` est une app écrite « comme un développeur ordinaire » ; la relancer avec
+`lcode run Examples/iOS/Sonde` liste ce qui manque encore à LSimUI. Premier relevé (16/11/2026) :
+`Image` / SF Symbols (déjà dans le modèle par défaut de `xtool new`), `Label`, `TextField`,
+`Toggle`, `Slider`, `Stepper`, `Picker`, `DatePicker`, `ProgressView`, `Form`, `TabView`/`Tab`,
+`.sheet`, `.alert`, `.toolbar`/`ToolbarItem`, `withAnimation`, `@AppStorage`, `@Bindable`,
+`.environment(objet)` / `@Environment(Type.self)`, `GeometryReader`, `LazyVGrid`/`LazyHStack`,
+`Link`, `AsyncImage`.
+
 ## Limites assumées
 
 - UIKit, frameworks matériels et fermés (ARKit, caméra, HealthKit…) : bouchons.

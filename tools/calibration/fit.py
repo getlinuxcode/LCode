@@ -220,6 +220,43 @@ class Fitter:
                     old = sizes[size]["circlePadH"]
                     self.set("marges cercle", ["button", "sizes", size, "circlePadH"], round(old - dw / 2, 2))
 
+    IMAGE_STYLE_SIZES = {"largeTitle": 34, "title2": 22, "body": 17, "footnote": 13, "caption": 12}
+
+    def fit_image(self):
+        """Symboles : marges du cadre autour de l'encre (correction directe), puis facteurs d'échelle (recherche)."""
+        if not any(k[0] == "image.styles" for k in self.ios):
+            print("  (pas de page Image dans cette série : réglages d'image inchangés)")
+            return
+        img = self.profile.setdefault("imageSettings", {"scaleSmall": 0.78, "scaleMedium": 1, "scaleLarge": 1.29,
+                                                        "paddingH": 0, "paddingV": 0})
+        for _ in range(3):
+            _, rows = self.evaluate(self.profile, ["image.styles"])
+            dh, dv = [], []
+            for r in rows:
+                if "d" not in r or not r["id"].startswith("image."):
+                    continue
+                size = self.IMAGE_STYLE_SIZES.get(r["id"].split(".")[1])
+                if size:
+                    dh.append(r["d"]["width"] / (2 * size))
+                    dv.append(r["d"]["height"] / (2 * size))
+            if dh:
+                self.set("images", ["imageSettings", "paddingH"], round(img["paddingH"] - statistics.median(dh), 4))
+                self.set("images", ["imageSettings", "paddingV"], round(img["paddingV"] - statistics.median(dv), 4))
+        # Espacement par défaut image ↔ voisine : correction directe sur la pile du modèle xtool.
+        if any(k[0] == "image.resizable" for k in self.ios):
+            img.setdefault("stackSpacing", 8)
+            for _ in range(2):
+                _, rows = self.evaluate(self.profile, ["image.resizable"])
+                stack = [r for r in rows if r["id"] == "template.stack" and "d" in r]
+                if stack:
+                    dh = statistics.mean(r["d"]["height"] for r in stack)
+                    self.set("images", ["imageSettings", "stackSpacing"], round(max(0, img["stackSpacing"] - dh), 2))
+        if any(k[0] == "image.scales" for k in self.ios):
+            for key in ("scaleSmall", "scaleLarge", "scaleMedium"):
+                v = img[key]
+                self.search("images", ["image.scales"], ["imageSettings", key],
+                            [round(v + d, 3) for d in (-0.12, -0.06, -0.03, -0.01, 0.01, 0.03, 0.06, 0.12)])
+
     def fit_glass(self):
         pages = ["button.glass", "button.glassProminent"]
         b = self.profile["button"]
@@ -287,7 +324,7 @@ def main():
 
     for step, fn in (("lecture des couches", fitter.read_layers), ("comportements", fitter.fit_behaviours),
                      ("approche du texte", fitter.fit_tracking), ("tailles et marges", fitter.fit_sizes),
-                     ("matière du verre", fitter.fit_glass)):
+                     ("images", fitter.fit_image), ("matière du verre", fitter.fit_glass)):
         fn()
         print(f"  {step} : terminé ({fitter.evals} évaluations, {time.time() - t0:.0f} s)", flush=True)
 

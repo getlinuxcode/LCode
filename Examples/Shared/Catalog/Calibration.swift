@@ -35,9 +35,15 @@ enum CalibrationRunner {
         }
         guard let window = keyWindow() else { return }
         let runID = ISO8601DateFormatter().string(from: Date())
+        // D'abord les SF Symbols : noms fournis par iOS + rendu de chacun (appariés aux glyphes de la police sur le PC).
+        await exportSymbols(server: server, runID: runID, status: status)
         for scheme in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = scheme
             for index in 0..<pageCount {
+                // Écran vide d'abord : la page est recréée et ses cadres relevés à neuf (sinon une page
+                // déjà affichée pendant l'export des symboles ne renverrait aucun cadre).
+                show(-1)
+                try? await Task.sleep(for: .milliseconds(150))
                 CalibrationRecorder.shared.frames = [:]
                 show(index)
                 status("")
@@ -61,6 +67,90 @@ enum CalibrationRunner {
         }
         window.overrideUserInterfaceStyle = .unspecified
         status("Calibration terminée ✓")
+    }
+
+    // MARK: - SF Symbols
+
+    static func post(_ server: String, _ path: String, _ payload: [String: Any]) async throws {
+        var request = URLRequest(url: URL(string: server + path)!)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        _ = try await URLSession.shared.data(for: request)
+    }
+
+    /// Liste des symboles fournie par iOS (bundle système CoreGlyphs), avec un diagnostic de ce qui a été trouvé.
+    static func symbolNames() -> (names: [String], aliases: [String: String], info: [String: Any]) {
+        let fm = FileManager.default
+        var info: [String: Any] = [:]
+        var names: [String] = []
+        var aliases: [String: String] = [:]
+        for base in ["/System/Library/CoreServices/CoreGlyphs.bundle",
+                     "/System/Library/CoreServices/CoreGlyphs.bundle/Contents/Resources"] {
+            info[base] = (try? fm.contentsOfDirectory(atPath: base))?.sorted().prefix(80).map { $0 } ?? "illisible"
+            if names.isEmpty, let order = NSArray(contentsOfFile: base + "/symbol_order.plist") as? [String] {
+                names = order
+                info["source"] = base + "/symbol_order.plist"
+            }
+            if names.isEmpty, let availability = NSDictionary(contentsOfFile: base + "/name_availability.plist"),
+               let symbols = availability["symbols"] as? [String: Any] {
+                names = symbols.keys.sorted()
+                info["source"] = base + "/name_availability.plist"
+            }
+            if aliases.isEmpty, let a = NSDictionary(contentsOfFile: base + "/name_aliases.strings") as? [String: String] {
+                aliases = a
+            }
+        }
+        return (names, aliases, info)
+    }
+
+    /// Rendu d'un symbole en niveaux de gris (64 × 64, noir sur blanc, ajusté sans déformation) et ses mesures.
+    static func renderSymbol(_ name: String) -> (pixels: Data, metrics: [Double])? {
+        let config = UIImage.SymbolConfiguration(pointSize: 48, weight: .regular, scale: .medium)
+        guard let image = UIImage(systemName: name, withConfiguration: config)?.withTintColor(.black, renderingMode: .alwaysOriginal) else { return nil }
+        let side = 64
+        var pixels = [UInt8](repeating: 255, count: side * side)
+        let ok = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let ctx = CGContext(data: buffer.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side,
+                                      space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            ctx.translateBy(x: 0, y: CGFloat(side))
+            ctx.scaleBy(x: 1, y: -1)
+            let size = image.size
+            let k = min(CGFloat(side) / max(size.width, 1), CGFloat(side) / max(size.height, 1))
+            let rect = CGRect(x: (CGFloat(side) - size.width * k) / 2, y: (CGFloat(side) - size.height * k) / 2,
+                              width: size.width * k, height: size.height * k)
+            UIGraphicsPushContext(ctx)
+            image.draw(in: rect)
+            UIGraphicsPopContext()
+            return true
+        }
+        guard ok else { return nil }
+        let insets = image.alignmentRectInsets
+        let metrics = [Double(image.size.width), Double(image.size.height), Double(insets.top), Double(insets.left),
+                       Double(insets.bottom), Double(insets.right), Double(image.baselineOffsetFromBottom ?? 0)]
+        return (Data(pixels), metrics)
+    }
+
+    static func exportSymbols(server: String, runID: String, status: @escaping (String) -> Void) async {
+        let (names, aliases, info) = symbolNames()
+        try? await post(server, "/symbols", ["run": runID, "kind": "info", "count": names.count,
+                                             "aliases": aliases, "info": info])
+        guard !names.isEmpty else {
+            status("Liste des symboles introuvable (voir le diagnostic sur le PC).")
+            try? await Task.sleep(for: .seconds(2))
+            return
+        }
+        let batchSize = 300
+        for start in stride(from: 0, to: names.count, by: batchSize) {
+            status("Symboles \(start)/\(names.count)…")
+            var entries: [[String: Any]] = []
+            for name in names[start..<min(start + batchSize, names.count)] {
+                guard let r = renderSymbol(name) else { continue }
+                entries.append(["name": name, "pixels": r.pixels.base64EncodedString(), "metrics": r.metrics])
+            }
+            try? await post(server, "/symbols", ["run": runID, "kind": "batch", "start": start, "total": names.count, "symbols": entries])
+            await Task.yield()
+        }
     }
 
     static func keyWindow() -> UIWindow? {

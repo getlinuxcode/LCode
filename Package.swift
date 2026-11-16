@@ -20,6 +20,9 @@ let package = Package(
         ),
         .target(name: "LSimHost", dependencies: ["LSimUI", "CGtk"], swiftSettings: v5),
         .target(name: "SwiftUI", dependencies: ["LSimUI", "LSimHost"], swiftSettings: v5),
+        // Cœur de l'IDE : projets xtool, génération et lancement du simulateur.
+        .target(name: "LCodeKit", swiftSettings: v5),
+        .executableTarget(name: "lcode", dependencies: ["LCodeKit"], swiftSettings: v5),
         .executableTarget(
             name: "CounterExample",
             dependencies: ["SwiftUI"],

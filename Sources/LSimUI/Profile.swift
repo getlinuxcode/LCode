@@ -9,6 +9,9 @@ public struct DesignProfile: Codable, Sendable {
     public var name: String
     public var text: TextProfile
     public var button: ButtonProfile
+    /// Optionnel pour rester compatible avec les profils plus anciens.
+    public var imageSettings: ImageProfile?
+    public var image: ImageProfile { imageSettings ?? .fallback }
 
     /// Chargé une seule fois, de façon sûre entre fils (initialisation paresseuse d'un `static let`).
     private static let embedded: DesignProfile = load()
@@ -64,6 +67,28 @@ public struct TextProfile: Codable, Sendable {
         let k = Int(size.rounded())
         if k < 6 { return tracking["6"] ?? 0 }
         return max(0, largeSizeTracking * (1 - Double(k - 40) / 40))
+    }
+}
+
+/// Symboles : taille relative au corps de la police selon `imageScale`, et marges du cadre autour de l'encre.
+public struct ImageProfile: Codable, Sendable {
+    public var scaleSmall: Double
+    public var scaleMedium: Double
+    public var scaleLarge: Double
+    /// Marge horizontale / verticale du cadre autour de l'encre du glyphe, en fraction du corps.
+    public var paddingH: Double
+    public var paddingV: Double
+    /// Espacement par défaut (pile sans `spacing:`) entre une image et sa voisine.
+    public var stackSpacing: Double?
+
+    public static let fallback = ImageProfile(scaleSmall: 0.78, scaleMedium: 1, scaleLarge: 1.29, paddingH: 0, paddingV: 0.09, stackSpacing: 8)
+
+    public func factor(_ scale: Image.Scale) -> Double {
+        switch scale {
+        case .small: scaleSmall
+        case .medium: scaleMedium
+        case .large: scaleLarge
+        }
     }
 }
 

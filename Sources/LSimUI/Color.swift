@@ -79,6 +79,12 @@ public struct Color: Hashable, Sendable, ShapeStyle {
     public static let primary = Color(light: RGBA(0, 0, 0), dark: RGBA(1, 1, 1))
     public static let secondary = Color(light: .rgb255(60, 60, 67, 0.6), dark: .rgb255(235, 235, 245, 0.6))
     public static let accentColor = blue
+    /// `.tint` : la teinte de l'environnement (ou la couleur d'accent). Valeur repère résolue à la construction.
+    public static let tint = Color(light: RGBA(-1, -1, -1, 1), dark: RGBA(-1, -1, -1, 1))
+
+    func resolvingTint(_ env: EnvironmentValues) -> Color {
+        self == .tint ? (env.tint ?? .accentColor) : self
+    }
 
     // Couleurs sémantiques utilisées en interne.
     static let systemBackground = Color(light: RGBA(1, 1, 1), dark: RGBA(0, 0, 0))

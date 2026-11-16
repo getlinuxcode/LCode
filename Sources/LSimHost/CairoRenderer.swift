@@ -75,6 +75,37 @@ final class PangoText: TextMeasurer {
         return layout
     }
 
+    /// Police du symbole : le corps de la police SwiftUI multiplié par le facteur d'échelle d'image.
+    static func symbolFont(_ font: Font, _ scale: Image.Scale) -> Font {
+        var f = font
+        f.size = font.size * CGFloat(DesignProfile.current.image.factor(scale))
+        return f
+    }
+
+    /// Encre et boîte typographique d'un symbole (en points, relatives à l'origine du texte) ; nil si inconnu.
+    func symbolBoxes(_ name: String, font: Font, scale: Image.Scale) -> (ink: CGRect, logical: CGRect)? {
+        guard let character = SymbolTable.shared.character(for: name) else { return nil }
+        let layout = makeLayout(character, font: Self.symbolFont(font, scale), width: nil, alignment: .leading)
+        defer { g_object_unref(UnsafeMutableRawPointer(layout)) }
+        var ink = PangoRectangle(), logical = PangoRectangle()
+        pango_layout_get_extents(layout, &ink, &logical)
+        let k = CGFloat(PANGO_SCALE)
+        func rect(_ r: PangoRectangle) -> CGRect {
+            CGRect(x: CGFloat(r.x) / k, y: CGFloat(r.y) / k, width: CGFloat(r.width) / k, height: CGFloat(r.height) / k)
+        }
+        return (rect(ink), rect(logical))
+    }
+
+    /// Cadre d'un symbole, d'après les mesures sur iPhone : largeur = chasse du glyphe (+ marge éventuelle),
+    /// hauteur = hauteur de l'encre + une marge proportionnelle au corps (≈ 0,09 × corps de chaque côté).
+    func measureSymbol(_ name: String, font: Font, scale: Image.Scale) -> SymbolMetrics? {
+        guard let box = symbolBoxes(name, font: font, scale: scale) else { return nil }
+        let p = DesignProfile.current.image
+        let size = Self.symbolFont(font, scale).size
+        return SymbolMetrics(size: CGSize(width: box.logical.width + 2 * CGFloat(p.paddingH) * size,
+                                          height: box.ink.height + 2 * CGFloat(p.paddingV) * size))
+    }
+
     func measure(_ text: String, font: Font, maxWidth: CGFloat?) -> CGSize {
         let layout = makeLayout(text, font: font, width: maxWidth, alignment: .leading)
         defer { g_object_unref(UnsafeMutableRawPointer(layout)) }
@@ -183,6 +214,8 @@ struct CairoRenderer {
                 cairo_rectangle(cr, rect.minX, rect.minY, rect.width, rect.height)
                 cairo_fill(cr)
                 cairo_pattern_destroy(gradient)
+            case let .symbol(name, font, scale, rect, color):
+                drawSymbol(name, font: font, scale: scale, in: rect, color: color)
             case let .backdrop(rect, blur, tint):
                 blurRegion(rect, sigma: blur)
                 setColor(tint)
@@ -192,6 +225,32 @@ struct CairoRenderer {
                 break
             }
         }
+    }
+
+    /// Dessine un symbole : son encre est centrée et mise à l'échelle dans le rectangle (sans déformation).
+    func drawSymbol(_ name: String, font: Font, scale: Image.Scale, in rect: CGRect, color: RGBA) {
+        guard let character = SymbolTable.shared.character(for: name),
+              let box = text.symbolBoxes(name, font: font, scale: scale), box.ink.width > 0, box.ink.height > 0 else {
+            // Symbole inconnu : cadre de substitution.
+            setColor(RGBA(color.r, color.g, color.b, color.a * 0.35))
+            path(.roundedRectangle(cornerRadius: 3), rect.insetBy(dx: 1, dy: 1))
+            cairo_set_line_width(cr, 1)
+            cairo_stroke(cr)
+            return
+        }
+        let natural = text.measureSymbol(name, font: font, scale: scale)?.size ?? box.ink.size
+        let k = min(rect.width / natural.width, rect.height / natural.height)
+        let layout = text.makeLayout(character, font: PangoText.symbolFont(font, scale), width: nil, alignment: .leading)
+        defer { g_object_unref(UnsafeMutableRawPointer(layout)) }
+        cairo_save(cr)
+        cairo_translate(cr, rect.midX, rect.midY)
+        cairo_scale(cr, k, k)
+        // Horizontalement : la boîte typographique (chasse) est centrée ; verticalement : l'encre.
+        cairo_translate(cr, -(box.logical.midX), -(box.ink.midY))
+        setColor(color)
+        cairo_move_to(cr, 0, 0)
+        pango_cairo_show_layout(cr, layout)
+        cairo_restore(cr)
     }
 
     /// Flou approchant un flou gaussien (trois passes de flou boîte) sur une zone déjà dessinée.

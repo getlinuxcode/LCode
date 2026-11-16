@@ -1,0 +1,69 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 50,
+   "id": "resizable.fill",
+   "width": 50,
+   "x": 304,
+   "y": 438.1666666666667
+  },
+  {
+   "height": 60,
+   "id": "resizable.fit.tall",
+   "width": 30,
+   "x": 162,
+   "y": 433.1666666666667
+  },
+  {
+   "height": 30,
+   "id": "resizable.fit.wide",
+   "width": 60,
+   "x": 86,
+   "y": 448.1666666666667
+  },
+  {
+   "height": 50,
+   "id": "resizable.stretch",
+   "width": 80,
+   "x": 208,
+   "y": 438.1666666666667
+  },
+  {
+   "height": 25.66666666666663,
+   "id": "template.globe",
+   "width": 25.666666666666657,
+   "x": 207.16666666666669,
+   "y": 531.1666666666667
+  },
+  {
+   "height": 78,
+   "id": "template.stack",
+   "width": 126.66666666666669,
+   "x": 156.66666666666669,
+   "y": 515.1666666666667
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "template.text",
+   "width": 94.66666666666669,
+   "x": 172.66666666666669,
+   "y": 556.8333333333334
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 214,
+   "x": 113,
+   "y": 390.83333333333337
+  }
+ ],
+ "page": "image.resizable",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

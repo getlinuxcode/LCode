@@ -5,3 +5,4 @@
 /Calibration/
 Examples/iOS/Catalog/Sources/Catalog/CalibrationServer.swift
 __pycache__/
+.lcode/

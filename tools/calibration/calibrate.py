@@ -34,10 +34,48 @@ def step(title):
     print(f"\n━━ {title}", flush=True)
 
 
-def sh(command, cwd=ROOT):
+NETMUXD = os.path.expanduser("~/.local/share/lcode/bin/netmuxd")
+MUX = ("127.0.0.1", 27015)
+
+
+def device_environment():
+    """Accès à l'iPhone en USB ou en Wi-Fi via netmuxd (démarré au besoin), sinon USB seul."""
+    import socket
+
+    def listening():
+        try:
+            with socket.create_connection(MUX, timeout=0.3):
+                return True
+        except OSError:
+            return False
+
+    if not os.access(NETMUXD, os.X_OK):
+        return {}
+    if not listening():
+        log = os.path.expanduser("~/.local/share/lcode/netmuxd.log")
+        subprocess.Popen([NETMUXD, "--disable-unix", "--host", MUX[0], "--port", str(MUX[1]),
+                          "--plist-storage", "/var/lib/lockdown", "--upstream-usbmuxd", "/var/run/usbmuxd"],
+                         stdout=open(log, "a"), stderr=subprocess.STDOUT, start_new_session=True)
+        for _ in range(30):
+            if listening():
+                break
+            time.sleep(0.1)
+    return {"USBMUXD_SOCKET_ADDRESS": f"{MUX[0]}:{MUX[1]}"} if listening() else {}
+
+
+def usb_connected():
+    """Un iPhone est-il branché en USB (vu par le usbmuxd du système) ?"""
+    try:
+        out = subprocess.run(["idevice_id", "-l"], capture_output=True, text=True, timeout=10).stdout
+        return bool(out.strip())
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def sh(command, cwd=ROOT, env=None):
     """Commande shell avec la chaîne Swift de swiftly dans le PATH."""
     full = f". {SWIFT_ENV} && {command}" if os.path.exists(SWIFT_ENV) else command
-    result = subprocess.run(["bash", "-c", full], cwd=cwd)
+    result = subprocess.run(["bash", "-c", full], cwd=cwd, env={**os.environ, **(env or {})})
     if result.returncode != 0:
         sys.exit(f"Échec : {command}")
 
@@ -98,11 +136,19 @@ def main():
     run = args.run
     if not run:
         if not args.skip_install:
-            step("Compilation et installation du catalogue sur l'iPhone (xtool)")
-            sh("xtool dev", cwd=IOS_PROJECT)
+            connection = device_environment()
+            step(f"Compilation et installation du catalogue sur l'iPhone (xtool, {'USB ou Wi-Fi' if connection else 'USB'})")
+            # L'USB s'il est branché (plus rapide), sinon le Wi-Fi : évite la question de xtool.
+            transport = "--usb" if usb_connected() or not connection else "--network"
+            sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
         step("Réception des mesures")
         run = receive(args.port, os.path.join(ROOT, "Calibration"), args.timeout)
         print(f"Série reçue : {run}")
+
+    if os.path.isdir(os.path.join(run, "symbols")):
+        step("Table des SF Symbols (appariement des dessins de l'iPhone aux glyphes de la police)")
+        venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
+        sh(f"'{venv}' -I tools/calibration/symbols.py '{run}'")
 
     step("Comparaison avant ajustement")
     sh(f"python3 -I tools/calibration/compare.py '{run}'")
