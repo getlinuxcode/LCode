@@ -53,6 +53,8 @@ final class PangoText: TextMeasurer {
         if tracking != 0 {
             pango_attr_list_insert(attrs, pango_attr_letter_spacing_new(Int32(tracking * CGFloat(PANGO_SCALE))))
         }
+        if font.isStrikethrough { pango_attr_list_insert(attrs, pango_attr_strikethrough_new(1)) }
+        if font.isUnderline { pango_attr_list_insert(attrs, pango_attr_underline_new(PANGO_UNDERLINE_SINGLE)) }
         pango_layout_set_attributes(layout, attrs)
         pango_attr_list_unref(attrs)
         let desc = pango_font_description_new()
@@ -216,10 +218,10 @@ struct CairoRenderer {
                 cairo_pattern_destroy(gradient)
             case let .symbol(name, font, scale, rect, color):
                 drawSymbol(name, font: font, scale: scale, in: rect, color: color)
-            case let .backdrop(rect, blur, tint):
-                blurRegion(rect, sigma: blur)
+            case let .backdrop(rect, blur, tint, shape):
+                blurRegion(rect, sigma: blur, shape: shape)
                 setColor(tint)
-                cairo_rectangle(cr, rect.minX, rect.minY, rect.width, rect.height)
+                path(shape, rect)
                 cairo_fill(cr)
             case .hitRegion, .scrollRegion, .marker:
                 break
@@ -254,7 +256,7 @@ struct CairoRenderer {
     }
 
     /// Flou approchant un flou gaussien (trois passes de flou boîte) sur une zone déjà dessinée.
-    func blurRegion(_ rect: CGRect, sigma: CGFloat) {
+    func blurRegion(_ rect: CGRect, sigma: CGFloat, shape: ShapeKind = .rectangle) {
         let target = cairo_get_group_target(cr)
         guard cairo_surface_get_type(target) == CAIRO_SURFACE_TYPE_IMAGE else { return }
         cairo_surface_flush(target)
@@ -286,8 +288,22 @@ struct CairoRenderer {
             Self.boxBlur(&buffer, w, h, r, horizontal: true)
             Self.boxBlur(&buffer, w, h, r, horizontal: false)
         }
-        for y in 0..<h { for x in 0..<w { pixels[(top + y) * stride + left + x] = buffer[y * w + x] } }
-        cairo_surface_mark_dirty(target)
+        // Le résultat flouté est recomposé à travers la forme (capsule, coins arrondis…) et les
+        // découpages en cours, au lieu d'être écrit directement dans les pixels.
+        let blurred = buffer.withUnsafeMutableBytes { bytes -> OpaquePointer? in
+            cairo_image_surface_create_for_data(bytes.baseAddress!.assumingMemoryBound(to: UInt8.self),
+                                                CAIRO_FORMAT_ARGB32, Int32(w), Int32(h), Int32(w * 4))
+        }
+        guard let blurred else { return }
+        cairo_save(cr)
+        path(shape, rect)
+        cairo_clip(cr)
+        cairo_identity_matrix(cr)
+        cairo_set_source_surface(cr, blurred, Double(left) + dx, Double(top) + dy)
+        cairo_paint(cr)
+        cairo_restore(cr)
+        cairo_surface_finish(blurred)
+        cairo_surface_destroy(blurred)
     }
 
     static func boxBlur(_ data: inout [UInt32], _ w: Int, _ h: Int, _ r: Int, horizontal: Bool) {

@@ -24,7 +24,7 @@ public enum DisplayItem {
     /// Fondu vertical d'une couleur opaque (en haut) vers transparent (en bas).
     case fade(CGRect, RGBA)
     /// Matière : floute ce qui est déjà dessiné dans la zone, puis applique un voile coloré.
-    case backdrop(CGRect, blur: CGFloat, tint: RGBA)
+    case backdrop(CGRect, blur: CGFloat, tint: RGBA, shape: ShapeKind = .rectangle)
     /// Zone interactive (bouton, onTapGesture). Les dernières zones dessinées sont au-dessus.
     case hitRegion(id: String, CGRect)
     /// Repère de mesure (`accessibilityIdentifier`) : cadre de la vue identifiée.

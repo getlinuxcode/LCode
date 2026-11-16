@@ -35,6 +35,9 @@ public struct Font: Hashable, Sendable {
     public var weight: Weight
     public var design: Design
     public var isItalic: Bool
+    /// Décorations (portées par la police pour simplifier le rendu).
+    public var isStrikethrough = false
+    public var isUnderline = false
 
     init(size: CGFloat, weight: Weight = .regular, design: Design = .default, isItalic: Bool = false) {
         self.size = size

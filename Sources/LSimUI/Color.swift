@@ -47,6 +47,9 @@ public struct Color: Hashable, Sendable, ShapeStyle {
         scheme == .light ? light : dark
     }
 
+    /// `.blue.gradient` : dégradé automatique d'iOS (rendu pour l'instant en couleur unie).
+    public var gradient: Color { self }
+
     public func opacity(_ opacity: Double) -> Color {
         var c = self
         c.light.a *= opacity

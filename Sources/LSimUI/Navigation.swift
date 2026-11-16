@@ -77,6 +77,8 @@ public final class NavigationModel {
 final class NavigationTitleSink {
     var title: String?
     var displayMode: NavigationBarItem.TitleDisplayMode = .automatic
+    /// Éléments de barre d'outils déclarés par l'écran affiché.
+    var toolbar: [(placement: ToolbarItemPlacement, node: LayoutNode)] = []
 }
 
 extension EnvironmentValues {
@@ -160,7 +162,9 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
         return [NavigationNode(
             page: page, title: sink.title, largeTitle: titleNode,
             backID: isRoot ? nil : backID, backTitle: backTitle, backPressed: context.graph.pressedID == backID,
-            tint: context.environment.tint ?? .accentColor
+            tint: context.environment.tint ?? .accentColor,
+            leading: sink.toolbar.filter { $0.placement.side == .leading }.map { BarButtonNode($0.node) },
+            trailing: sink.toolbar.filter { $0.placement.side == .trailing }.map { BarButtonNode($0.node) }
         )]
     }
 }
@@ -177,7 +181,13 @@ final class NavigationNode: LayoutNode {
 
     private typealias M = NavigationMetrics
 
-    init(page: LayoutNode, title: String?, largeTitle: LayoutNode?, backID: String?, backTitle: String, backPressed: Bool, tint: Color) {
+    let leading: [LayoutNode]
+    let trailing: [LayoutNode]
+
+    init(page: LayoutNode, title: String?, largeTitle: LayoutNode?, backID: String?, backTitle: String, backPressed: Bool, tint: Color,
+         leading: [LayoutNode] = [], trailing: [LayoutNode] = []) {
+        self.leading = leading
+        self.trailing = trailing
         self.page = page
         self.title = title
         self.largeTitle = largeTitle
@@ -257,6 +267,21 @@ final class NavigationNode: LayoutNode {
             let size = lc.measurer.measure(title, font: font, maxWidth: maxWidth)
             let r = CGRect(x: bar.midX - size.width / 2, y: centerY - size.height / 2, width: size.width, height: size.height)
             list.append(.text(title, font, r, Color.primary.resolve(in: lc.colorScheme), .center))
+        }
+
+        // Boutons de barre d'outils (pastilles de verre) : à droite, et à gauche après le bouton retour.
+        var right = bar.maxX - M.glassButtonLeading
+        for node in trailing.reversed() {
+            let size = node.sizeThatFits(.unspecified, lc)
+            right -= size.width
+            node.render(in: CGRect(x: right, y: centerY - size.height / 2, width: size.width, height: size.height), lc, &list)
+            right -= 8
+        }
+        var left = bar.minX + M.glassButtonLeading + (backID == nil ? 0 : M.glassButtonSize + 8)
+        for node in leading {
+            let size = node.sizeThatFits(.unspecified, lc)
+            node.render(in: CGRect(x: left, y: centerY - size.height / 2, width: size.width, height: size.height), lc, &list)
+            left += size.width + 8
         }
 
         if let backID, DesignStyle.current == .liquidGlass {

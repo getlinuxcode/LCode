@@ -142,13 +142,14 @@ final class StackNode: LayoutNode {
     private func spacing(before index: Int) -> CGFloat {
         guard index > 0 else { return 0 }
         if let spacing { return spacing }
-        return Self.defaultSpacing(between: children[index - 1], and: children[index])
+        return Self.defaultSpacing(between: children[index - 1], and: children[index], axis: axis)
     }
 
     /// Espacement par défaut entre deux voisins (SwiftUI l'adapte selon les types de vues).
-    static func defaultSpacing(between a: LayoutNode, and b: LayoutNode) -> CGFloat {
+    /// Mesuré : dans une pile verticale, une image touche sa voisine ; l'horizontal reste à 8 pt.
+    static func defaultSpacing(between a: LayoutNode, and b: LayoutNode, axis: Axis) -> CGFloat {
         if a.isSpacer || b.isSpacer { return 0 }
-        if a.isImage || b.isImage, let s = DesignProfile.current.image.stackSpacing { return CGFloat(s) }
+        if axis == .vertical, a.isImage || b.isImage, let s = DesignProfile.current.image.stackSpacing { return CGFloat(s) }
         return defaultSpacing
     }
 
@@ -430,10 +431,16 @@ final class TapNode: SingleChildNode {
 // MARK: - Racine
 
 /// Dispose les vues racines dans la zone sûre de l'écran (centrées, comme un WindowGroup).
-public func layoutRoot(_ nodes: [LayoutNode], in container: CGRect, _ lc: LayoutContext) -> DisplayList {
+public func layoutRoot(_ nodes: [LayoutNode], in container: CGRect, _ lc: LayoutContext,
+                       presentations: [LayoutNode] = []) -> DisplayList {
     var list = DisplayList()
     let root: LayoutNode = nodes.count == 1 ? nodes[0] : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: nodes)
     let size = root.sizeThatFits(ProposedViewSize(container.size), lc)
     root.render(in: Alignment.center.place(size, in: container), lc, &list)
+    // Feuilles et alertes : dessinées sur tout l'écran, au-dessus du reste.
+    let screen = lc.screen == .zero ? container : lc.screen
+    for presentation in presentations {
+        presentation.render(in: screen, lc, &list)
+    }
     return list
 }

@@ -125,12 +125,22 @@ Limites actuelles : paquets externes et ressources non pris en charge (signalés
 ### Couverture de l'API — sonde
 
 `Examples/iOS/Sonde` est une app écrite « comme un développeur ordinaire » ; la relancer avec
-`lcode run Examples/iOS/Sonde` liste ce qui manque encore à LSimUI. Premier relevé (16/11/2026) :
-`Image` / SF Symbols (déjà dans le modèle par défaut de `xtool new`), `Label`, `TextField`,
-`Toggle`, `Slider`, `Stepper`, `Picker`, `DatePicker`, `ProgressView`, `Form`, `TabView`/`Tab`,
-`.sheet`, `.alert`, `.toolbar`/`ToolbarItem`, `withAnimation`, `@AppStorage`, `@Bindable`,
-`.environment(objet)` / `@Environment(Type.self)`, `GeometryReader`, `LazyVGrid`/`LazyHStack`,
-`Link`, `AsyncImage`.
+`lcode run Examples/iOS/Sonde` vérifie la couverture de LSimUI. Depuis le 16/11/2026 elle compile et
+s'affiche entièrement : `Image`/SF Symbols, `Label`, `TextField` (saisie au clavier), `Toggle`,
+`Slider`, `Stepper`, `Picker` (menu et segmenté), `DatePicker`, `ProgressView`, `Form`,
+`TabView`/`Tab`/`.tabItem`, `.sheet`, `.alert`, `.toolbar`, `@Bindable`, `@AppStorage`,
+`.environment(objet)`, `GeometryReader`, `LazyVGrid`, `ScrollView(.horizontal)`, `Link`, `.task`.
+
+Approximations connues (à calibrer ou à compléter) : animations (`withAnimation` s'applique sans
+transition), menu de `Picker` (toucher = option suivante), `AsyncImage` sans téléchargement,
+`.swipeActions`/`.searchable`/`.refreshable` acceptés sans effet, gabarits iOS 26 des nouveaux
+contrôles estimés et non encore mesurés par le banc.
+
+### Prochain chantier : Liquid Glass et animations
+
+Vrai matériau de verre (réfraction/lentille de l'arrière-plan, reflets spéculaires), comportements
+des barres (rétraction de la barre d'onglets au défilement, transitions de navigation), et
+calibration des animations image par image (positions des couches Core Animation à chaque image).
 
 ## Limites assumées
 

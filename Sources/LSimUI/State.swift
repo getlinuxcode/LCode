@@ -113,6 +113,62 @@ public final class ViewGraph {
 
     public init() {}
 
+    // MARK: Saisie et glissers
+
+    /// Champ de texte actuellement actif (reçoit le clavier).
+    public var focusedID: String?
+    struct TextInput {
+        let get: () -> String
+        let set: (String) -> Void
+        let submit: () -> Void
+    }
+    private(set) var textInputs: [String: TextInput] = [:]
+    /// Contrôles qui suivent le doigt (Slider) : reçoivent la position du pointeur, en points écran.
+    public private(set) var dragHandlers: [String: (CGPoint) -> Void] = [:]
+    /// Zones défilant horizontalement (le glisser utilise alors le déplacement en x).
+    public internal(set) var horizontalScrolls: Set<String> = []
+    /// Cadres des GeometryReader lors de la dernière passe (leur contenu dépend de leur taille).
+    var geometryFrames: [String: CGRect] = [:]
+    /// Présentations (feuilles, alertes) collectées pendant la construction, dessinées au-dessus de tout.
+    public internal(set) var presentations: [LayoutNode] = []
+
+    func registerTextInput(_ id: String, get: @escaping () -> String, set: @escaping (String) -> Void, submit: @escaping () -> Void) {
+        textInputs[id] = TextInput(get: get, set: set, submit: submit)
+    }
+
+    func registerDrag(_ id: String, _ handler: @escaping (CGPoint) -> Void) {
+        dragHandlers[id] = handler
+    }
+
+    public var hasFocusedTextField: Bool { focusedID.flatMap { textInputs[$0] } != nil }
+
+    /// Frappe au clavier dans le champ actif.
+    public func insertText(_ text: String) {
+        guard let id = focusedID, let input = textInputs[id] else { return }
+        input.set(input.get() + text)
+    }
+
+    public func deleteBackward() {
+        guard let id = focusedID, let input = textInputs[id] else { return }
+        var value = input.get()
+        if !value.isEmpty { value.removeLast() }
+        input.set(value)
+    }
+
+    /// Entrée : valide le champ (onSubmit) et rend le clavier.
+    public func submitText() {
+        guard let id = focusedID, let input = textInputs[id] else { return }
+        focusedID = nil
+        input.submit()
+        invalidate()
+    }
+
+    public func resignFocus() {
+        guard focusedID != nil else { return }
+        focusedID = nil
+        invalidate()
+    }
+
     func stateStorage(for key: String, initial: Any) -> StateStorage {
         touchedKeys.insert(key)
         if let existing = storages[key] { return existing }
@@ -138,6 +194,9 @@ public final class ViewGraph {
     /// - Parameter app: objet racine optionnel (la structure `App`) dont l'état est installé avant `root`.
     public func build<Root: View>(environment: EnvironmentValues, app: Any? = nil, root: () -> Root) -> [LayoutNode] {
         actions = [:]
+        textInputs = [:]
+        dragHandlers = [:]
+        presentations = []
         touchedKeys = []
         currentAppear = []
         pendingAppear = []

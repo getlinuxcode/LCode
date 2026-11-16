@@ -11,6 +11,8 @@ public struct Text: View, _PrimitiveView, Equatable {
     var font: Font?
     var weight: Font.Weight?
     var isItalic = false
+    var strike = false
+    var underlined = false
     var color: Color?
 
     public init<S: StringProtocol>(_ content: S) {
@@ -26,6 +28,11 @@ public struct Text: View, _PrimitiveView, Equatable {
     public func bold() -> Text { fontWeight(.bold) }
     public func bold(_ isActive: Bool) -> Text { isActive ? bold() : self }
     public func italic() -> Text { var t = self; t.isItalic = true; return t }
+    public func strikethrough(_ isActive: Bool = true, color: Color? = nil) -> Text { var t = self; t.strike = isActive; return t }
+    public func underline(_ isActive: Bool = true, color: Color? = nil) -> Text { var t = self; t.underlined = isActive; return t }
+    public func monospacedDigit() -> Text { self }
+    public func kerning(_ kerning: CGFloat) -> Text { self }
+    public func tracking(_ tracking: CGFloat) -> Text { self }
     public func foregroundColor(_ color: Color?) -> Text { var t = self; t.color = color; return t }
     public func foregroundStyle(_ color: Color) -> Text { foregroundColor(color) }
 
@@ -34,6 +41,8 @@ public struct Text: View, _PrimitiveView, Equatable {
         var resolved = font ?? env.font ?? .body
         if let w = weight ?? env.fontWeight { resolved.weight = w }
         if isItalic || env.isItalic { resolved.isItalic = true }
+        resolved.isStrikethrough = strike
+        resolved.isUnderline = underlined
         var fg = (color ?? env.foregroundColor ?? .primary).resolvingTint(env)
         if !env.isEnabled { fg = .tertiaryLabel }
         var string = content

@@ -88,10 +88,14 @@ def main():
             continue
         sims = fv @ v                                   # similarité cosinus (vecteurs normés)
         sims = sims - 0.5 * np.abs(np.log(np.maximum(fr, 1e-3) / max(ratio, 1e-3)))  # pénalise un rapport différent
-        best = int(np.argmax(sims))
+        order = np.argsort(sims)[::-1]
+        best = int(order[0])
         score = float(sims[best])
+        margin = score - float(sims[order[1]])
         distances.append(score)
-        if score < 0.9:
+        # Accepté si très ressemblant, ou assez ressemblant ET nettement meilleur que le deuxième candidat
+        # (les formes très fines, comme « minus », ont une similarité plus basse à cause de l'anticrénelage).
+        if score < 0.9 and not (score >= 0.84 and margin >= 0.03):
             weak.append((e["name"], score))
             continue
         table[e["name"]] = cps[best]

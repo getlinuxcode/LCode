@@ -106,16 +106,54 @@ final class ScrollNode: LayoutNode {
 public struct ScrollView<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let content: Content
+    let horizontal: Bool
 
     public init(_ axes: Axis.Set = .vertical, showsIndicators: Bool = true, @ViewBuilder content: () -> Content) {
         self.content = content()
+        self.horizontal = axes == .horizontal
     }
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         let ctx = context.child("ScrollView")
         let children = LSimUI._makeNodes(content, ctx)
+        if horizontal {
+            let stack = StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)
+            context.graph.horizontalScrolls.insert(ctx.path + "#scroll")
+            return [HorizontalScrollNode(id: ctx.path + "#scroll", content: stack, graph: context.graph)]
+        }
         let stack = StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: children)
         return [ScrollNode(id: ctx.path + "#scroll", content: stack, graph: context.graph, background: nil, centerContent: true)]
+    }
+}
+
+/// Défilement horizontal : hauteur du contenu, largeur proposée.
+final class HorizontalScrollNode: LayoutNode {
+    let id: String
+    let content: LayoutNode
+    let graph: ViewGraph
+
+    init(id: String, content: LayoutNode, graph: ViewGraph) {
+        self.id = id
+        self.content = content
+        self.graph = graph
+        super.init()
+        _ = graph.scrollOffset(id)
+    }
+
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        let natural = content.sizeThatFits(ProposedViewSize(width: nil, height: p.height), lc)
+        let width = p.width.flatMap { $0.isFinite ? $0 : nil } ?? natural.width
+        return CGSize(width: width, height: natural.height)
+    }
+
+    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let natural = content.sizeThatFits(ProposedViewSize(width: nil, height: rect.height), lc)
+        let offset = min(max(0, graph.scrollOffset(id)), max(0, natural.width - rect.width))
+        graph.setScrollOffsetSilently(id, offset)
+        list.append(.pushClip(.rectangle, rect))
+        content.render(in: CGRect(x: rect.minX - offset, y: rect.minY, width: natural.width, height: rect.height), lc, &list)
+        list.append(.popClip)
+        list.append(.scrollRegion(id: id, rect))
     }
 }
 

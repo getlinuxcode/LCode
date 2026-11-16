@@ -44,6 +44,15 @@ public struct Button<Label: View>: View, _PrimitiveView {
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         let env = context.environment
         let id = context.path + "/Button"
+        if env.isInAlert {
+            let action = self.action, dismiss = env.presentationDismiss
+            context.graph.registerAction(id) { action(); dismiss?() }
+            var labelCtx = context.child("label")
+            labelCtx.environment.isInAlert = false
+            labelCtx.environment.foregroundColor = role == .destructive ? .red : .primary
+            labelCtx.environment.font = role == .cancel ? .body : .system(size: 17, weight: .semibold)
+            return [AlertButtonNode(group(LSimUI._makeNodes(label, labelCtx)), id: id, role: role)]
+        }
         if env.isEnabled { context.graph.registerAction(id, action) }
 
         // Toutes les valeurs viennent du profil de design (réécrit par le banc de calibration).

@@ -20,8 +20,15 @@ public struct EnvironmentValues {
     var buttonStyle: _ButtonStyleKind = .automatic
     public var controlSize: ControlSize = .regular
     public var buttonBorderShape: ButtonBorderShape = .automatic
+    public var labelStyle: _LabelStyleKind = .automatic
+    public var labelsHidden = false
+    public var textFieldStyle: _TextFieldStyleKind = .automatic
+    public var pickerStyle: _PickerStyleKind = .automatic
+    var onSubmit: (() -> Void)?
 
     private var custom: [ObjectIdentifier: Any] = [:]
+    /// Objets placés par `.environment(objet)`, indexés par leur type.
+    var objects: [ObjectIdentifier: AnyObject] = [:]
 
     public init() {}
 
@@ -36,15 +43,20 @@ public struct EnvironmentValues {
 public struct Environment<Value>: _DynamicProperty {
     final class Box { var values: EnvironmentValues? }
 
-    let keyPath: KeyPath<EnvironmentValues, Value>
+    let read: (EnvironmentValues) -> Value
     let box = Box()
 
     public init(_ keyPath: KeyPath<EnvironmentValues, Value>) {
-        self.keyPath = keyPath
+        read = { $0[keyPath: keyPath] }
+    }
+
+    /// `@Environment(MonModele.self)` : objet placé par `.environment(objet)`.
+    public init(_ objectType: Value.Type) where Value: AnyObject {
+        read = { $0.object(objectType) }
     }
 
     public var wrappedValue: Value {
-        (box.values ?? EnvironmentValues())[keyPath: keyPath]
+        read(box.values ?? EnvironmentValues())
     }
 
     func _install(_ context: _InstallContext) {

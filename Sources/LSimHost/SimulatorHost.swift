@@ -78,7 +78,7 @@ public final class SimulatorHost {
             self.scheduleRedraw()
         }
         let lc = LayoutContext(measurer: text, colorScheme: colorScheme, screen: device.screenRect, safeArea: device.safeArea)
-        displayList = layoutRoot(nodes, in: device.contentRect, lc)
+        displayList = layoutRoot(nodes, in: device.contentRect, lc, presentations: graph.presentations)
     }
 
     func draw(_ cr: OpaquePointer) {
@@ -178,38 +178,83 @@ public final class SimulatorHost {
     var isScrolling = false
     var pointer = CGPoint.zero
 
+    /// Contrôle qui suit le doigt (Slider) pendant le geste en cours.
+    var dragControlID: String?
+
     func press(at point: CGPoint) {
         dragStart = point
         dragLast = 0
+        dragLastX = 0
         isScrolling = false
         dragScrollID = displayList.scrollTarget(point)
-        graph.pressedID = displayList.hitTest(point)
+        let hit = displayList.hitTest(point)
+        // Toucher hors du champ actif : le clavier se ferme.
+        if hit != graph.focusedID { graph.resignFocus() }
+        if let hit, let handler = graph.dragHandlers[hit] {
+            dragControlID = hit
+            handler(point)
+        } else {
+            graph.pressedID = hit
+        }
         queueDraw()
     }
 
-    /// Déplacement du doigt (souris enfoncée) : au-delà de 8 pt, le geste devient un défilement.
+    /// Déplacement du doigt (souris enfoncée) : un contrôle glissable le suit ; sinon, au-delà de 8 pt,
+    /// le geste devient un défilement (horizontal pour les ScrollView horizontales).
     func drag(dx: CGFloat, dy: CGFloat) {
         guard let start = dragStart else { return }
+        if let control = dragControlID {
+            graph.dragHandlers[control]?(CGPoint(x: start.x + dx, y: start.y + dy))
+            return
+        }
         if !isScrolling, hypot(dx, dy) > 8, dragScrollID != nil {
             isScrolling = true
             graph.pressedID = nil
         }
         if isScrolling, let id = dragScrollID {
-            graph.scroll(id, by: -(dy - dragLast))
+            if graph.horizontalScrolls.contains(id) {
+                graph.scroll(id, by: -(dx - dragLastX))
+            } else {
+                graph.scroll(id, by: -(dy - dragLast))
+            }
         }
         dragLast = dy
-        _ = start
+        dragLastX = dx
     }
+
+    var dragLastX: CGFloat = 0
 
     func release(at point: CGPoint) {
         let pressed = graph.pressedID
         graph.pressedID = nil
-        if !isScrolling, let pressed, displayList.hitTest(point) == pressed {
+        if dragControlID == nil, !isScrolling, let pressed, displayList.hitTest(point) == pressed {
             graph.performAction(pressed)
         }
+        dragControlID = nil
         dragStart = nil
         isScrolling = false
         queueDraw()
+    }
+
+    /// Clavier : la frappe va au champ de texte actif ; sinon raccourcis du simulateur (D, Q).
+    func key(_ keyval: UInt32) -> Bool {
+        if graph.hasFocusedTextField {
+            switch keyval {
+            case 0xff08: graph.deleteBackward()                 // Retour arrière
+            case 0xff0d, 0xff8d: graph.submitText()             // Entrée
+            case 0xff1b: graph.resignFocus()                    // Échap
+            default:
+                let code = gdk_keyval_to_unicode(keyval)
+                guard code >= 0x20, let scalar = Unicode.Scalar(code) else { return false }
+                graph.insertText(String(Character(scalar)))
+            }
+            return true
+        }
+        switch keyval {
+        case 0x64, 0x44: toggleColorScheme(); return true
+        case 0x71, 0x51: running = false; return true
+        default: return false
+        }
     }
 
     /// Molette : défile la zone sous le pointeur.
@@ -300,11 +345,7 @@ public final class SimulatorHost {
         let keys = gtk_event_controller_key_new()!
         let keyPressed: @convention(c) (OpaquePointer?, guint, guint, GdkModifierType, gpointer?) -> gboolean = { _, keyval, _, _, data in
             let host = Unmanaged<SimulatorHost>.fromOpaque(data!).takeUnretainedValue()
-            switch keyval {
-            case 0x64, 0x44: host.toggleColorScheme(); return 1
-            case 0x71, 0x51: host.running = false; return 1
-            default: return 0
-            }
+            return host.key(keyval) ? 1 : 0
         }
         lsim_signal_connect(UnsafeMutableRawPointer(keys), "key-pressed", unsafeBitCast(keyPressed, to: GCallback.self), me)
         gtk_widget_add_controller(window, keys)
@@ -317,6 +358,14 @@ public final class SimulatorHost {
 
         gtk_window_set_child(UnsafeMutablePointer(gtkWindow), area)
         gtk_window_present(UnsafeMutablePointer(gtkWindow))
+
+        // Tâches asynchrones (.task, @MainActor) : la boucle d'exécution de Swift est servie
+        // toutes les 16 ms au sein de la boucle GTK.
+        let pump: @convention(c) (gpointer?) -> gboolean = { _ in
+            _ = RunLoop.main.run(mode: .default, before: Date())
+            return 1
+        }
+        g_timeout_add(16, pump, nil)
 
         while running {
             g_main_context_iteration(nil, 1)
@@ -350,6 +399,8 @@ public final class SimulatorHost {
         let surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Int32(size.width * pixelScale), Int32(size.height * pixelScale))
         let cr = cairo_create(surface)!
         cairo_scale(cr, pixelScale, pixelScale)
+        // Deux passes : la première fixe les tailles (GeometryReader) et lance les onAppear.
+        updateLayout()
         if screenOnly {
             updateLayout()
             let r = CairoRenderer(cr: cr, text: text)
