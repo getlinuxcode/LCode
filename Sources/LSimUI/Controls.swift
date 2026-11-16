@@ -29,13 +29,13 @@ func controlRow(_ label: [LayoutNode], _ trailing: LayoutNode) -> LayoutNode {
 /// Nœud de taille fixe dessiné par une fermeture.
 final class DrawNode: LayoutNode {
     let size: (ProposedViewSize) -> CGSize
-    let draw: (CGRect, LayoutContext, inout DisplayList) -> Void
+    let paint: (CGRect, LayoutContext, inout DisplayList) -> Void
     init(size: @escaping (ProposedViewSize) -> CGSize, draw: @escaping (CGRect, LayoutContext, inout DisplayList) -> Void) {
         self.size = size
-        self.draw = draw
+        self.paint = draw
     }
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize { size(p) }
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) { draw(rect, lc, &list) }
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) { paint(rect, lc, &list) }
 }
 
 extension Color {
@@ -210,7 +210,7 @@ final class TextFieldNode: LayoutNode {
         return CGSize(width: width, height: line.height + insets.vertical)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         if bordered {
             list.append(.fill(.roundedRectangle(cornerRadius: 6), rect, Color.secondarySystemGroupedBackground.resolve(in: lc.colorScheme)))
             list.append(.stroke(.roundedRectangle(cornerRadius: 6), rect.insetBy(dx: 0.25, dy: 0.25),

@@ -107,7 +107,7 @@ final class BarButtonNode: SingleChildNode {
         return CGSize(width: max(Self.size, s.width + 20), height: Self.size)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         GlassShapeNode(.capsule, tint: nil, profile: DesignProfile.current.button).render(in: rect, lc, &list)
         let s = child.sizeThatFits(.unspecified, lc)
         child.render(in: Alignment.center.place(s, in: rect), lc, &list)
@@ -219,7 +219,7 @@ final class SheetNode: LayoutNode {
         self.dimID = dimID
     }
 
-    override func render(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, lc.colorScheme == .dark ? 0.4 : M.dimAlpha)))
         list.append(.hitRegion(id: dimID, screen))
         let frame: CGRect
@@ -336,7 +336,7 @@ final class AlertNode: LayoutNode {
         self.blockID = blockID
     }
 
-    override func render(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, lc.colorScheme == .dark ? 0.45 : 0.2)))
         list.append(.hitRegion(id: blockID, screen))
         let inner = M.width - 2 * M.padding

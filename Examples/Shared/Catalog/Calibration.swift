@@ -52,10 +52,19 @@ enum CalibrationRunner {
                 show(-1)
                 try? await Task.sleep(for: .milliseconds(150))
                 CalibrationRecorder.shared.frames = [:]
+                let isAnimation = pageIDs[index].hasPrefix("anim.")
+                let sampler = isAnimation ? AnimationSampler(window: window) : nil
+                AnimationProbe.triggerTime = nil
                 show(index)
                 status("")
-                try? await Task.sleep(for: .milliseconds(900))
+                sampler?.start()
+                try? await Task.sleep(for: .milliseconds(isAnimation ? 2600 : 900))
+                sampler?.stop()
                 var payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
+                if let sampler, let trigger = AnimationProbe.triggerTime {
+                    // Position du carré rouge à chaque image, en secondes depuis le déclenchement.
+                    payload["samples"] = sampler.samples.map { [$0.time - trigger, $0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] }
+                }
                 // Permet au récepteur de savoir quand la série est complète (pages × 2 thèmes).
                 payload["pageCount"] = selected.count
                 status("Envoi \(pageIDs[index]) (\(scheme == .light ? "clair" : "sombre"))…")
@@ -255,4 +264,44 @@ extension View {
     }
 }
 
+#endif
+
+#if canImport(UIKit)
+/// Relève, à chaque image de l'écran, le cadre présenté de la couche rouge (carré des pages anim.*).
+@MainActor
+final class AnimationSampler: NSObject {
+    let window: UIWindow
+    var samples: [(time: Double, frame: CGRect)] = []
+    private var link: CADisplayLink?
+
+    init(window: UIWindow) { self.window = window }
+
+    func start() {
+        link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+        link?.preferredFrameRateRange = CAFrameRateRange(minimum: 120, maximum: 120, preferred: 120)
+        link?.add(to: .main, forMode: .common)
+    }
+
+    func stop() {
+        link?.invalidate()
+        link = nil
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        guard let frame = Self.redFrame(in: window.layer, root: window.layer) else { return }
+        samples.append((CACurrentMediaTime(), frame))
+    }
+
+    static func redFrame(in layer: CALayer, root: CALayer) -> CGRect? {
+        let presented = layer.presentation() ?? layer
+        if let c = presented.backgroundColor?.components, c.count >= 3, c[0] > 0.95, c[1] < 0.05, c[2] < 0.05,
+           presented.bounds.width > 50, presented.bounds.width < 70 {
+            return presented.convert(presented.bounds, to: root.presentation() ?? root)
+        }
+        for sub in layer.sublayers ?? [] {
+            if let f = redFrame(in: sub, root: root) { return f }
+        }
+        return nil
+    }
+}
 #endif

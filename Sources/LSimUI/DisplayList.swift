@@ -19,6 +19,9 @@ public enum DisplayItem {
     case chevron(CGRect, RGBA, lineWidth: CGFloat, pointingLeft: Bool)
     case pushOpacity(Double)
     case popOpacity
+    /// Translation et mise à l'échelle autour d'un point (transitions).
+    case pushTransform(dx: CGFloat, dy: CGFloat, scale: CGFloat, anchor: CGPoint)
+    case popTransform
     case pushClip(ShapeKind, CGRect)
     case popClip
     /// Fondu vertical d'une couleur opaque (en haut) vers transparent (en bas).
@@ -114,6 +117,8 @@ public final class LayoutContext {
     public let safeArea: EdgeInsets
     /// Pixels par point de l'appareil simulé (3 sur les iPhone récents).
     public var displayScale: CGFloat = 3
+    /// Animateur du graphe (nil : rendu sans animation).
+    public var animator: Animator?
 
     public init(measurer: TextMeasurer, colorScheme: ColorScheme, screen: CGRect = .zero, safeArea: EdgeInsets = EdgeInsets()) {
         self.measurer = measurer

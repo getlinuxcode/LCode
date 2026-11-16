@@ -206,7 +206,7 @@ final class GlassNode: LayoutNode {
         p.replacingUnspecifiedDimensions()
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         guard glass.variant != .identity else { return }
         list.append(.glass(shape, rect, glass.render(lc.colorScheme)))
     }

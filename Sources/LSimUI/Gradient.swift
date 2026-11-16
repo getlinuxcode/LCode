@@ -65,7 +65,7 @@ final class GradientNode: LayoutNode {
         p.replacingUnspecifiedDimensions()
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let stops = gradient.stops.map { ($0.color.resolve(in: lc.colorScheme), $0.location) }
         let p0 = CGPoint(x: rect.minX + rect.width * start.x, y: rect.minY + rect.height * start.y)
         let p1 = CGPoint(x: rect.minX + rect.width * end.x, y: rect.minY + rect.height * end.y)

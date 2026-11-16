@@ -17,13 +17,110 @@ open class LayoutNode {
     }
 
     open func computeSize(_ proposal: ProposedViewSize, _ lc: LayoutContext) -> CGSize { .zero }
-    open func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {}
+    /// Dessin du nœud dans le rectangle donné (à surcharger).
+    open func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {}
+
+    /// Identité stable (chemin dans l'arbre de vues), animation implicite et transition, posées à la
+    /// construction ; elles permettent d'animer le nœud d'une image à l'autre.
+    var identity: String?
+    var animation: Animation?
+    var transition: AnyTransition?
+    /// Clé du nœud dans l'image en cours (pour animer ses grandeurs propres, comme l'opacité).
+    var frameKey: String?
+
+    /// Point d'entrée du rendu : applique l'animation du cadre et les transitions, puis dessine.
+    public final func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        guard let animator = lc.animator, let identity else { return draw(in: rect, lc, &list) }
+        let key = animator.key(identity)
+        frameKey = key
+        let now = animator.frameTime
+        let v = animator.present(key, [Double(rect.minX), Double(rect.minY), Double(rect.width), Double(rect.height)],
+                                 animation: animation, now: now)
+        let presented = CGRect(x: v[0], y: v[1], width: max(0, v[2]), height: max(0, v[3]))
+        // Apparition pendant une transaction animée : transition (fondu par défaut) sur la racine du
+        // sous-arbre inséré seulement.
+        if let progress = animator.insertionProgress(key, animation: transition?.animation ?? animation),
+           progress < 1 {
+            let kinds = transition?.insertion ?? [.opacity]
+            var dx: CGFloat = 0, dy: CGFloat = 0, scale: CGFloat = 1, alpha = 1.0
+            let screen = lc.screen == .zero ? presented : lc.screen
+            for kind in kinds {
+                switch kind {
+                case .identity: break
+                case .opacity: alpha *= progress
+                case let .scale(s): scale *= CGFloat(s + (1 - s) * progress)
+                case let .move(edge):
+                    let k = CGFloat(1 - progress)
+                    switch edge {
+                    case .leading: dx -= (presented.maxX - screen.minX) * k
+                    case .trailing: dx += (screen.maxX - presented.minX) * k
+                    case .top: dy -= (presented.maxY - screen.minY) * k
+                    case .bottom: dy += (screen.maxY - presented.minY) * k
+                    }
+                case .slide: dx -= (presented.maxX - screen.minX) * CGFloat(1 - progress)
+                case let .offset(x, y): dx += x * CGFloat(1 - progress); dy += y * CGFloat(1 - progress)
+                }
+            }
+            list.append(.pushTransform(dx: dx, dy: dy, scale: scale, anchor: CGPoint(x: presented.midX, y: presented.midY)))
+            if alpha < 1 { list.append(.pushOpacity(max(0, alpha))) }
+            animator.enterInserted()
+            draw(in: presented, lc, &list)
+            animator.leaveInserted()
+            if alpha < 1 { list.append(.popOpacity) }
+            list.append(.popTransform)
+            return
+        }
+        draw(in: presented, lc, &list)
+    }
 
     /// Axe d'expansion d'un Spacer / Divider (défini par la pile parente).
     var stackAxis: Axis?
     var isSpacer: Bool { false }
     /// Une image (éventuellement enveloppée de modificateurs) : SwiftUI l'espace différemment.
     var isImage: Bool { (self as? SingleChildNode)?.child.isImage ?? false }
+    /// `.ignoresSafeArea()` quelque part dans la chaîne de modificateurs : le conteneur (écran de navigation)
+    /// lui donne tout l'écran, barres et zones sûres comprises.
+    var ignoresSafeArea: Bool { (self as? SingleChildNode)?.child.ignoresSafeArea ?? false }
+    /// Rectangle où le contenu est réellement dessiné (après `.offset`) : zone de toucher, comme SwiftUI.
+    func drawnRect(for rect: CGRect) -> CGRect { (self as? SingleChildNode)?.child.drawnRect(for: rect) ?? rect }
+}
+
+/// `.ignoresSafeArea()` : occupe tout l'écran (le conteneur l'y place) ; ailleurs, déborde dans les
+/// zones sûres qu'il touche.
+final class IgnoresSafeAreaNode: SingleChildNode {
+    override var ignoresSafeArea: Bool { true }
+
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        child.sizeThatFits(p, lc)
+    }
+
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let r = lc.extendingIntoSafeArea(rect)
+        let s = child.sizeThatFits(ProposedViewSize(r.size), lc)
+        child.render(in: Alignment.center.place(s, in: r), lc, &list)
+    }
+}
+
+struct _IgnoresSafeAreaModifier: _PrimitiveModifier {
+    func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
+        let nodes = content(context)
+        let child = nodes.count == 1 ? nodes[0] : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: nodes)
+        return [IgnoresSafeAreaNode(child)]
+    }
+}
+
+public struct SafeAreaRegions: OptionSet, Sendable {
+    public let rawValue: Int
+    public init(rawValue: Int) { self.rawValue = rawValue }
+    public static let container = SafeAreaRegions(rawValue: 1)
+    public static let keyboard = SafeAreaRegions(rawValue: 2)
+    public static let all: SafeAreaRegions = [.container, .keyboard]
+}
+
+extension View {
+    public func ignoresSafeArea(_ regions: SafeAreaRegions = .all, edges: Edge.Set = .all) -> some View {
+        modifier(_IgnoresSafeAreaModifier())
+    }
 }
 
 // MARK: - Feuilles
@@ -48,7 +145,7 @@ final class TextNode: LayoutNode {
         return CGSize(width: (size.width * scale).rounded(.up) / scale, height: (size.height * scale).rounded(.up) / scale)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.text(string, font, rect, color.resolve(in: lc.colorScheme), alignment))
     }
 }
@@ -72,7 +169,7 @@ final class ShapeNode: LayoutNode {
         return size
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         var r = rect
         if kind == .circle {
             let side = min(rect.width, rect.height)
@@ -108,7 +205,7 @@ final class DividerNode: LayoutNode {
         return CGSize(along: along.isFinite ? along : 10, cross: thickness, axis: lineAxis)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.fill(.rectangle, rect, Color.separator.resolve(in: lc.colorScheme)))
     }
 }
@@ -200,7 +297,7 @@ final class StackNode: LayoutNode {
         return CGSize(along: along, cross: cross, axis: axis)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let sizes = childSizes(ProposedViewSize(rect.size), lc)
         let crossSize = rect.size[axis.other]
         var cursor: CGFloat = axis == .horizontal ? rect.minX : rect.minY
@@ -232,7 +329,7 @@ final class ZStackNode: LayoutNode {
         }
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         for child in children {
             let s = child.sizeThatFits(ProposedViewSize(rect.size), lc)
             child.render(in: alignment.place(s, in: rect), lc, &list)
@@ -256,7 +353,7 @@ class SingleChildNode: LayoutNode {
         child.sizeThatFits(p, lc)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         child.render(in: rect, lc, &list)
     }
 }
@@ -278,7 +375,7 @@ final class PaddingNode: SingleChildNode {
         return CGSize(width: s.width + insets.horizontal, height: s.height + insets.vertical)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let inner = CGRect(
             x: rect.minX + insets.leading,
             y: rect.minY + insets.top,
@@ -332,7 +429,7 @@ final class FrameNode: SingleChildNode {
         return CGSize(width: resolve(p.width, cs.width, width), height: resolve(p.height, cs.height, height))
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let cp = ProposedViewSize(width: childProposal(rect.width, width), height: childProposal(rect.height, height))
         let cs = child.sizeThatFits(cp, lc)
         child.render(in: alignment.place(cs, in: rect), lc, &list)
@@ -352,7 +449,7 @@ final class LayerNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         if !isBackground { child.render(in: rect, lc, &list) }
         for node in layer {
             let s = node.sizeThatFits(ProposedViewSize(rect.size), lc)
@@ -369,9 +466,13 @@ final class OpacityNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        guard opacity < 1 else { return child.render(in: rect, lc, &list) }
-        list.append(.pushOpacity(opacity))
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        var opacity = self.opacity
+        if let animator = lc.animator, let key = frameKey {
+            opacity = animator.present(key + "#opacity", [opacity], animation: animation, now: animator.frameTime)[0]
+        }
+        guard opacity < 0.999 else { return child.render(in: rect, lc, &list) }
+        list.append(.pushOpacity(max(0, opacity)))
         child.render(in: rect, lc, &list)
         list.append(.popOpacity)
     }
@@ -384,7 +485,7 @@ final class ClipNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.pushClip(shape, rect))
         child.render(in: rect, lc, &list)
         list.append(.popClip)
@@ -398,8 +499,12 @@ final class OffsetNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         child.render(in: rect.offsetBy(dx: offset.width, dy: offset.height), lc, &list)
+    }
+
+    override func drawnRect(for rect: CGRect) -> CGRect {
+        child.drawnRect(for: rect.offsetBy(dx: offset.width, dy: offset.height))
     }
 }
 
@@ -416,7 +521,7 @@ final class TapNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         if isPressed && pressedOpacity < 1 {
             list.append(.pushOpacity(pressedOpacity))
             child.render(in: rect, lc, &list)
@@ -424,7 +529,7 @@ final class TapNode: SingleChildNode {
         } else {
             child.render(in: rect, lc, &list)
         }
-        list.append(.hitRegion(id: id, rect))
+        list.append(.hitRegion(id: id, child.drawnRect(for: rect)))
     }
 }
 
@@ -433,14 +538,18 @@ final class TapNode: SingleChildNode {
 /// Dispose les vues racines dans la zone sûre de l'écran (centrées, comme un WindowGroup).
 public func layoutRoot(_ nodes: [LayoutNode], in container: CGRect, _ lc: LayoutContext,
                        presentations: [LayoutNode] = []) -> DisplayList {
-    var list = DisplayList()
     let root: LayoutNode = nodes.count == 1 ? nodes[0] : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: nodes)
     let size = root.sizeThatFits(ProposedViewSize(container.size), lc)
-    root.render(in: Alignment.center.place(size, in: container), lc, &list)
-    // Feuilles et alertes : dessinées sur tout l'écran, au-dessus du reste.
     let screen = lc.screen == .zero ? container : lc.screen
-    for presentation in presentations {
-        presentation.render(in: screen, lc, &list)
+    func renderAll() -> DisplayList {
+        var list = DisplayList()
+        root.render(in: Alignment.center.place(size, in: container), lc, &list)
+        // Feuilles et alertes : dessinées sur tout l'écran, au-dessus du reste.
+        for presentation in presentations {
+            presentation.render(in: screen, lc, &list)
+        }
+        return list
     }
-    return list
+    // Avec un animateur : une ou deux passes (cibles, puis valeurs présentées).
+    return lc.animator?.frame(renderAll) ?? renderAll()
 }

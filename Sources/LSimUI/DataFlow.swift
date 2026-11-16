@@ -136,50 +136,6 @@ extension RangeReplaceableCollection where Self: MutableCollection {
     }
 }
 
-// MARK: - Animations (acceptées ; les changements sont pour l'instant appliqués sans transition)
-
-public struct Animation: Equatable, Sendable {
-    let name: String
-    public static let `default` = Animation(name: "default")
-    public static let linear = Animation(name: "linear")
-    public static let easeIn = Animation(name: "easeIn")
-    public static let easeOut = Animation(name: "easeOut")
-    public static let easeInOut = Animation(name: "easeInOut")
-    public static let spring = Animation(name: "spring")
-    public static let bouncy = Animation(name: "bouncy")
-    public static let smooth = Animation(name: "smooth")
-    public static let snappy = Animation(name: "snappy")
-    public static let interactiveSpring = Animation(name: "interactiveSpring")
-    public static func linear(duration: Double) -> Animation { .linear }
-    public static func easeIn(duration: Double) -> Animation { .easeIn }
-    public static func easeOut(duration: Double) -> Animation { .easeOut }
-    public static func easeInOut(duration: Double) -> Animation { .easeInOut }
-    public static func spring(response: Double = 0.5, dampingFraction: Double = 0.825, blendDuration: Double = 0) -> Animation { .spring }
-    public static func spring(duration: Double, bounce: Double = 0) -> Animation { .spring }
-    public func speed(_ speed: Double) -> Animation { self }
-    public func delay(_ delay: Double) -> Animation { self }
-    public func repeatCount(_ count: Int, autoreverses: Bool = true) -> Animation { self }
-    public func repeatForever(autoreverses: Bool = true) -> Animation { self }
-}
-
-@discardableResult
-public func withAnimation<Result>(_ animation: Animation? = .default, _ body: () throws -> Result) rethrows -> Result {
-    try body()
-}
-
-public struct AnyTransition: Sendable {
-    public static let identity = AnyTransition()
-    public static let opacity = AnyTransition()
-    public static let slide = AnyTransition()
-    public static let scale = AnyTransition()
-    public static func scale(scale: CGFloat, anchor: UnitPoint = .center) -> AnyTransition { AnyTransition() }
-    public static func move(edge: Edge) -> AnyTransition { AnyTransition() }
-    public static func push(from edge: Edge) -> AnyTransition { AnyTransition() }
-    public static func asymmetric(insertion: AnyTransition, removal: AnyTransition) -> AnyTransition { AnyTransition() }
-    public func combined(with other: AnyTransition) -> AnyTransition { self }
-    public func animation(_ animation: Animation?) -> AnyTransition { self }
-}
-
 public struct UnitPoint: Hashable, Sendable {
     public var x: CGFloat, y: CGFloat
     public init(x: CGFloat, y: CGFloat) { self.x = x; self.y = y }
@@ -194,10 +150,6 @@ public struct UnitPoint: Hashable, Sendable {
     public static let bottomTrailing = UnitPoint(x: 1, y: 1)
 }
 
-extension View {
-    public func animation<V: Equatable>(_ animation: Animation?, value: V) -> some View { self }
-    public func transition(_ t: AnyTransition) -> some View { self }
-}
 
 // MARK: - Tâches asynchrones : .task
 

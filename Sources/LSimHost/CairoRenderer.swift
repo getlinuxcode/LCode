@@ -191,6 +191,13 @@ struct CairoRenderer {
             case let .text(string, font, rect, color, alignment):
                 // +1 pt de marge pour éviter un retour à la ligne dû aux arrondis.
                 drawText(string, font: font, at: rect.origin, width: rect.width + 1, color: color, alignment: alignment)
+            case let .pushTransform(dx, dy, scale, anchor):
+                cairo_save(cr)
+                cairo_translate(cr, Double(dx + anchor.x), Double(dy + anchor.y))
+                cairo_scale(cr, Double(scale), Double(scale))
+                cairo_translate(cr, Double(-anchor.x), Double(-anchor.y))
+            case .popTransform:
+                cairo_restore(cr)
             case let .pushOpacity(alpha):
                 opacities.append(alpha)
                 cairo_push_group(cr)

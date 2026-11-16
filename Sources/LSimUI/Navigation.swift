@@ -268,7 +268,7 @@ final class NavigationNode: LayoutNode {
         p.replacingUnspecifiedDimensions(by: CGSize(width: 375, height: 600))
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let bar = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: M.currentBarHeight)
         var contentRect = CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: rect.height - bar.height)
         var showInlineTitle = largeTitle == nil
@@ -293,6 +293,11 @@ final class NavigationNode: LayoutNode {
             // Le contenu défilant occupe tout l'écran et passe sous la barre.
             scroll.topInset = bar.height
             page.render(in: rect, lc, &list)
+        } else if page.ignoresSafeArea {
+            // Fond plein écran : passe sous la barre et dans les zones sûres.
+            let screen = lc.screen == .zero ? rect : lc.screen
+            let s = page.sizeThatFits(ProposedViewSize(screen.size), lc)
+            page.render(in: Alignment.center.place(s, in: screen), lc, &list)
         } else {
             let s = page.sizeThatFits(ProposedViewSize(contentRect.size), lc)
             page.render(in: Alignment.center.place(s, in: contentRect), lc, &list)

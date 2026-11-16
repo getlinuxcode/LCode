@@ -40,12 +40,21 @@ public struct BuildContext {
 
 /// Transforme une vue (primitive ou composée) en nœuds de layout.
 public func _makeNodes<V: View>(_ view: V, _ context: BuildContext) -> [LayoutNode] {
+    let nodes: [LayoutNode]
     if let primitive = view as? _PrimitiveView {
-        return primitive._makeNodes(context)
+        nodes = primitive._makeNodes(context)
+    } else {
+        let ctx = context.child(String(describing: V.self))
+        installDynamicProperties(of: view, ctx)
+        nodes = _makeNodes(view.body, ctx)
     }
-    let ctx = context.child(String(describing: V.self))
-    installDynamicProperties(of: view, ctx)
-    return _makeNodes(view.body, ctx)
+    // Identité stable pour les animations : chemin de construction (le plus profond l'emporte), rang et type.
+    for (i, node) in nodes.enumerated() where node.identity == nil {
+        node.identity = "\(context.path)#\(i):\(type(of: node))"
+        node.animation = context.environment.animation
+        node.transition = context.environment.transition
+    }
+    return nodes
 }
 
 // MARK: - Propriétés dynamiques (@State, @Environment…)

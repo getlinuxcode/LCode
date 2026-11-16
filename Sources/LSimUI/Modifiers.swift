@@ -249,7 +249,7 @@ final class MarkerNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         child.render(in: rect, lc, &list)
         list.append(.marker(id: id, rect))
     }

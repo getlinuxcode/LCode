@@ -81,7 +81,7 @@ final class ScrollNode: LayoutNode {
         return CGSize(width: width.isFinite ? width : 0, height: height.isFinite ? height : 0)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let viewport = lc.extendingIntoSafeArea(rect)
         if let background {
             list.append(.fill(.rectangle, viewport, background.resolve(in: lc.colorScheme)))
@@ -167,7 +167,7 @@ final class HorizontalScrollNode: LayoutNode {
         return CGSize(width: width, height: natural.height)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let natural = content.sizeThatFits(ProposedViewSize(width: nil, height: rect.height), lc)
         let offset = min(max(0, graph.scrollOffset(id)), max(0, natural.width - rect.width))
         graph.setScrollOffsetSilently(id, offset)
@@ -190,7 +190,7 @@ final class RowActionNode: SingleChildNode {
         super.init(child)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         child.render(in: rect, lc, &list)
         list.append(.hitRegion(id: id, rect))
     }
@@ -253,7 +253,7 @@ final class ListContentNode: LayoutNode {
         return CGSize(width: width, height: y + M.bottomInset)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let rowX = rect.minX + M.margin
         let rowWidth = rect.width - 2 * M.margin
         let textX = rowX + M.rowPaddingH

@@ -162,7 +162,7 @@ final class GridNode: LayoutNode {
         return CGSize(along: along, cross: min(cross, crossUsed), axis: axis)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let cross = rect.size[axis.other]
         let (sizes, lines) = layout(cross, lc)
         let n = max(sizes.count, 1)
@@ -230,7 +230,7 @@ final class GeometryNode: LayoutNode {
         p.replacingUnspecifiedDimensions()
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         if graph.geometryFrames[key] != rect {
             graph.geometryFrames[key] = rect
             graph.invalidate()
@@ -453,7 +453,7 @@ final class TabBarNode: LayoutNode {
         p.replacingUnspecifiedDimensions(by: CGSize(width: 375, height: 600))
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let s = page.sizeThatFits(ProposedViewSize(rect.size), lc)
         page.render(in: s.width >= rect.width - 0.5 && s.height >= rect.height - 0.5 ? rect : Alignment.center.place(s, in: rect), lc, &list)
 

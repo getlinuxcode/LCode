@@ -187,8 +187,13 @@ public final class ViewGraph {
     }
 
     public func invalidate() {
+        // Changement fait dans `withAnimation` : l'image suivante l'anime.
+        if let animation = Transaction.current { animator.pending = animation }
         onInvalidate?()
     }
+
+    /// Valeurs présentées d'une image à l'autre (animations).
+    public let animator = Animator()
 
     /// Construit les nœuds de layout d'une vue racine.
     /// - Parameter app: objet racine optionnel (la structure `App`) dont l'état est installé avant `root`.

@@ -118,7 +118,7 @@ final class SymbolNode: LayoutNode {
                       height: (n.height * k).isFinite ? n.height * k : proposed.height)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.symbol(name, font, scale, rect, color.resolve(in: lc.colorScheme)))
     }
 }
@@ -135,7 +135,7 @@ final class MissingImageNode: LayoutNode {
         resizable ? p.replacingUnspecifiedDimensions(by: CGSize(width: 40, height: 40)) : CGSize(width: 40, height: 40)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.fill(.roundedRectangle(cornerRadius: 4), rect, Color.gray.opacity(0.2).resolve(in: lc.colorScheme)))
         list.append(.stroke(.roundedRectangle(cornerRadius: 4), rect, Color.gray.resolve(in: lc.colorScheme), lineWidth: 1))
     }

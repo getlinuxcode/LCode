@@ -78,7 +78,10 @@ public final class SimulatorHost {
             self.scheduleRedraw()
         }
         let lc = LayoutContext(measurer: text, colorScheme: colorScheme, screen: device.screenRect, safeArea: device.safeArea)
+        lc.animator = graph.animator
         displayList = layoutRoot(nodes, in: device.contentRect, lc, presentations: graph.presentations)
+        // Animation en cours : image suivante dans ~16 ms.
+        if graph.animator.isAnimating { scheduleFrame() }
     }
 
     func draw(_ cr: OpaquePointer) {
@@ -268,6 +271,21 @@ public final class SimulatorHost {
         queueDraw()
     }
 
+    private var frameScheduled = false
+
+    /// Prochaine image d'animation (une seule demande à la fois).
+    func scheduleFrame() {
+        guard area != nil, !frameScheduled else { return }
+        frameScheduled = true
+        let cb: @convention(c) (gpointer?) -> gboolean = { data in
+            let host = Unmanaged<SimulatorHost>.fromOpaque(data!).takeUnretainedValue()
+            host.frameScheduled = false
+            host.queueDraw()
+            return 0
+        }
+        g_timeout_add(16, cb, Unmanaged.passUnretained(self).toOpaque())
+    }
+
     func queueDraw() {
         redrawScheduled = false
         if let area { gtk_widget_queue_draw(area) }
@@ -391,6 +409,27 @@ public final class SimulatorHost {
             if let id = displayList.hitTest(point) { graph.performAction(id) }
         }
         let env = ProcessInfo.processInfo.environment
+        // Animation image par image : LSIM_FRAMES="pas,nombre" (secondes) après les touchers, horloge
+        // simulée ; les cadres des repères sont écrits dans LSIM_SAMPLES (JSON).
+        if let spec = env["LSIM_FRAMES"], let out = env["LSIM_SAMPLES"] {
+            let parts = spec.split(separator: ",").compactMap { Double($0) }
+            let step = parts.first ?? 1.0 / 60, count = Int(parts.count > 1 ? parts[1] : 120)
+            final class TimeBox { var t = 0.0 }
+            let time = TimeBox()
+            let base = graph.animator.clock()
+            graph.animator.clock = { base + time.t }
+            var samples: [String: [[Double]]] = [:]
+            for i in 0..<count {
+                time.t = Double(i) * step
+                updateLayout()
+                for (id, r) in displayList.markers {
+                    samples[id, default: []].append([time.t, Double(r.minX), Double(r.minY), Double(r.width), Double(r.height)])
+                }
+            }
+            if let data = try? JSONSerialization.data(withJSONObject: samples) {
+                FileManager.default.createFile(atPath: out, contents: data)
+            }
+        }
         let screenOnly = env["LSIM_SCREEN_ONLY"] == "1"
         // Écran seul : contenu de l'app à l'échelle de l'appareil (@3x), sans cadre ni barre d'état,
         // comme une capture faite par l'app elle-même sur l'iPhone.

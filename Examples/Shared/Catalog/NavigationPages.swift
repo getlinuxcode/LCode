@@ -19,6 +19,12 @@ enum NavigationCatalog {
     /// pas suivre le grand titre sur la capture, alors qu'il suit le doigt ; comportement vérifié à la main.)
     static let offsets: [Int] = [0, 56, 70, 120, 352]
     static let largeTitle: CGFloat = 52
+    static let buttonBackgrounds: [(String, GlassBackground)] = [
+        ("low", .low), ("high", .high), ("xcoarse", .rampX(.coarse)), ("xsin", .rampX(.sin)), ("xcos", .rampX(.cos)),
+        ("ycoarse", .rampY(.coarse)), ("ysin", .rampY(.sin)), ("ycos", .rampY(.cos)),
+        ("xsin64", .rampX(.sin64)), ("xcos64", .rampX(.cos64)), ("ysin64", .rampY(.sin64)), ("ycos64", .rampY(.cos64)),
+        ("checker", .checker),
+    ]
     static let edgeBackgrounds: [(String, GlassBackground)] = [
         ("low", .low), ("high", .high), ("xsin", .rampX(.sin)), ("xcos", .rampX(.cos)),
     ]
@@ -30,6 +36,11 @@ enum NavigationCatalog {
             pages.append(CatalogPage(id: "nav.bar.\(offset)") {
                 AnyView(NavigationBarPage(offset: CGFloat(offset), background: .checker))
             })
+        }
+        // Boutons de barre posés directement sur des fonds codés (sans défilement ni matière) : mesure du
+        // verre des boutons, qui s'adapte au contenu qu'il recouvre.
+        for (name, bg) in buttonBackgrounds {
+            pages.append(CatalogPage(id: "nav.button.\(name)") { AnyView(NavigationButtonPage(background: bg)) })
         }
         for (name, bg) in edgeBackgrounds {
             pages.append(CatalogPage(id: "nav.edge.\(name)") {
@@ -107,4 +118,32 @@ struct NavigationBarPage: View {
         return nil
     }
     #endif
+}
+
+/// Écran poussé, fond codé plein écran immobile (pas de zone défilante : pas d'effet de bord).
+@available(iOS 26, *)
+struct NavigationButtonPage: View {
+    let background: GlassBackground
+    @State private var path = [1]
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            Text("Accueil")
+                .navigationTitle("Accueil")
+                .navigationDestination(for: Int.self) { _ in
+                    ZStack(alignment: .topLeading) {
+                        CodedBackground(kind: background, width: 440, height: 956)
+                            .calibrate("board.nav.button")
+                    }
+                    .ignoresSafeArea()
+                    .navigationTitle("Réglages")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {} label: { Image(systemName: "plus") }
+                        }
+                    }
+                }
+        }
+    }
 }

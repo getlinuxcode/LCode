@@ -177,7 +177,7 @@ final class SquareNode: SingleChildNode {
         return CGSize(width: side, height: side)
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         let s = child.sizeThatFits(ProposedViewSize(rect.size), lc)
         child.render(in: Alignment.center.place(s, in: rect), lc, &list)
     }
@@ -199,7 +199,7 @@ final class GlassShapeNode: LayoutNode {
         p.replacingUnspecifiedDimensions()
     }
 
-    override func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         // Vrai matériau Liquid Glass ; un verre « proéminent » est entièrement teinté.
         var glass = Glass.regular.render(lc.colorScheme)
         if let tint {
