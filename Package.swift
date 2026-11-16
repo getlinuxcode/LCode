@@ -12,7 +12,7 @@ let package = Package(
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
     ],
     targets: [
-        .target(name: "LSimUI", swiftSettings: v5),
+        .target(name: "LSimUI", resources: [.process("Profiles")], swiftSettings: v5),
         .systemLibrary(
             name: "CGtk",
             pkgConfig: "gtk4",

@@ -1,0 +1,125 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.extraLarge.destructive",
+   "width": 119.33333333333331,
+   "x": 164,
+   "y": 602.3333333333334
+  },
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.extraLarge.disabled",
+   "width": 87.33333333333331,
+   "x": 295.3333333333333,
+   "y": 602.3333333333334
+  },
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.extraLarge.normal",
+   "width": 94.66666666666666,
+   "x": 57.33333333333334,
+   "y": 602.3333333333334
+  },
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.large.destructive",
+   "width": 119.33333333333331,
+   "x": 164,
+   "y": 530
+  },
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.large.disabled",
+   "width": 87.33333333333331,
+   "x": 295.3333333333333,
+   "y": 530
+  },
+  {
+   "height": 50.33333333333337,
+   "id": "button.borderedProminent.large.normal",
+   "width": 94.66666666666666,
+   "x": 57.33333333333334,
+   "y": 530
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.mini.destructive",
+   "width": 91.33333333333331,
+   "x": 177.66666666666669,
+   "y": 373.6666666666667
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.mini.disabled",
+   "width": 62.666666666666686,
+   "x": 281,
+   "y": 373.6666666666667
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.mini.normal",
+   "width": 69.33333333333334,
+   "x": 96.33333333333334,
+   "y": 373.6666666666667
+  },
+  {
+   "height": 34.333333333333314,
+   "id": "button.borderedProminent.regular.destructive",
+   "width": 103.33333333333331,
+   "x": 172,
+   "y": 473.6666666666667
+  },
+  {
+   "height": 34.333333333333314,
+   "id": "button.borderedProminent.regular.disabled",
+   "width": 71.33333333333331,
+   "x": 287.3333333333333,
+   "y": 473.6666666666667
+  },
+  {
+   "height": 34.333333333333314,
+   "id": "button.borderedProminent.regular.normal",
+   "width": 78.66666666666666,
+   "x": 81.33333333333334,
+   "y": 473.6666666666667
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.small.destructive",
+   "width": 91.33333333333331,
+   "x": 177.66666666666669,
+   "y": 423.6666666666667
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.small.disabled",
+   "width": 62.666666666666686,
+   "x": 281,
+   "y": 423.6666666666667
+  },
+  {
+   "height": 28,
+   "id": "button.borderedProminent.small.normal",
+   "width": 69.33333333333334,
+   "x": 96.33333333333334,
+   "y": 423.6666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 218.3333333333333,
+   "x": 110.83333333333334,
+   "y": 331.33333333333337
+  }
+ ],
+ "page": "button.borderedProminent",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

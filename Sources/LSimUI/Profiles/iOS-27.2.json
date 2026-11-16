@@ -1,0 +1,205 @@
+{
+  "button": {
+    "defaultShape": "capsule",
+    "disabledGlassTintedFill": {
+      "dark": [
+        0.2157,
+        0.2157,
+        0.2157,
+        1
+      ],
+      "light": [
+        0.8784,
+        0.8784,
+        0.8784,
+        1
+      ]
+    },
+    "glassFill": {
+      "dark": [
+        0.13,
+        0.13,
+        0.13,
+        1
+      ],
+      "light": [
+        0.996,
+        0.996,
+        0.996,
+        0.61
+      ]
+    },
+    "glassRimAlphaDark": 0.03,
+    "glassRimAlphaLight": 0.03,
+    "glassShadowAlphaDark": 0.25,
+    "glassShadowAlphaLight": 0.02,
+    "glassStroke": {
+      "dark": [
+        0.98,
+        0.98,
+        0.98,
+        0.14
+      ],
+      "light": [
+        0.08,
+        0.08,
+        0.08,
+        0
+      ]
+    },
+    "neutralFill": {
+      "dark": [
+        0.4706,
+        0.4706,
+        0.502,
+        0.32
+      ],
+      "light": [
+        0.4706,
+        0.4706,
+        0.502,
+        0.16
+      ]
+    },
+    "roundedRectangleRadius": 7,
+    "sizes": {
+      "extraLarge": {
+        "circlePadH": 6.78,
+        "fontSize": 17,
+        "padH": 20.11,
+        "padV": 15
+      },
+      "large": {
+        "circlePadH": 6.78,
+        "fontSize": 17,
+        "padH": 20.11,
+        "padV": 15
+      },
+      "mini": {
+        "circlePadH": 6.78,
+        "fontSize": 15,
+        "padH": 9.56,
+        "padV": 5
+      },
+      "regular": {
+        "circlePadH": 6.78,
+        "fontSize": 17,
+        "padH": 12.11,
+        "padV": 7
+      },
+      "small": {
+        "circlePadH": 6.78,
+        "fontSize": 15,
+        "padH": 9.56,
+        "padV": 5
+      }
+    },
+    "styles": {
+      "automatic": {
+        "destructiveLabel": "tint",
+        "fill": "none",
+        "followsControlSize": true,
+        "label": "tint",
+        "pressedOpacity": 0.25
+      },
+      "bordered": {
+        "destructiveLabel": "tint",
+        "fill": "neutralOrTinted",
+        "followsControlSize": true,
+        "label": "tint",
+        "pressedOpacity": 0.25
+      },
+      "borderedProminent": {
+        "destructiveLabel": "white",
+        "fill": "solid",
+        "followsControlSize": true,
+        "label": "white",
+        "pressedOpacity": 0.7
+      },
+      "borderless": {
+        "destructiveLabel": "tint",
+        "fill": "none",
+        "followsControlSize": true,
+        "label": "tint",
+        "pressedOpacity": 0.25
+      },
+      "glass": {
+        "destructiveLabel": "primary",
+        "fill": "glass",
+        "followsControlSize": true,
+        "label": "primary",
+        "pressedOpacity": 0.25
+      },
+      "glassProminent": {
+        "destructiveLabel": "white",
+        "fill": "glassTinted",
+        "followsControlSize": true,
+        "label": "white",
+        "pressedOpacity": 0.7
+      },
+      "plain": {
+        "destructiveLabel": "primary",
+        "fill": "none",
+        "followsControlSize": false,
+        "label": "inherit",
+        "pressedOpacity": 0.25
+      }
+    },
+    "tintFillAlphaDark": 0.25,
+    "tintFillAlphaLight": 0.18
+  },
+  "name": "iOS 27.2 — iPhone 17 Pro Max",
+  "text": {
+    "largeSizeTracking": 0.37,
+    "tracking": {
+      "10": 0.12,
+      "11": -0.211,
+      "12": -0.334,
+      "13": -0.256,
+      "14": -0.293,
+      "15": -0.283,
+      "16": -0.348,
+      "17": -0.408,
+      "18": -0.44,
+      "19": -0.45,
+      "20": -0.164,
+      "21": -0.36,
+      "22": -0.181,
+      "23": -0.1,
+      "24": 0.07,
+      "25": 0.15,
+      "26": 0.22,
+      "27": 0.29,
+      "28": -0.253,
+      "29": 0.4,
+      "30": 0.4,
+      "31": 0.39,
+      "32": 0.41,
+      "33": 0.4,
+      "34": -0.066,
+      "35": 0.38,
+      "36": 0.37,
+      "37": 0.36,
+      "38": 0.37,
+      "39": 0.38,
+      "40": 0.37,
+      "6": 0.24,
+      "7": 0.23,
+      "8": 0.21,
+      "9": 0.17
+    },
+    "trackingSemibold": {
+      "11": -0.163,
+      "12": -0.181,
+      "13": -0.342,
+      "14": -0.331,
+      "15": -0.273,
+      "16": -0.176,
+      "17": -0.332,
+      "20": -0.228,
+      "22": -0.213,
+      "28": -0.142,
+      "34": 0.044
+    }
+  }
+}

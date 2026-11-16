@@ -42,7 +42,9 @@ enum CalibrationRunner {
                 show(index)
                 status("")
                 try? await Task.sleep(for: .milliseconds(900))
-                let payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
+                var payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
+                // Permet au récepteur de savoir quand la série est complète (pages × 2 thèmes).
+                payload["pageCount"] = pageCount
                 status("Envoi \(pageIDs[index]) (\(scheme == .light ? "clair" : "sombre"))…")
                 try? await Task.sleep(for: .milliseconds(50))
                 do {

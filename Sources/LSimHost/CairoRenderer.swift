@@ -33,20 +33,10 @@ final class PangoText: TextMeasurer {
     }
 
     /// Approche (tracking) appliquée par iOS à la police système, en points (table des Human Interface Guidelines).
+    /// Approche appliquée par iOS à la police système, lue dans le profil de design (ajustée par le banc).
     static func tracking(for font: Font) -> CGFloat {
         guard font.design != .monospaced else { return 0 }
-        let table: [Int: CGFloat] = [
-            6: 0.24, 7: 0.23, 8: 0.21, 9: 0.17, 10: 0.12, 11: 0.06, 12: 0, 13: -0.08, 14: -0.15,
-            15: -0.23, 16: -0.31, 17: -0.30 /* calibré sur iPhone, iOS 27 (HIG : -0.43) */, 18: -0.44, 19: -0.45, 20: -0.45, 21: -0.36, 22: -0.26,
-            23: -0.10, 24: 0.07, 25: 0.15, 26: 0.22, 27: 0.29, 28: 0.38, 29: 0.40, 30: 0.40,
-            31: 0.39, 32: 0.41, 33: 0.40, 34: 0.40, 35: 0.38, 36: 0.37, 37: 0.36, 38: 0.37,
-            39: 0.38, 40: 0.37,
-        ]
-        let size = Int(font.size.rounded())
-        if let value = table[size] { return value }
-        if size < 6 { return 0.24 }
-        // Au-delà de 40 pt, l'approche diminue progressivement jusqu'à 0 vers 80 pt.
-        return max(0, 0.37 * (1 - CGFloat(size - 40) / 40))
+        return CGFloat(DesignProfile.current.text.tracking(forSize: Double(font.size), weight: font.weight.rawValue))
     }
 
     /// Interlignes « Dynamic Type » des HIG. Non utilisés : le banc de calibration a montré que SwiftUI

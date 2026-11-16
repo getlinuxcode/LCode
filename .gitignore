@@ -2,5 +2,6 @@
 .swiftpm/
 *.xip
 .bsp/
-Calibration/
+/Calibration/
 Examples/iOS/Catalog/Sources/Catalog/CalibrationServer.swift
+__pycache__/

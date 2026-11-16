@@ -1,0 +1,97 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 13.333333333333371,
+   "id": "text.11.caption2.regular",
+   "width": 193.66666666666663,
+   "x": 80,
+   "y": 609
+  },
+  {
+   "height": 14.333333333333371,
+   "id": "text.12.caption.regular",
+   "width": 208.66666666666663,
+   "x": 80,
+   "y": 584.6666666666666
+  },
+  {
+   "height": 15.666666666666629,
+   "id": "text.13.footnote.regular",
+   "width": 223.33333333333331,
+   "x": 80,
+   "y": 559
+  },
+  {
+   "height": 17,
+   "id": "text.14.system14.regular",
+   "width": 238,
+   "x": 80,
+   "y": 660.3333333333334
+  },
+  {
+   "height": 18,
+   "id": "text.15.subheadline.regular",
+   "width": 252.33333333333331,
+   "x": 80,
+   "y": 531
+  },
+  {
+   "height": 18,
+   "id": "text.15.system15.regular",
+   "width": 252.33333333333331,
+   "x": 80,
+   "y": 632.3333333333334
+  },
+  {
+   "height": 19.333333333333314,
+   "id": "text.16.callout.regular",
+   "width": 267,
+   "x": 80,
+   "y": 501.6666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "text.17.body.regular",
+   "width": 280,
+   "x": 80,
+   "y": 471.33333333333337
+  },
+  {
+   "height": 24,
+   "id": "text.20.title3.regular",
+   "width": 198.66666666666663,
+   "x": 80,
+   "y": 437.33333333333337
+  },
+  {
+   "height": 26.333333333333314,
+   "id": "text.22.title2.regular",
+   "width": 215.33333333333331,
+   "x": 80,
+   "y": 401.00000000000006
+  },
+  {
+   "height": 33.666666666666686,
+   "id": "text.28.title.regular",
+   "width": 202.33333333333331,
+   "x": 80,
+   "y": 357.33333333333337
+  },
+  {
+   "height": 40.666666666666686,
+   "id": "text.34.largeTitle.regular",
+   "width": 244.33333333333331,
+   "x": 80,
+   "y": 306.6666666666667
+  }
+ ],
+ "page": "text.regular",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

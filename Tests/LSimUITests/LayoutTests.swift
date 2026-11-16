@@ -106,3 +106,12 @@ struct Counter: View {
     list = render(Root(key: 2), graph: graph)
     #expect(texts(list)[0].0 == "count 0")
 }
+
+@Test func embeddedProfileLoads() {
+    // Le profil JSON embarqué doit se décoder (sinon LSim retomberait silencieusement sur le repli).
+    let url = Bundle.module.url(forResource: "iOS-27.2", withExtension: "json")
+    #expect(url != nil)
+    let profile = try? JSONDecoder().decode(DesignProfile.self, from: Data(contentsOf: url!))
+    #expect(profile?.button.sizes.count == 5)
+    #expect(profile?.button.styles.count == 7)
+}

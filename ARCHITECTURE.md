@@ -79,8 +79,30 @@ La fidélité ne repose pas sur des captures faites à la main mais sur des mesu
    les mêmes pages par LSim (`LSIM_SCREEN_ONLY`, `LSIM_DUMP`) et produit un rapport des écarts
    et des planches iPhone | LSim | différence.
 
-Les mesures sont reportées dans des tables (`ButtonMetrics`, `ListMetrics`, `NavigationMetrics`),
-par génération de design (`DesignStyle` : Liquid Glass ou compatibilité).
+### Ajustement automatique
+
+Les valeurs mesurables vivent dans un **profil de design** JSON
+(`Sources/LSimUI/Profiles/iOS-27.2.json`) : approche du texte par corps et par graisse, gabarits
+de boutons par taille, couleurs, matière du verre, et aussi les *comportements* (couleur du libellé,
+sensibilité à `controlSize`, type de remplissage). LSim le lit au démarrage ; `LSIM_PROFILE`
+permet d'en essayer une variante sans recompiler.
+
+Une seule commande fait tout :
+
+```bash
+python3 -I tools/calibration/calibrate.py
+```
+
+compile et installe le catalogue (xtool), attend que l'on touche l'icône sur l'iPhone, reçoit les
+mesures, puis `fit.py` ajuste le profil (lecture directe des couches, choix des comportements par
+recherche, marges et approche par correction des écarts, verre par recherche sur les pixels),
+recompile LSim, enregistre les références dans `Tests/Calibration/` et lance `check.py`
+(non-régression : échoue si un repère s'éloigne de plus de 0,5 pt de son résidu accepté).
+Les écarts qu'aucun réglage n'explique sont listés comme anomalies dans `ajustement.md` : ce sont
+eux, et eux seuls, qui demandent du code.
+
+Les composants non encore passés au profil gardent des tables en code (`ListMetrics`,
+`NavigationMetrics`), par génération de design (`DesignStyle` : Liquid Glass ou compatibilité).
 
 Pièges connus : les captures d'iPhone sont en Display P3 (convertir avant de comparer) ;
 `lld` inscrit la version minimale comme version du SDK (forcer `-platform_version`), sinon iOS

@@ -1,0 +1,125 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.extraLarge.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 587.6666666666666
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.extraLarge.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 587.6666666666666
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.extraLarge.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 587.6666666666666
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.large.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 545.3333333333333
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.large.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 545.3333333333333
+  },
+  {
+   "height": 20.33333333333337,
+   "id": "button.plain.large.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 545.3333333333333
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.mini.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 418.3333333333333
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.mini.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 418.3333333333333
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.mini.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 418.3333333333333
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.regular.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 502.99999999999994
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.regular.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 502.99999999999994
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.regular.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 502.99999999999994
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.small.destructive",
+   "width": 79.33333333333331,
+   "x": 184,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.small.disabled",
+   "width": 47.333333333333314,
+   "x": 275.3333333333333,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "button.plain.small.normal",
+   "width": 54.66666666666666,
+   "x": 117.33333333333334,
+   "y": 460.66666666666663
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 101,
+   "x": 169.5,
+   "y": 376
+  }
+ ],
+ "page": "button.plain",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

@@ -34,6 +34,8 @@ enum Catalog {
         }
         pages.append(CatalogPage(id: "button.shapes") { AnyView(ButtonShapesPage()) })
         pages.append(CatalogPage(id: "button.tints") { AnyView(ButtonTintsPage()) })
+        pages.append(CatalogPage(id: "text.regular") { AnyView(TextStylesPage(weight: .regular, name: "regular")) })
+        pages.append(CatalogPage(id: "text.semibold") { AnyView(TextStylesPage(weight: .semibold, name: "semibold")) })
         return pages
     }
 }
@@ -111,6 +113,36 @@ struct ButtonTintsPage: View {
                     Button("Bordé") {}.buttonStyle(.bordered).tint(color).calibrate("tint.\(name).bordered")
                     Button("Plein") {}.buttonStyle(.borderedProminent).tint(color).calibrate("tint.\(name).prominent")
                 }
+            }
+        }
+        .padding()
+    }
+}
+
+/// Une phrase témoin par style typographique : sert à ajuster l'approche du texte par corps.
+struct TextStylesPage: View {
+    let weight: Font.Weight
+    let name: String
+
+    static let styles: [(String, Int, Font)] = [
+        ("largeTitle", 34, .largeTitle), ("title", 28, .title), ("title2", 22, .title2), ("title3", 20, .title3),
+        ("body", 17, .body), ("callout", 16, .callout), ("subheadline", 15, .subheadline),
+        ("footnote", 13, .footnote), ("caption", 12, .caption), ("caption2", 11, .caption2),
+        ("system15", 15, .system(size: 15)), ("system14", 14, .system(size: 14)),
+    ]
+
+    /// Phrase témoin (assez courte pour tenir sur une ligne à chaque corps).
+    static func sample(_ size: Int) -> String {
+        size >= 28 ? "Portez ce whisky" : size >= 20 ? "Portez ce vieux whisky" : "Portez ce vieux whisky au juge blond"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Self.styles, id: \.0) { styleName, size, font in
+                Text(Self.sample(size))
+                    .font(font)
+                    .fontWeight(weight)
+                    .calibrate("text.\(size).\(styleName).\(name)")
             }
         }
         .padding()
