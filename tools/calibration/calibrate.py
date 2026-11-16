@@ -95,8 +95,11 @@ def receive(port, out_dir, timeout):
                 files = glob.glob(os.path.join(run, "ios", "*.json"))
                 if not files:
                     continue
-                with open(files[0]) as f:
-                    expected = 2 * json.load(f).get("pageCount", 0)
+                try:
+                    with open(files[0]) as f:
+                        expected = 2 * json.load(f).get("pageCount", 0)
+                except (json.JSONDecodeError, OSError):
+                    continue  # fichier en cours d'écriture : on réessaie à la seconde suivante
                 if expected and len(files) >= expected:
                     return run
         sys.exit("Délai dépassé : aucune série complète reçue.")
@@ -125,6 +128,8 @@ def main():
     parser.add_argument("--skip-install", action="store_true", help="ne pas recompiler / réinstaller l'app iOS")
     parser.add_argument("--run", help="réutiliser une série déjà reçue")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--pages", help="passe partielle : préfixes de pages séparés par des virgules (ex. : nav.), "
+                                        "mesures directes seulement, sans ajustement ni références")
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--symboles", action="store_true",
                         help="refaire l'export des SF Symbols (automatique si la table locale manque)")
@@ -145,6 +150,9 @@ def main():
             sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
         table = os.path.expanduser("~/.local/share/lcode/symbols/iOS-27.2.json")
         receiver.Handler.want_symbols = args.symboles or not os.path.exists(table)
+        if args.pages:
+            receiver.Handler.want_symbols = False
+            receiver.Handler.only = [p.strip() for p in args.pages.split(",") if p.strip()]
         step("Réception des mesures" + (" (avec export des SF Symbols)" if receiver.Handler.want_symbols else ""))
         run = receive(args.port, os.path.join(ROOT, "Calibration"), args.timeout)
         print(f"Série reçue : {run}")
@@ -153,6 +161,17 @@ def main():
         step("Table des SF Symbols (appariement des dessins de l'iPhone aux glyphes de la police)")
         venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
         sh(f"'{venv}' -I tools/calibration/symbols.py '{run}'")
+
+    if args.pages:
+        venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
+        if glob.glob(os.path.join(run, "ios", "glass.field.low.*.json")):
+            step("Verre Liquid Glass mesuré (fonds codés)")
+            sh(f"'{venv}' -I tools/calibration/glassfield.py '{run}'")
+        if glob.glob(os.path.join(run, "ios", "nav.edge.low.*.json")):
+            step("Barre de navigation mesurée (effet de bord de défilement)")
+            sh(f"'{venv}' -I tools/calibration/navfield.py '{run}'")
+        step(f"Passe partielle terminée en {time.time() - t0:.0f} s : {run}")
+        return
 
     step("Comparaison avant ajustement")
     sh(f"python3 -I tools/calibration/compare.py '{run}'")

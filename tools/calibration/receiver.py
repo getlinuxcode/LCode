@@ -22,11 +22,12 @@ def safe(name: str) -> str:
 class Handler(BaseHTTPRequestHandler):
     out_dir = "Calibration"
     want_symbols = True
+    only = []  # préfixes de pages à capturer (vide : toutes)
 
     def do_GET(self):
         if self.path == "/config":
             # L'app demande si elle doit exporter les SF Symbols (long : 8 600 dessins).
-            body = json.dumps({"symbols": self.want_symbols}).encode()
+            body = json.dumps({"symbols": self.want_symbols, "only": self.only}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -73,8 +74,10 @@ class Handler(BaseHTTPRequestHandler):
         if png:
             with open(base + ".png", "wb") as f:
                 f.write(base64.b64decode(png))
-        with open(base + ".json", "w") as f:
+        # Écriture atomique : le PC surveille ces fichiers et ne doit jamais en lire un à moitié écrit.
+        with open(base + ".json.tmp", "w") as f:
             json.dump(payload, f, indent=1, sort_keys=True)
+        os.replace(base + ".json.tmp", base + ".json")
         print(f"reçu {page} ({scheme}) : {len(payload.get('markers', []))} repères, "
               f"{len(payload.get('layers', []))} couches — {payload.get('device')} iOS {payload.get('system')}", flush=True)
         self.send_response(200)

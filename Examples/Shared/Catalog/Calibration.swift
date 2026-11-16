@@ -37,12 +37,16 @@ enum CalibrationRunner {
         let runID = ISO8601DateFormatter().string(from: Date())
         // D'abord les SF Symbols, si le PC les demande : noms fournis par iOS + rendu de chacun
         // (appariés aux glyphes de la police sur le PC).
-        if await wantsSymbols(server) {
+        let config = await fetchConfig(server)
+        if config["symbols"] as? Bool ?? true {
             await exportSymbols(server: server, runID: runID, status: status)
         }
+        // Passe partielle : seules les pages dont l'identifiant commence par l'un des préfixes demandés.
+        let prefixes = config["only"] as? [String] ?? []
+        let selected = (0..<pageCount).filter { i in prefixes.isEmpty || prefixes.contains { pageIDs[i].hasPrefix($0) } }
         for scheme in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = scheme
-            for index in 0..<pageCount {
+            for index in selected {
                 // Écran vide d'abord : la page est recréée et ses cadres relevés à neuf (sinon une page
                 // déjà affichée pendant l'export des symboles ne renverrait aucun cadre).
                 show(-1)
@@ -53,7 +57,7 @@ enum CalibrationRunner {
                 try? await Task.sleep(for: .milliseconds(900))
                 var payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
                 // Permet au récepteur de savoir quand la série est complète (pages × 2 thèmes).
-                payload["pageCount"] = pageCount
+                payload["pageCount"] = selected.count
                 status("Envoi \(pageIDs[index]) (\(scheme == .light ? "clair" : "sombre"))…")
                 try? await Task.sleep(for: .milliseconds(50))
                 do {
@@ -134,11 +138,12 @@ enum CalibrationRunner {
         return (Data(pixels), metrics)
     }
 
-    static func wantsSymbols(_ server: String) async -> Bool {
+    /// Configuration demandée par le PC : export des symboles, pages à capturer.
+    static func fetchConfig(_ server: String) async -> [String: Any] {
         guard let url = URL(string: server + "/config"),
               let (data, _) = try? await URLSession.shared.data(from: url),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return true }
-        return json["symbols"] as? Bool ?? true
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return json
     }
 
     static func exportSymbols(server: String, runID: String, status: @escaping (String) -> Void) async {

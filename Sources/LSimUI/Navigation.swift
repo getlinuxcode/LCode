@@ -271,12 +271,16 @@ final class NavigationNode: LayoutNode {
         let bar = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: M.currentBarHeight)
         var contentRect = CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: rect.height - bar.height)
         var showInlineTitle = largeTitle == nil
+        // Grand titre (iOS 27, vérifié au doigt sur iPhone) : il défile net avec le contenu et passe sous
+        // les boutons de barre, sans matière ; la matière et le titre centré n'apparaissent qu'une fois le
+        // grand titre entièrement passé sous la barre.
+        let collapseOffset = DesignStyle.current == .liquidGlass ? M.largeTitleHeight : M.collapseThreshold
 
         if let largeTitle {
             if let scroll {
                 // Le grand titre défile avec le contenu, puis laisse place au titre centré.
                 scroll.header = largeTitle
-                showInlineTitle = scroll.offset > M.collapseThreshold
+                showInlineTitle = scroll.offset >= collapseOffset
             } else {
                 largeTitle.render(in: CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: M.largeTitleHeight), lc, &list)
                 contentRect.origin.y += M.largeTitleHeight
@@ -294,7 +298,7 @@ final class NavigationNode: LayoutNode {
         }
 
         // Effet de bord quand le contenu passe sous la barre.
-        if let scroll, scroll.offset > 0 {
+        if let scroll, scroll.offset > 0, largeTitle == nil || scroll.offset >= collapseOffset || DesignStyle.current != .liquidGlass {
             let top = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: bar.maxY - lc.screen.minY)
             let dark = lc.colorScheme == .dark
             let measured = dark ? DesignProfile.current.navigation?.edgeDark : DesignProfile.current.navigation?.edgeLight
