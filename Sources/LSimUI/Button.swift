@@ -127,9 +127,11 @@ public struct Button<Label: View>: View, _PrimitiveView {
             }
             node = PaddingNode(node, insets: padding)
             let background: LayoutNode
-            if style == .glass || (style == .glassProminent && !env.isEnabled) {
-                // Un bouton glassProminent désactivé est dessiné comme du verre simple.
+            if style == .glass {
                 background = GlassShapeNode(shape)
+            } else if style == .glassProminent && !env.isEnabled {
+                // Mesuré : verre gris plein (224 en clair, 55 en sombre) avec son reflet.
+                background = GlassShapeNode(shape, tint: Color(light: .rgb255(224, 224, 224), dark: .rgb255(55, 55, 55)))
             } else if style == .glassProminent {
                 background = GlassShapeNode(shape, tint: tint)
             } else if prominent {
@@ -230,8 +232,11 @@ final class GlassShapeNode: LayoutNode {
         if let tint {
             // Verre teinté : teinte pleine, reflet clair sur le pourtour (plus marqué en haut).
             list.append(.fill(shape, rect, tint.resolve(in: lc.colorScheme)))
-            list.append(.stroke(shape, rect.insetBy(dx: 0.75, dy: 0.75), RGBA(1, 1, 1, 0.45), lineWidth: 1))
+            list.append(.stroke(shape, rect.insetBy(dx: 0.75, dy: 0.75), RGBA(1, 1, 1, dark ? 0.18 : 0.3), lineWidth: 1))
+            // Le reflet est découpé à la forme (sinon un rectangle apparaît autour de la capsule).
+            list.append(.pushClip(shape, rect))
             list.append(.fade(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: rect.height * 0.5), RGBA(1, 1, 1, 0.08)))
+            list.append(.popClip)
         } else {
             list.append(.fill(shape, rect, dark ? RGBA(0.17, 0.17, 0.18, 0.96) : RGBA(0.976, 0.976, 0.976, 0.97)))
             list.append(.stroke(shape, rect.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.18) : RGBA(0, 0, 0, 0.22), lineWidth: 0.5))
