@@ -92,7 +92,12 @@ main() {
     # The binaries find LCode's sources (needed to build apps for the simulator) at the path they
     # were compiled from, so they must stay in $dir.
     say "Building LCode (the first build takes several minutes)…"
-    (cd "$dir" && swift build -c release --product lcode && swift build -c release --product lcode-ide)
+    local log="$dir/.build/install.log"
+    mkdir -p "$dir/.build"
+    if ! (cd "$dir" && swift build -c release --product lcode && swift build -c release --product lcode-ide) >"$log" 2>&1; then
+        grep -E "error:" "$log" | head -20 >&2 || true
+        die "build failed; full log: $log"
+    fi
 
     # --- Commands and menu entry ------------------------------------------------------------------
     mkdir -p "$bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/scalable/apps"
