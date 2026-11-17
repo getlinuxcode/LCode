@@ -1,13 +1,12 @@
 {
-  "originHash" : "1af386e90753f03406878f69c389d6920f16f4d725b14a3a02b778ab7645ce6f",
+  "originHash" : "2aa745d9c6c28fea70c0100fc678f3a7fd2a9637c453842eef9110c2472d48f7",
   "pins" : [
     {
       "identity" : "assetkit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/xtool-org/AssetKit",
+      "location" : "https://github.com/gulian/AssetKit",
       "state" : {
-        "revision" : "bc9912b1017facbda994cd24ce7e44b93165adc6",
-        "version" : "1.0.0"
+        "revision" : "e077f8146abcec600de1f3df2eb4bf26927f24c2"
       }
     },
     {

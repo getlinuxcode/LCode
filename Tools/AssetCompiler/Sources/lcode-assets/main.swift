@@ -25,7 +25,7 @@ let infoURL = app.appendingPathComponent("Info.plist")
 guard fm.fileExists(atPath: infoURL.path) else { fail("no Info.plist in \(app.path)") }
 
 /// Copy of the catalog adjusted for what Xcode accepts but AssetKit rejects or encodes differently: empty
-/// color and icon slots, single-size icons, single-scale images.
+/// color and icon slots, single-size icons, bitmaps missing their 2x/3x renditions.
 func sanitizedCopy(of catalog: URL) throws -> URL {
     let copy = fm.temporaryDirectory.appendingPathComponent("lcode-assets-\(getpid())").appendingPathComponent(catalog.lastPathComponent)
     try? fm.removeItem(at: copy.deletingLastPathComponent())
@@ -37,7 +37,7 @@ func sanitizedCopy(of catalog: URL) throws -> URL {
     }
     guard let walker = fm.enumerator(at: copy, includingPropertiesForKeys: nil) else { return copy }
     for case let url as URL in walker where url.pathExtension == "imageset" {
-        try giveSingleScaleImagesAScale(url)
+        try completeBitmapScales(url)
     }
     guard let walker = fm.enumerator(at: copy, includingPropertiesForKeys: nil) else { return copy }
     for case let url as URL in walker where url.pathExtension == "colorset" {
@@ -90,23 +90,62 @@ func expandSingleSizeIcon(_ set: URL) throws {
     try JSONSerialization.data(withJSONObject: updated).write(to: contents)
 }
 
-/// Xcode's "Single Scale" images (no `scale`) would get scale 0 in Assets.car, which CoreUI's scale-keyed lookup
-/// never finds: on the iPhone, Image("name") came out empty. Bitmaps get 1x, like actool; SVGs keep their own path.
-func giveSingleScaleImagesAScale(_ set: URL) throws {
+/// Bitmap image sets as iOS finds them in an AssetKit catalog. Measured on an iPhone (iOS 27, 3x): a name whose only
+/// rendition is 1x is listed by CoreUI but never resolved (Image("name") empty), while one with 1x, 2x and 3x is.
+/// So every bitmap gets 1x, 2x and 3x renditions: a missing scale is upscaled from the largest one present, which is
+/// what iOS does on screen with a lower-scale image anyway. Xcode's "Single Scale" images (no `scale`) count as 1x.
+func completeBitmapScales(_ set: URL) throws {
     let contents = set.appendingPathComponent("Contents.json")
     guard let data = try? Data(contentsOf: contents),
           var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
           let images = json["images"] as? [[String: Any]] else { return }
-    var changed = false
-    json["images"] = images.map { image -> [String: Any] in
-        guard image["scale"] == nil, let file = image["filename"] as? String,
-              ["png", "jpg", "jpeg"].contains((file as NSString).pathExtension.lowercased()) else { return image }
-        var image = image
-        image["scale"] = "1x"
-        changed = true
-        return image
+    func isBitmap(_ image: [String: Any]) -> Bool {
+        guard let file = image["filename"] as? String else { return false }
+        return ["png", "jpg", "jpeg"].contains((file as NSString).pathExtension.lowercased())
     }
-    if changed { try JSONSerialization.data(withJSONObject: json).write(to: contents) }
+    func scaleOf(_ image: [String: Any]) -> Int { Int(((image["scale"] as? String) ?? "1x").dropLast()) ?? 1 }
+    // Variants (idiom, appearance…) are completed separately: everything but scale and filename identifies one.
+    func variant(_ image: [String: Any]) -> String {
+        var rest = image; rest["scale"] = nil; rest["filename"] = nil
+        return (try? JSONSerialization.data(withJSONObject: rest, options: .sortedKeys)).map { String(decoding: $0, as: UTF8.self) } ?? ""
+    }
+    var output: [[String: Any]] = []
+    var groups: [String: [[String: Any]]] = [:]
+    var order: [String] = []
+    for image in images {
+        guard isBitmap(image) else {
+            if image["filename"] != nil || images.allSatisfy({ !isBitmap($0) }) { output.append(image) }
+            continue
+        }
+        var image = image
+        if image["scale"] == nil { image["scale"] = "1x" }
+        let key = variant(image)
+        if groups[key] == nil { order.append(key) }
+        groups[key, default: []].append(image)
+    }
+    for key in order {
+        let present = groups[key]!
+        output += present
+        guard let best = present.max(by: { scaleOf($0) < scaleOf($1) }), let file = best["filename"] as? String else { continue }
+        let bestScale = scaleOf(best)
+        for scale in [1, 2, 3] where !present.contains(where: { scaleOf($0) == scale }) && scale > bestScale {
+            let source = set.appendingPathComponent(file)
+            let name = "lcode-\((file as NSString).deletingPathExtension)@\(scale)x.png"
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            p.arguments = ["ffmpeg", "-loglevel", "error", "-y", "-i", source.path,
+                           "-vf", "scale=iw*\(scale)/\(bestScale):ih*\(scale)/\(bestScale):flags=lanczos", set.appendingPathComponent(name).path]
+            try p.run()
+            p.waitUntilExit()
+            guard p.terminationStatus == 0 else { fail("ffmpeg couldn't scale \(file) (sudo apt install ffmpeg)") }
+            var extra = best
+            extra["filename"] = name
+            extra["scale"] = "\(scale)x"
+            output.append(extra)
+        }
+    }
+    json["images"] = output
+    try JSONSerialization.data(withJSONObject: json).write(to: contents)
 }
 
 let source: URL
