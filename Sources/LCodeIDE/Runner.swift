@@ -13,6 +13,8 @@ final class Runner {
     private(set) var lastBuildOutput = ""
     var onBuildFinished: (String) -> Void = { _ in }
     var onState: (State) -> Void = { _ in }
+    /// Problèmes de compte ou de signature relevés à la fin d'une installation sur iPhone.
+    var onSigningIssues: ([SigningIssue]) -> Void = { _ in }
 
     enum State: Equatable { case idle, building, running, failed }
     private(set) var state = State.idle
@@ -238,6 +240,8 @@ final class Runner {
         process.arguments = ["xtool", "dev", "run", "--udid", udid, network ? "--network" : "--usb"]
         process.currentDirectoryURL = project.root
         process.environment = Self.environment.merging(env) { _, n in n }
+        // Pas d'entrée : sans compte, xtool échoue au lieu d'attendre une saisie invisible.
+        process.standardInput = FileHandle.nullDevice
         stream(process)
         process.terminationHandler = { [weak self] p in
             guard let self else { return }
@@ -247,10 +251,13 @@ final class Runner {
             onMain { self.onBuildFinished(output) }
             if p.terminationStatus == 0 || output.contains("Installed") || output.contains("Installing") && !output.contains("error:") {
                 self.emit("✓ Installé. Touchez l'icône de l'app sur l'iPhone pour la lancer.\n")
+                onMain { self.onSigningIssues([]) }
                 self.set(.idle)
                 self.startDeviceLog(udid: udid, env: env)
             } else {
                 self.emit("✗ Échec (code \(p.terminationStatus)).\n")
+                let issues = SigningIssue.extract(from: output)
+                onMain { self.onSigningIssues(issues) }
                 self.set(.failed)
             }
         }

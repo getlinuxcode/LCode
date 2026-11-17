@@ -37,9 +37,13 @@ final class ProjectWindow {
     private var status: UnsafeMutablePointer<GtkWidget>!
 
     /// Onglets ouverts, dans l'ordre du carnet.
-    private enum Tab { case document(EditorDocument), assets(AssetEditor) }
+    private enum Tab { case document(EditorDocument), assets(AssetEditor), signing(SigningEditor) }
     private var tabs: [(url: URL, tab: Tab, page: UnsafeMutablePointer<GtkWidget>)] = []
     private var diagnostics: [Diagnostic] = []
+    /// Problèmes de signature de la dernière installation sur iPhone (page Signature et capabilities).
+    private var signingIssues: [SigningIssue] = []
+    /// Adresse fictive de l'onglet « Signature et capabilities » (les onglets sont repérés par URL).
+    private var signingURL: URL { project.root.appendingPathComponent("Signature et capabilities") }
 
     init(project: XtoolProject) {
         self.project = project
@@ -52,6 +56,7 @@ final class ProjectWindow {
         runner.onAppOutput = { [weak self] in self?.append($0, to: self?.appLog) }
         runner.onDeviceLog = { [weak self] in self?.append($0, to: self?.deviceLog) }
         runner.onState = { [weak self] in self?.update($0) }
+        runner.onSigningIssues = { [weak self] in self?.signingIssuesFound($0) }
         runner.onBuildFinished = { [weak self] output in
             guard let self else { return }
             self.setDiagnostics(Diagnostic.parse(output) { SimulatorBuild(project: self.project, lcodeRoot: lcodeRoot).originalPath(for: $0) })
@@ -121,7 +126,12 @@ final class ProjectWindow {
         gtk_widget_add_css_class(addButton, "flat")
         gtk_widget_set_tooltip_text(addButton, "Nouveau fichier (Ctrl+N)")
         connect(raw(addButton), "clicked") { [weak self] in self?.newFile() }
+        let signingButton = gtk_button_new_from_icon_name("security-high-symbolic")!
+        gtk_widget_add_css_class(signingButton, "flat")
+        gtk_widget_set_tooltip_text(signingButton, "Signature et capabilities")
+        connect(raw(signingButton), "clicked") { [weak self] in self?.openSigning() }
         gtk_box_append(cast(raw(navBar)), navTitle)
+        gtk_box_append(cast(raw(navBar)), signingButton)
         gtk_box_append(cast(raw(navBar)), addButton)
         gtk_box_append(cast(raw(navBox)), navBar)
         gtk_box_append(cast(raw(navBox)), navigator.widget)
@@ -289,6 +299,8 @@ final class ProjectWindow {
         item("Nouveau dossier…") { [weak self] in self?.navigator.newFolder() }
         item("Enregistrer tout  (Ctrl+Alt+S)") { [weak self] in self?.saveAll() }
         item("Paquets…") { [weak self] in if let self { PackagesDialog.present(for: self) } }
+        item("Signature et capabilities") { [weak self] in self?.openSigning() }
+        item("Compte Apple…") { [weak self] in self?.showAccount() }
         separator()
         let win = window
         item("Nouveau projet…") { App.shared.newProject(from: win) }
@@ -325,7 +337,12 @@ final class ProjectWindow {
         }
         let tab: Tab
         let page: UnsafeMutablePointer<GtkWidget>
-        if url.pathExtension == "xcassets" {
+        if url == signingURL {
+            let editor = SigningEditor(window: self)
+            editor.issues = signingIssues
+            tab = .signing(editor)
+            page = editor.widget
+        } else if url.pathExtension == "xcassets" {
             let editor = AssetEditor(catalog: url, window: self)
             tab = .assets(editor)
             page = editor.widget
@@ -353,7 +370,8 @@ final class ProjectWindow {
         }
         // Étiquette : icône, nom, bouton de fermeture.
         let label = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)!
-        gtk_box_append(cast(raw(label)), gtk_image_new_from_icon_name(url.pathExtension == "xcassets" ? "image-x-generic-symbolic" : "text-x-script-symbolic"))
+        let icon = url == signingURL ? "security-high-symbolic" : url.pathExtension == "xcassets" ? "image-x-generic-symbolic" : "text-x-script-symbolic"
+        gtk_box_append(cast(raw(label)), gtk_image_new_from_icon_name(icon))
         let name = gtk_label_new(url.lastPathComponent)!
         gtk_box_append(cast(raw(label)), name)
         let close = gtk_button_new_from_icon_name("window-close-symbolic")!
@@ -560,7 +578,10 @@ final class ProjectWindow {
                     self.language.stop()
                     self.language = LanguageServer(build: self.preview.build)
                     self.language.start()
-                    for t in self.tabs { if case let .document(doc) = t.tab, !doc.dirty { doc.reloadFromDisk() } }
+                    for t in self.tabs {
+                        if case let .document(doc) = t.tab, !doc.dirty { doc.reloadFromDisk() }
+                        if case let .signing(editor) = t.tab { editor.projectChanged() }
+                    }
                     self.append("▸ Projet rechargé (\(loaded.dependencies.count) paquet(s)).\n", to: self.buildLog)
                 }
                 done()
@@ -586,6 +607,28 @@ final class ProjectWindow {
         gtk_label_set_text(cast(raw(status)), text)
         if state == .running { gtk_notebook_set_current_page(cast(raw(logNotebook)), 2) }
         if state == .failed, !diagnostics.filter(\.isError).isEmpty { gtk_notebook_set_current_page(cast(raw(logNotebook)), 1) }
+    }
+
+    // MARK: - Signature
+
+    /// Ouvre (ou montre) l'onglet « Signature et capabilities ».
+    func openSigning() { open(signingURL) }
+
+    func showAccount() {
+        AccountDialog.present(from: window) { [weak self] in
+            for t in self?.tabs ?? [] { if case let .signing(editor) = t.tab { editor.refreshAccount() } }
+        }
+    }
+
+    /// Fin d'une installation sur iPhone : les problèmes de signature vont au journal et à la page de signature.
+    private func signingIssuesFound(_ issues: [SigningIssue]) {
+        signingIssues = issues
+        for t in tabs { if case let .signing(editor) = t.tab { editor.issues = issues } }
+        guard !issues.isEmpty else { return }
+        for issue in issues { append("✗ Signature : \(issue.message)\n", to: buildLog) }
+        append("▸ Détails : menu › Signature et capabilities.\n", to: buildLog)
+        // Pas de compte : on propose directement la connexion.
+        if issues.contains(where: { $0.message.hasPrefix("Aucun compte Apple") }) { showAccount() }
     }
 
     // MARK: - Problèmes
