@@ -52,7 +52,7 @@ public struct SimulatorBuild {
         var targets: [String] = []
         for t in project.targets {
             let deps = t.localDependencies.map { "\"\($0)\"" } + t.externalProducts.map(\.declaration)
-                + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
+                + PackageOverlay.lsimModules.map { ".product(name: \"\($0)\", package: \"\(lcodeName)\")" }
             let kind = t.name == project.appTarget ? "executableTarget" : "target"
             targets.append("""
                     .\(kind)(
@@ -119,6 +119,8 @@ public struct SimulatorOptions {
     public var dark = false
     public var screenshot: String?
     public var taps: String?
+    /// Secondes de fonctionnement réel avant la capture (médias, réseau, tâches asynchrones).
+    public var wait: Double?
 
     public init() {}
 
@@ -127,6 +129,7 @@ public struct SimulatorOptions {
         if dark { env["LSIM_DARK"] = "1" }
         if let screenshot { env["LSIM_SCREENSHOT"] = screenshot }
         if let taps { env["LSIM_TAPS"] = taps }
+        if let wait { env["LSIM_WAIT"] = String(wait) }
         return env
     }
 }

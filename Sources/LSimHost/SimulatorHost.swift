@@ -16,6 +16,7 @@ import Observation
 /// - `LSIM_SCREEN_ONLY=1` : capture du seul contenu de l'écran, @3x (calibration)
 /// - `LSIM_DUMP`       : écrit les repères `accessibilityIdentifier` en JSON (calibration)
 /// - `LSIM_TAPS`       : touchers à simuler avant la capture, en points écran : `x,y;x,y`
+/// - `LSIM_WAIT`       : secondes de fonctionnement réel (boucle d'exécution servie) avant la capture
 public final class SimulatorHost {
     let device: DeviceProfile
     let graph = ViewGraph()
@@ -495,6 +496,15 @@ public final class SimulatorHost {
             if let id = displayList.hitTest(point) { graph.performAction(id) }
         }
         let env = ProcessInfo.processInfo.environment
+        // Attente réelle : lecture vidéo, réseau, tâches asynchrones avancent comme dans la fenêtre.
+        if let wait = env["LSIM_WAIT"].flatMap(Double.init), wait > 0 {
+            updateLayout()
+            let end = Date().addingTimeInterval(wait)
+            while Date() < end {
+                _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.016))
+                updateLayout()
+            }
+        }
         // Animation image par image : LSIM_FRAMES="pas,nombre" (secondes) après les touchers, horloge
         // simulée ; les cadres des repères sont écrits dans LSIM_SAMPLES (JSON).
         if let spec = env["LSIM_FRAMES"], let out = env["LSIM_SAMPLES"] {

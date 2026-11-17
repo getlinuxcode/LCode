@@ -1,3 +1,4 @@
+import CoreVideo
 import Foundation
 
 public enum ShapeKind: Hashable, Sendable {
@@ -17,6 +18,8 @@ public enum DisplayItem {
     case symbol(String, Font, Image.Scale, CGRect, RGBA)
     /// Image du catalogue d'assets (fichier PNG, JPEG, SVG…), étirée au rectangle.
     case image(String, CGRect)
+    /// Image vidéo en mémoire (BGRA prémultiplié), étirée au rectangle.
+    case pixels(CVPixelBuffer, CGRect)
     /// Chevron (›) ou flèche de retour (‹) dessinés en traits.
     case chevron(CGRect, RGBA, lineWidth: CGFloat, pointingLeft: Bool)
     case pushOpacity(Double)

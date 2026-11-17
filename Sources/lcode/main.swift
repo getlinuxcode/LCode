@@ -21,6 +21,7 @@ Options :
   --sombre                 démarre en mode sombre
   --capture <fichier.png>  rend une capture sans ouvrir de fenêtre, puis quitte
   --touchers "x,y;x,y"     touchers simulés avant la capture
+  --attente <secondes>     laisse l'app tourner ce temps avant la capture (vidéo, réseau…)
 """
 
 /// Racine du dépôt LCode (ce fichier est dans Sources/lcode/).
@@ -117,6 +118,9 @@ while i < args.count {
     case "--sombre": options.dark = true
     case "--capture": options.screenshot = URL(fileURLWithPath: value()).path
     case "--touchers": options.taps = value()
+    case "--attente":
+        guard let s = Double(value()) else { fail("--attente : nombre de secondes attendu") }
+        options.wait = s
     case "--help", "-h": print(usage); exit(0)
     default:
         if a.hasPrefix("-") { fail("option inconnue : \(a)\n\n\(usage)") }

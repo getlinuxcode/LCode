@@ -12,10 +12,19 @@ let package = Package(
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
         // Combine pour le simulateur (le framework d'Apple n'existe pas sous Linux).
         .library(name: "Combine", targets: ["Combine"]),
+        // Médias pour le simulateur : lecture réelle par ffmpeg, affichée par VideoPlayer (AVKit).
+        .library(name: "CoreMedia", targets: ["CoreMedia"]),
+        .library(name: "CoreVideo", targets: ["CoreVideo"]),
+        .library(name: "AVFoundation", targets: ["AVFoundation"]),
+        .library(name: "AVKit", targets: ["AVKit"]),
     ],
     targets: [
         .target(name: "Combine", swiftSettings: v5),
-        .target(name: "LSimUI", dependencies: ["Combine"], resources: [.process("Profiles")], swiftSettings: v5),
+        .target(name: "CoreMedia", swiftSettings: v5),
+        .target(name: "CoreVideo", swiftSettings: v5),
+        .target(name: "AVFoundation", dependencies: ["CoreMedia", "CoreVideo", "Combine"], swiftSettings: v5),
+        .target(name: "AVKit", dependencies: ["AVFoundation", "SwiftUI"], swiftSettings: v5),
+        .target(name: "LSimUI", dependencies: ["Combine", "CoreVideo"], resources: [.process("Profiles")], swiftSettings: v5),
         .systemLibrary(
             name: "CGtk",
             pkgConfig: "gtk4",

@@ -1,3 +1,4 @@
+import CoreVideo
 import CGtk
 import Foundation
 import LSimUI
@@ -159,6 +160,31 @@ struct CairoRenderer {
         cairo_restore(cr)
     }
 
+    /// Dessine une image vidéo (BGRA prémultiplié = ARGB32 natif de Cairo en petit-boutiste).
+    func drawPixels(_ buffer: CVPixelBuffer, in rect: CGRect) {
+        guard buffer.width > 0, buffer.height > 0, rect.width > 0, rect.height > 0,
+              buffer.bytesPerRow >= buffer.width * 4, buffer.data.count >= buffer.bytesPerRow * buffer.height else { return }
+        let stride = Int(cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, Int32(buffer.width)))
+        guard let surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, Int32(buffer.width), Int32(buffer.height)) else { return }
+        defer { cairo_surface_destroy(surface) }
+        cairo_surface_flush(surface)
+        guard let dest = cairo_image_surface_get_data(surface) else { return }
+        buffer.data.withUnsafeBytes { src in
+            for row in 0..<buffer.height {
+                memcpy(dest + row * stride, src.baseAddress! + row * buffer.bytesPerRow, buffer.width * 4)
+            }
+        }
+        cairo_surface_mark_dirty(surface)
+        cairo_save(cr)
+        cairo_translate(cr, rect.minX, rect.minY)
+        cairo_scale(cr, Double(rect.width) / Double(buffer.width), Double(rect.height) / Double(buffer.height))
+        cairo_set_source_surface(cr, surface, 0, 0)
+        cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_GOOD)
+        cairo_rectangle(cr, 0, 0, Double(buffer.width), Double(buffer.height))
+        cairo_fill(cr)
+        cairo_restore(cr)
+    }
+
     func setColor(_ c: RGBA) {
         cairo_set_source_rgba(cr, c.r, c.g, c.b, c.a)
     }
@@ -277,6 +303,8 @@ struct CairoRenderer {
                 drawSymbol(name, font: font, scale: scale, in: rect, color: color)
             case let .image(path, rect):
                 drawImage(path, in: rect)
+            case let .pixels(buffer, rect):
+                drawPixels(buffer, in: rect)
             case let .linearGradient(shape, rect, colors, locations, p0, p1):
                 let pattern = cairo_pattern_create_linear(p0.x, p0.y, p1.x, p1.y)
                 for (c, l) in zip(colors, locations) {

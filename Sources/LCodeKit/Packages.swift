@@ -96,7 +96,7 @@ public struct PackageOverlay {
         let fm = FileManager.default
         let resolvedURL = project.root.appendingPathComponent("Package.resolved")
         let resolved = (try? String(contentsOf: resolvedURL, encoding: .utf8)) ?? ""
-        let key = (project.dependencies.map(\.declaration) + [resolved, lcodeRoot.path, "v1"]).joined(separator: "\n")
+        let key = (project.dependencies.map(\.declaration) + [resolved, lcodeRoot.path, "v2:" + Self.lsimModules.joined(separator: ",")]).joined(separator: "\n")
         let stateURL = directory.appendingPathComponent("etat.json")
         if let data = try? Data(contentsOf: stateURL),
            let state = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -126,7 +126,7 @@ public struct PackageOverlay {
         if !resolved.isEmpty { try? fm.copyItem(at: resolvedURL, to: pinned) }
         try Shell.capture(["swift", "package", "resolve", "--package-path", resolution.path])
 
-        // 2. Paquets (directs ou transitifs) qui importent SwiftUI : copiés et branchés sur LSim.
+        // 2. Paquets (directs ou transitifs) qui importent un framework Apple recréé par LSim : copiés et branchés.
         var candidates: [(identity: String, folder: URL)] = []
         let checkouts = resolution.appendingPathComponent(".build/checkouts")
         for name in (try? fm.contentsOfDirectory(atPath: checkouts.path)) ?? [] where !name.hasPrefix(".") {
@@ -136,7 +136,7 @@ public struct PackageOverlay {
             if case let .local(path) = dep.source { candidates.append((dep.identity, URL(fileURLWithPath: path))) }
         }
         var patched: [String: URL] = [:]
-        for c in candidates where Self.importsSwiftUI(c.folder) {
+        for c in candidates where Self.importsLSimModule(c.folder) {
             let copy = directory.appendingPathComponent(c.identity)
             try? fm.removeItem(at: copy)
             try Shell.capture(["cp", "-a", c.folder.path, copy.path])
@@ -167,12 +167,15 @@ public struct PackageOverlay {
         return state["copies"] as? [String] ?? []
     }
 
-    /// Une source du paquet (hors tests et exemples) fait-elle `import SwiftUI` ?
-    static func importsSwiftUI(_ folder: URL) -> Bool {
+    /// Frameworks Apple recréés par LCode pour le simulateur (un produit du paquet LCode chacun).
+    public static let lsimModules = ["SwiftUI", "Combine", "CoreMedia", "CoreVideo", "AVFoundation", "AVKit"]
+
+    /// Une source du paquet (hors tests et exemples) importe-t-elle un framework recréé par LSim ?
+    static func importsLSimModule(_ folder: URL) -> Bool {
         let sources = folder.appendingPathComponent("Sources")
         let root = FileManager.default.fileExists(atPath: sources.path) ? sources : folder
         guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return false }
-        let pattern = try! NSRegularExpression(pattern: #"(?m)^\s*(@\w+\s+)*import\s+(struct\s+|class\s+|enum\s+|protocol\s+|func\s+)?SwiftUI\b"#)
+        let pattern = try! NSRegularExpression(pattern: #"(?m)^\s*(@\w+\s+)*import\s+(struct\s+|class\s+|enum\s+|protocol\s+|func\s+|typealias\s+)?(\#(lsimModules.joined(separator: "|")))\b"#)
         for case let url as URL in walker {
             let name = url.lastPathComponent
             if [".build", ".git", "Tests", "Examples", "Example", "Demo"].contains(name) { walker.skipDescendants(); continue }
@@ -202,10 +205,12 @@ public struct PackageOverlay {
         manifest += """
 
 
-        // Ajouté par LCode : dans le simulateur, `import SwiftUI` désigne l'API de LSim.
+        // Ajouté par LCode : dans le simulateur, les frameworks Apple (SwiftUI, Combine…) sont ceux de LSim.
         package.dependencies.append(.package(path: "\(lcodeRoot.path)"))
         for target in package.targets where target.type == .regular || target.type == .executable {
-            target.dependencies.append(.product(name: "SwiftUI", package: "\(lcodeRoot.lastPathComponent)"))\(languageMode)
+            for module in [\(Self.lsimModules.map { "\"\($0)\"" }.joined(separator: ", "))] {
+                target.dependencies.append(.product(name: module, package: "\(lcodeRoot.lastPathComponent)"))
+            }\(languageMode)
         }
 
         """

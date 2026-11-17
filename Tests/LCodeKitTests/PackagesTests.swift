@@ -13,9 +13,9 @@ import Testing
     try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
     try "import Foundation\n// import SwiftUI dans un commentaire\n".write(to: sources.appendingPathComponent("A.swift"), atomically: true, encoding: .utf8)
-    #expect(!PackageOverlay.importsSwiftUI(root))
+    #expect(!PackageOverlay.importsLSimModule(root))
     try "@preconcurrency import SwiftUI\n".write(to: sources.appendingPathComponent("B.swift"), atomically: true, encoding: .utf8)
-    #expect(PackageOverlay.importsSwiftUI(root))
+    #expect(PackageOverlay.importsLSimModule(root))
 }
 
 @Test func removesDependencyAndProducts() throws {

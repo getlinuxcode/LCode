@@ -235,7 +235,7 @@ public struct PreviewBuild {
         var targets: [String] = []
         for t in project.targets {
             let deps = t.localDependencies.map { "\"\($0)\"" } + t.externalProducts.map(\.declaration)
-                + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
+                + PackageOverlay.lsimModules.map { ".product(name: \"\($0)\", package: \"\(lcodeName)\")" }
             let kind = t.name == project.appTarget ? "executableTarget" : "target"
             targets.append("""
                     .\(kind)(
