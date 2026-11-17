@@ -10,9 +10,12 @@ let package = Package(
         .library(name: "LSimUI", targets: ["LSimUI"]),
         // Module que le code utilisateur importe sous le nom `SwiftUI` pour le simulateur.
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
+        // Combine pour le simulateur (le framework d'Apple n'existe pas sous Linux).
+        .library(name: "Combine", targets: ["Combine"]),
     ],
     targets: [
-        .target(name: "LSimUI", resources: [.process("Profiles")], swiftSettings: v5),
+        .target(name: "Combine", swiftSettings: v5),
+        .target(name: "LSimUI", dependencies: ["Combine"], resources: [.process("Profiles")], swiftSettings: v5),
         .systemLibrary(
             name: "CGtk",
             pkgConfig: "gtk4",

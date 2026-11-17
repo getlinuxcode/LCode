@@ -1,5 +1,6 @@
 // Module importé par le code utilisateur sous le nom `SwiftUI` lors d'un build simulateur.
 // Il réexporte LSimUI (l'API) et branche le point d'entrée `@main` sur le simulateur.
+@_exported import Combine
 @_exported import Foundation
 @_exported import LSimUI
 @_exported import Observation

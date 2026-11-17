@@ -244,6 +244,8 @@ public final class ViewGraph {
     // MARK: - Navigation et défilement
 
     private var retainedPrefixes: [String] = []
+    /// Objets Combine (ObservableObject) suivis par le graphe.
+    var observed: [ObjectIdentifier: ObservedEntry] = [:]
 
     /// Conserve l'état d'un sous-arbre non construit pendant cette passe (écran masqué d'une pile).
     func retain(prefix: String) {
