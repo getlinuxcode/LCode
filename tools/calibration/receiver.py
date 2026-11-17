@@ -23,11 +23,13 @@ class Handler(BaseHTTPRequestHandler):
     out_dir = "Calibration"
     want_symbols = True
     only = []  # préfixes de pages à capturer (vide : toutes)
+    mode = "pages"  # « gestures » : l'app ouvre l'entraîneur de gestes (essais faits au doigt)
+    gestures_file = None  # chemin du dernier lot de gestes reçu
 
     def do_GET(self):
         if self.path == "/config":
             # L'app demande si elle doit exporter les SF Symbols (long : 8 600 dessins).
-            body = json.dumps({"symbols": self.want_symbols, "only": self.only}).encode()
+            body = json.dumps({"symbols": self.want_symbols, "only": self.only, "mode": self.mode}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -38,7 +40,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"LCode calibration receiver\n")
 
     def do_POST(self):
-        if self.path not in ("/upload", "/symbols"):
+        if self.path not in ("/upload", "/symbols", "/gestures"):
             self.send_error(404)
             return
         length = int(self.headers.get("Content-Length", "0"))
@@ -51,6 +53,19 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(400)
             return
         run = safe(payload.get("run", "run"))
+        if self.path == "/gestures":
+            folder = os.path.join(self.out_dir, "gestes")
+            os.makedirs(folder, exist_ok=True)
+            path = os.path.join(folder, f"{run}.json")
+            with open(path + ".tmp", "w") as f:
+                json.dump(payload, f, indent=1)
+            os.replace(path + ".tmp", path)
+            Handler.gestures_file = path
+            print(f"gestes reçus : {len(payload.get('back', []))} balayages, {len(payload.get('sheet', []))} feuilles → {path}", flush=True)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+            return
         if self.path == "/symbols":
             folder = os.path.join(self.out_dir, run, "symbols")
             os.makedirs(folder, exist_ok=True)

@@ -127,9 +127,10 @@ public final class NavigationModel {
         dragPresence = nil
         let now = graph?.animator.clock() ?? 0
         let v = -Double(velocity / max(width, 1))
-        let projected = Double(translation + 0.2 * velocity) / Double(max(width, 1))
+        let rule = DesignProfile.current.gestures?.backSwipe ?? GestureRule(projection: 0.2, threshold: 0.5)
+        let projected = (Double(translation) + rule.projection * Double(velocity)) / Double(max(width, 1))
         let below: Screen = path.count >= 2 ? path[path.count - 2] : nil
-        if projected > 0.5 {
+        if projected > rule.threshold {
             let popped = path.removeLast()
             transition = Transition(top: popped, bottom: below, from: presence, to: 0, velocity: v, start: now,
                                     animation: NavigationMetrics.popAnimation)

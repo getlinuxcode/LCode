@@ -197,7 +197,8 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
                 let presence = 1 - Double(offset / travel)
                 let v = -Double(velocity.height / travel)
                 let now = graph.animator.clock()
-                if offset + 0.25 * velocity.height > 0.4 * state.height {
+                let rule = DesignProfile.current.gestures?.sheetDismiss ?? GestureRule(projection: 0.25, threshold: 0.4)
+                if Double(offset) + rule.projection * Double(velocity.height) > rule.threshold * Double(travel) {
                     state.release = (now, presence, 0, v, SheetMetrics.dismissAnimation)
                     close()
                 } else {

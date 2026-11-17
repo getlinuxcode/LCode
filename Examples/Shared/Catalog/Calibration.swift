@@ -38,12 +38,20 @@ enum CalibrationRunner {
         // D'abord les SF Symbols, si le PC les demande : noms fournis par iOS + rendu de chacun
         // (appariés aux glyphes de la police sur le PC).
         let config = await fetchConfig(server)
+        // Entraîneur de gestes : l'app affiche sa page et envoie elle-même le lot au PC.
+        if config["mode"] as? String == "gestures", let index = pageIDs.firstIndex(of: "gesture.trainer") {
+            show(index)
+            return
+        }
         if config["symbols"] as? Bool ?? true {
             await exportSymbols(server: server, runID: runID, status: status)
         }
         // Passe partielle : seules les pages dont l'identifiant commence par l'un des préfixes demandés.
         let prefixes = config["only"] as? [String] ?? []
-        let selected = (0..<pageCount).filter { i in prefixes.isEmpty || prefixes.contains { pageIDs[i].hasPrefix($0) } }
+        let selected = (0..<pageCount).filter { i in
+            // L'entraîneur de gestes n'est jamais capturé comme une page.
+            !pageIDs[i].hasPrefix("gesture.") && (prefixes.isEmpty || prefixes.contains { pageIDs[i].hasPrefix($0) })
+        }
         for scheme in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = scheme
             for index in selected {

@@ -195,6 +195,16 @@
     "tintFillAlphaDark": 0.25,
     "tintFillAlphaLight": 0.18
   },
+  "gestures": {
+    "backSwipe": {
+      "projection": 0.28,
+      "threshold": 0.81
+    },
+    "sheetDismiss": {
+      "projection": 0.37,
+      "threshold": 0.53
+    }
+  },
   "glassSettings": {
     "clear": {
       "bezel": 23.125,

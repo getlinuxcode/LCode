@@ -19,6 +19,8 @@ public struct DesignProfile: Codable, Sendable {
     public var navigation: NavigationProfile?
     /// Courbes des préréglages d'animation mesurées sur iPhone (default, spring, smooth, snappy, bouncy…).
     public var animations: [String: AnimationSetting]?
+    /// Règles de décision des gestes système mesurées au doigt (retour par balayage, feuille tirée).
+    public var gestures: GestureProfile?
 
     /// Chargé une seule fois, de façon sûre entre fils (initialisation paresseuse d'un `static let`).
     private static let embedded: DesignProfile = load()
@@ -277,4 +279,16 @@ public struct AnimationSetting: Codable, Sendable {
     public var duration: Double?
     /// Délai entre la transaction et le premier mouvement à l'écran (s), mesuré ; non appliqué.
     public var lag: Double?
+}
+
+/// Décision au lâcher d'un geste : position projetée = déplacement + `projection` × vitesse, comparée à
+/// `threshold` × largeur de l'écran (balayage) ou course de la feuille.
+public struct GestureRule: Codable, Sendable {
+    public var projection: Double
+    public var threshold: Double
+}
+
+public struct GestureProfile: Codable, Sendable {
+    public var backSwipe: GestureRule?
+    public var sheetDismiss: GestureRule?
 }

@@ -107,6 +107,27 @@ def receive(port, out_dir, timeout):
         server.shutdown()
 
 
+def receive_gestures(port, out_dir, timeout):
+    """Mode entraîneur : attend le lot de gestes faits au doigt sur l'iPhone."""
+    receiver.Handler.out_dir = out_dir
+    receiver.Handler.mode = "gestures"
+    receiver.Handler.want_symbols = False
+    receiver.Handler.gestures_file = None
+    server = ThreadingHTTPServer(("0.0.0.0", port), receiver.Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    print(f"En attente sur le port {port}. Touchez l'icône « LCode Catalogue » sur l'iPhone, "
+          "puis suivez les consignes à l'écran.", flush=True)
+    start = time.time()
+    try:
+        while time.time() - start < timeout:
+            time.sleep(1)
+            if receiver.Handler.gestures_file:
+                return receiver.Handler.gestures_file
+        sys.exit("Délai dépassé : aucun lot de gestes reçu.")
+    finally:
+        server.shutdown()
+
+
 def save_reference(run):
     """Copie légère des mesures (cadres, sans images ni couches) pour la vérification."""
     os.makedirs(REFERENCE, exist_ok=True)
@@ -133,9 +154,27 @@ def main():
     parser.add_argument("--timeout", type=int, default=900)
     parser.add_argument("--symboles", action="store_true",
                         help="refaire l'export des SF Symbols (automatique si la table locale manque)")
+    parser.add_argument("--gestes", action="store_true",
+                        help="entraîneur de gestes : retours par balayage et feuilles tirées, faits au doigt")
     args = parser.parse_args()
     os.chdir(ROOT)
     t0 = time.time()
+
+    if args.gestes:
+        if not args.skip_install:
+            connection = device_environment()
+            step(f"Compilation et installation du catalogue sur l'iPhone (xtool, {'USB ou Wi-Fi' if connection else 'USB'})")
+            transport = "--usb" if usb_connected() or not connection else "--network"
+            sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
+        step("Gestes faits au doigt sur l'iPhone")
+        path = receive_gestures(args.port, os.path.join(ROOT, "Calibration"), args.timeout * 2)
+        venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
+        step("Seuils de décision des gestes")
+        sh(f"'{venv}' -I tools/calibration/gesturefit.py '{path}' --write")
+        step("Recompilation de LSim avec le nouveau profil")
+        sh("swift build --product CatalogExample")
+        step(f"Terminé en {time.time() - t0:.0f} s")
+        return
 
     step("Compilation du catalogue pour LSim")
     sh("swift build --product CatalogExample")
