@@ -21,11 +21,18 @@ public struct SimulatorBuild {
             if !t.externalProducts.isEmpty {
                 w.append("La cible \(t.name) dépend de paquets externes (\(t.externalProducts.joined(separator: ", "))) : non pris en charge par le simulateur pour l'instant.")
             }
-            if t.hasResources {
-                w.append("La cible \(t.name) a des ressources : elles ne sont pas encore copiées dans le simulateur.")
+            if t.hasResources, Self.otherResources(in: t.path) {
+                w.append("La cible \(t.name) a des ressources hors catalogue d'assets : seules les images et couleurs des .xcassets sont reprises par le simulateur.")
             }
         }
         return w
+    }
+
+    /// Fichiers de ressources autres que les catalogues d'assets (dossier Resources).
+    static func otherResources(in folder: URL) -> Bool {
+        let resources = folder.appendingPathComponent("Resources")
+        let items = (try? FileManager.default.contentsOfDirectory(atPath: resources.path)) ?? []
+        return items.contains { !$0.hasSuffix(".xcassets") && !$0.hasPrefix(".") }
     }
 
     /// Écrit le paquet simulateur (idempotent : seuls les fichiers modifiés changent).
@@ -128,6 +135,6 @@ extension SimulatorBuild {
     /// Compile puis lance l'app dans le simulateur (fenêtre, ou capture si `screenshot`).
     public func run(_ options: SimulatorOptions) throws -> Int32 {
         let binary = try build()
-        return try Shell.run([binary.path], environment: options.environment)
+        return try Shell.run([binary.path], environment: options.environment.merging(project.simulatorEnvironment) { a, _ in a })
     }
 }

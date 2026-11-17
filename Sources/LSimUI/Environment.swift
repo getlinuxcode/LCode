@@ -16,7 +16,8 @@ public struct EnvironmentValues {
     public var isEnabled = true
     public var textCase: Text.Case?
     public var imageScale: Image.Scale = .medium
-    public var imageContentMode: ContentMode = .fit
+    /// Fixé par `aspectRatio`, `scaledToFit` ou `scaledToFill` (nil : une image redimensionnable s'étire).
+    public var imageContentMode: ContentMode?
     var buttonStyle: _ButtonStyleKind = .automatic
     public var controlSize: ControlSize = .regular
     public var buttonBorderShape: ButtonBorderShape = .automatic

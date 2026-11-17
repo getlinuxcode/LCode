@@ -90,7 +90,7 @@ if args.first == "preview" {
         guard status == 0 else { exit(status) }
         let bin = try Shell.capture(["swift", "build", "--package-path", preview.directory.path, "--show-bin-path"])
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        var env = ["LSIM_PREVIEW_ID": entry.preview.symbol, "LSIM_DEVICE": "iphone17promax"]
+        var env = ["LSIM_PREVIEW_ID": entry.preview.symbol, "LSIM_DEVICE": "iphone17promax"].merging(project.simulatorEnvironment) { a, _ in a }
         if dark { env["LSIM_DARK"] = "1" }
         if let capture { env["LSIM_SCREENSHOT"] = capture; env["LSIM_SCREEN_ONLY"] = "1" }
         exit(try Shell.run([bin + "/" + project.appTarget], environment: env))

@@ -20,8 +20,8 @@ public struct Image: View, _PrimitiveView, Equatable {
     var isResizable = false
 
     public init(systemName: String) { source = .system(systemName) }
-    public init(_ name: String) { source = .named(name) }
-    public init(decorative name: String) { source = .named(name) }
+    public init(_ name: String, bundle: Bundle? = nil) { source = .named(name) }
+    public init(decorative name: String, bundle: Bundle? = nil) { source = .named(name) }
 
     public func resizable(capInsets: EdgeInsets = EdgeInsets(), resizingMode: ResizingMode = .stretch) -> Image {
         var i = self
@@ -40,10 +40,14 @@ public struct Image: View, _PrimitiveView, Equatable {
         switch source {
         case let .system(name):
             return [SymbolNode(name: name, font: font, scale: env.imageScale, color: color.resolvingTint(env),
-                               resizable: isResizable, contentMode: env.imageContentMode)]
+                               resizable: isResizable, contentMode: env.imageContentMode ?? .fit)]
         case let .named(name):
-            // Les images de l'app (catalogue d'assets) ne sont pas encore prises en charge : cadre de substitution.
-            return [MissingImageNode(name: name, resizable: isResizable)]
+            // Image du catalogue d'assets de l'app ; absente : rien (comme iOS), signalée dans la sortie.
+            guard AssetCatalog.shared.image(name, scheme: .light) != nil || AssetCatalog.shared.image(name, scheme: .dark) != nil else {
+                AssetCatalog.shared.warnMissing("image", name)
+                return [MissingImageNode(name: name, resizable: isResizable)]
+            }
+            return [AssetImageNode(name: name, resizable: isResizable, contentMode: env.imageContentMode)]
         }
     }
 }
@@ -120,6 +124,48 @@ final class SymbolNode: LayoutNode {
 
     override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         list.append(.symbol(name, font, scale, rect, color.resolve(in: lc.colorScheme)))
+    }
+}
+
+/// Image du catalogue d'assets : taille naturelle = pixels / échelle du fichier (1x, 2x, 3x).
+final class AssetImageNode: LayoutNode {
+    let name: String
+    let resizable: Bool
+    let contentMode: ContentMode?
+
+    init(name: String, resizable: Bool, contentMode: ContentMode?) {
+        self.name = name
+        self.resizable = resizable
+        self.contentMode = contentMode
+    }
+
+    override var isImage: Bool { true }
+
+    private func file(_ lc: LayoutContext) -> AssetCatalog.ImageFile? {
+        AssetCatalog.shared.image(name, scheme: lc.colorScheme, displayScale: Double(lc.displayScale))
+    }
+
+    func natural(_ lc: LayoutContext) -> CGSize {
+        guard let f = file(lc), let px = lc.measurer.measureImage(f.path) else { return .zero }
+        return CGSize(width: px.width / CGFloat(f.scale), height: px.height / CGFloat(f.scale))
+    }
+
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        let n = natural(lc)
+        guard resizable else { return n }
+        let proposed = p.replacingUnspecifiedDimensions(by: n)
+        guard n.width > 0, n.height > 0 else { return proposed }
+        // Sans aspectRatio : l'image s'étire sur la place proposée ; sinon le rapport est gardé.
+        guard let mode = contentMode else { return proposed }
+        let kw = proposed.width / n.width, kh = proposed.height / n.height
+        let k = mode == .fit ? min(kw, kh) : max(kw, kh)
+        return CGSize(width: (n.width * k).isFinite ? n.width * k : proposed.width,
+                      height: (n.height * k).isFinite ? n.height * k : proposed.height)
+    }
+
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        guard let f = file(lc) else { return }
+        list.append(.image(f.path, rect))
     }
 }
 

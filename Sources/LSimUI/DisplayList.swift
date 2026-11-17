@@ -15,6 +15,8 @@ public enum DisplayItem {
     case text(String, Font, CGRect, RGBA, TextAlignment)
     /// Symbole SF Symbols, ajusté au rectangle.
     case symbol(String, Font, Image.Scale, CGRect, RGBA)
+    /// Image du catalogue d'assets (fichier PNG, JPEG, SVG…), étirée au rectangle.
+    case image(String, CGRect)
     /// Chevron (›) ou flèche de retour (‹) dessinés en traits.
     case chevron(CGRect, RGBA, lineWidth: CGFloat, pointingLeft: Bool)
     case pushOpacity(Double)
@@ -131,10 +133,13 @@ public protocol TextMeasurer {
     func measure(_ text: String, font: Font, maxWidth: CGFloat?) -> CGSize
     /// Mesure d'un symbole SF Symbols (nil si le symbole est inconnu).
     func measureSymbol(_ name: String, font: Font, scale: Image.Scale) -> SymbolMetrics?
+    /// Taille en pixels d'un fichier image (nil s'il est illisible).
+    func measureImage(_ path: String) -> CGSize?
 }
 
 extension TextMeasurer {
     public func measureSymbol(_ name: String, font: Font, scale: Image.Scale) -> SymbolMetrics? { nil }
+    public func measureImage(_ path: String) -> CGSize? { nil }
 }
 
 public final class LayoutContext {

@@ -108,6 +108,12 @@ final class PangoText: TextMeasurer {
                                           height: box.ink.height + 2 * CGFloat(p.paddingV) * size))
     }
 
+    func measureImage(_ path: String) -> CGSize? {
+        var w: Int32 = 0, h: Int32 = 0
+        guard gdk_pixbuf_get_file_info(path, &w, &h) != nil, w > 0, h > 0 else { return nil }
+        return CGSize(width: CGFloat(w), height: CGFloat(h))
+    }
+
     func measure(_ text: String, font: Font, maxWidth: CGFloat?) -> CGSize {
         let layout = makeLayout(text, font: font, width: maxWidth, alignment: .leading)
         defer { g_object_unref(UnsafeMutableRawPointer(layout)) }
@@ -117,10 +123,41 @@ final class PangoText: TextMeasurer {
     }
 }
 
+/// Images décodées, à la taille en pixels où elles sont dessinées (net, y compris pour le SVG).
+private final class ImageCache: @unchecked Sendable {
+    static let shared = ImageCache()
+    private var pixbufs: [String: OpaquePointer] = [:]
+
+    func pixbuf(_ path: String, width: Int32, height: Int32) -> OpaquePointer? {
+        let key = "\(path)@\(width)x\(height)"
+        if let p = pixbufs[key] { return p }
+        guard let p = gdk_pixbuf_new_from_file_at_scale(path, width, height, 0, nil) else { return nil }
+        if pixbufs.count > 64 { pixbufs.values.forEach { g_object_unref(UnsafeMutableRawPointer($0)) }; pixbufs = [:] }
+        pixbufs[key] = p
+        return p
+    }
+}
+
 /// Traduit une DisplayList en appels Cairo.
 struct CairoRenderer {
     let cr: OpaquePointer
     let text: PangoText
+
+    /// Image étirée au rectangle, décodée à la résolution de l'écran.
+    func drawImage(_ path: String, in rect: CGRect) {
+        guard rect.width > 0, rect.height > 0 else { return }
+        var sx = Double(rect.width), sy = Double(rect.height)
+        cairo_user_to_device_distance(cr, &sx, &sy)
+        let pw = Int32(max(1, abs(sx).rounded())), ph = Int32(max(1, abs(sy).rounded()))
+        guard let pixbuf = ImageCache.shared.pixbuf(path, width: pw, height: ph) else { return }
+        cairo_save(cr)
+        cairo_translate(cr, rect.minX, rect.minY)
+        cairo_scale(cr, Double(rect.width) / Double(pw), Double(rect.height) / Double(ph))
+        gdk_cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+        cairo_rectangle(cr, 0, 0, Double(pw), Double(ph))
+        cairo_fill(cr)
+        cairo_restore(cr)
+    }
 
     func setColor(_ c: RGBA) {
         cairo_set_source_rgba(cr, c.r, c.g, c.b, c.a)
@@ -238,6 +275,8 @@ struct CairoRenderer {
                 cairo_pattern_destroy(gradient)
             case let .symbol(name, font, scale, rect, color):
                 drawSymbol(name, font: font, scale: scale, in: rect, color: color)
+            case let .image(path, rect):
+                drawImage(path, in: rect)
             case let .linearGradient(shape, rect, colors, locations, p0, p1):
                 let pattern = cairo_pattern_create_linear(p0.x, p0.y, p1.x, p1.y)
                 for (c, l) in zip(colors, locations) {

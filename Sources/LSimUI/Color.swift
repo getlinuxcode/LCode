@@ -84,7 +84,18 @@ public struct Color: Hashable, Sendable, ShapeStyle {
 
     public static let primary = Color(light: RGBA(0, 0, 0), dark: RGBA(1, 1, 1))
     public static let secondary = Color(light: .rgb255(60, 60, 67, 0.6), dark: .rgb255(235, 235, 245, 0.6))
-    public static let accentColor = blue
+    /// Couleur d'accent : « AccentColor » du catalogue d'assets s'il la définit, sinon le bleu système.
+    public static var accentColor: Color { AssetCatalog.shared.color("AccentColor") ?? blue }
+
+    /// Couleur du catalogue d'assets (`Name.colorset`) ; absente : transparente, signalée dans la sortie (comme iOS).
+    public init(_ name: String, bundle: Bundle? = nil) {
+        if let c = AssetCatalog.shared.color(name) {
+            self = c
+        } else {
+            AssetCatalog.shared.warnMissing("color", name)
+            self = .clear
+        }
+    }
     /// `.tint` : la teinte de l'environnement (ou la couleur d'accent). Valeur repère résolue à la construction.
     public static let tint = Color(light: RGBA(-1, -1, -1, 1), dark: RGBA(-1, -1, -1, 1))
 

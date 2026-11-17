@@ -28,6 +28,25 @@ public struct XtoolProject {
     public let targets: [Target]
     public let manifest: String
 
+    /// Catalogues d'assets (`*.xcassets`) des cibles de l'app.
+    public var assetCatalogs: [URL] {
+        targets.flatMap { t -> [URL] in
+            guard let walker = FileManager.default.enumerator(at: t.path, includingPropertiesForKeys: nil) else { return [] }
+            var found: [URL] = []
+            for case let url as URL in walker where url.pathExtension == "xcassets" {
+                found.append(url)
+                walker.skipDescendants()
+            }
+            return found
+        }
+    }
+
+    /// Variables d'environnement qui donnent au simulateur les ressources du projet.
+    public var simulatorEnvironment: [String: String] {
+        let catalogs = assetCatalogs
+        return catalogs.isEmpty ? [:] : ["LSIM_ASSETS": catalogs.map(\.path).joined(separator: ":")]
+    }
+
     /// Le binaire iOS déclarera-t-il le bon SDK (sinon iOS affiche l'app en mode compatibilité) ?
     public var hasSDKVersionFix: Bool { manifest.contains("platform_version") }
 

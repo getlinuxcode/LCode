@@ -122,6 +122,7 @@ final class Runner {
         var env = Self.environment
         env["LSIM_DEVICE"] = device
         if dark { env["LSIM_DARK"] = "1" }
+        env.merge(project.simulatorEnvironment) { _, n in n }
         process.environment = env
         stream(process, app: true)
         process.terminationHandler = { [weak self] p in
