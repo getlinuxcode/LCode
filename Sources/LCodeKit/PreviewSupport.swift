@@ -264,6 +264,22 @@ public struct PreviewBuild {
         if (try? String(contentsOf: url, encoding: .utf8)) != manifest { try manifest.write(to: url, atomically: true, encoding: .utf8) }
     }
 
+    /// Fichier d'origine → sa copie dans le paquet d'aperçu (pour le serveur de langage).
+    public func copyURL(for original: URL) -> URL? {
+        let path = original.standardizedFileURL.path
+        for t in project.targets where path.hasPrefix(t.path.standardizedFileURL.path + "/") {
+            let relative = path.dropFirst(t.path.standardizedFileURL.path.count + 1)
+            return directory.appendingPathComponent("Cibles/\(t.name)/\(relative)")
+        }
+        return nil
+    }
+
+    /// Le fichier appartient-il à la cible de l'app (dont la copie perd son `@main`) ?
+    public func isAppFile(_ url: URL) -> Bool {
+        guard let app = project.targets.first(where: { $0.name == project.appTarget }) else { return false }
+        return url.standardizedFileURL.path.hasPrefix(app.path.standardizedFileURL.path + "/")
+    }
+
     /// Chemin d'un fichier de la copie → fichier d'origine (pour les erreurs du compilateur).
     public func originalPath(for copyPath: String) -> String {
         for t in project.targets {

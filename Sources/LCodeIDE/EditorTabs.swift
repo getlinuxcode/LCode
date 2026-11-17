@@ -15,6 +15,7 @@ final class EditorDocument {
     var onChange: () -> Void = {}
     var onDirty: () -> Void = {}
     static let indent = "    "
+    private(set) var completion: CompletionController!
 
     init(url: URL, text: String) {
         self.url = url
@@ -57,6 +58,7 @@ final class EditorDocument {
             }
         }
         applyScheme()
+        completion = CompletionController(view: view, buffer: cast(raw(buffer)))
 
         loading = true
         gtk_text_buffer_begin_irreversible_action(cast(raw(buffer)))
@@ -72,6 +74,7 @@ final class EditorDocument {
             guard let self, !self.loading else { return }
             if !self.dirty { self.dirty = true; self.onDirty() }
             self.onChange()
+            self.completion.textChanged()
         }
         installSmartIndent()
         overlayTypes()
@@ -179,6 +182,7 @@ final class EditorDocument {
     private func handleKey(_ keyval: guint, _ state: GdkModifierType) -> Bool {
         let ctrl = state.rawValue & GDK_CONTROL_MASK.rawValue != 0
         let shift = state.rawValue & GDK_SHIFT_MASK.rawValue != 0
+        if completion.handleKey(keyval, ctrl: ctrl) { return true }
         switch Int32(keyval) {
         case GDK_KEY_Return, GDK_KEY_KP_Enter:
             guard !ctrl, !shift else { return false }

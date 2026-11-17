@@ -13,6 +13,8 @@ final class ProjectWindow {
     private let monitor = DeviceMonitor()
     private var navigator: FileNavigator!
     private var preview: PreviewPane!
+    /// Serveur de langage (sourcekit-lsp) pour l'autocomplétion, sur la copie d'aperçu du projet.
+    private var language: LanguageServer!
 
     private var titleWidget: UnsafeMutablePointer<GtkWidget>!
     private var stopButton: UnsafeMutablePointer<GtkWidget>!
@@ -193,6 +195,8 @@ final class ProjectWindow {
         }
         preview.device = { [weak self] in self?.selectedDestination.simulatorID ?? "iphone17promax" }
         preview.onDiagnostics = { [weak self] in self?.setDiagnostics($0) }
+        language = LanguageServer(build: preview.build)
+        language.start()
         previewRevealer = gtk_revealer_new()
         gtk_revealer_set_transition_type(cast(raw(previewRevealer)), GTK_REVEALER_TRANSITION_TYPE_SLIDE_LEFT)
         gtk_revealer_set_child(cast(raw(previewRevealer)), preview.widget)
@@ -240,6 +244,7 @@ final class ProjectWindow {
             self.runner.stop()
             self.runner.stopDeviceLog()
             self.preview.stopServer()
+            self.language.stop()
             App.shared.projectClosed(self)
         }
         // Apparence : l'éditeur suit le thème clair ou sombre.
@@ -324,6 +329,12 @@ final class ProjectWindow {
                 guard let self, let doc else { return }
                 self.overlayLater(doc)
                 if self.currentURL == doc.url { self.preview.textChanged() }
+            }
+            if url.pathExtension == "swift" {
+                doc.completion.provider = { [weak self, weak doc] text, line, character, done in
+                    guard let self, let doc else { return }
+                    self.language.complete(doc.url, text: text, line: line, character: character, completion: done)
+                }
             }
             tab = .document(doc)
             page = doc.scroller

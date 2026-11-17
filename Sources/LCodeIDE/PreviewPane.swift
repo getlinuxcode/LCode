@@ -37,7 +37,7 @@ struct Diagnostic {
 final class PreviewPane {
     let widget: UnsafeMutablePointer<GtkWidget>
     private let project: XtoolProject
-    private let build: PreviewBuild
+    let build: PreviewBuild
     private let picture: UnsafeMutablePointer<GtkWidget>
     private let status: UnsafeMutablePointer<GtkWidget>
     private let spinner: UnsafeMutablePointer<GtkWidget>
