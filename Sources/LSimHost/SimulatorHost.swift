@@ -393,6 +393,12 @@ public final class SimulatorHost {
     // MARK: - Capture sans fenêtre
 
     func screenshot(to path: String, taps: String) {
+        // Rendu image par image : l'état initial (et ses éventuelles animations d'ouverture) est réglé
+        // 10 s plus tôt, pour être stable au moment des touchers.
+        if ProcessInfo.processInfo.environment["LSIM_FRAMES"] != nil {
+            let real = graph.animator.clock
+            graph.animator.clock = { real() - 10 }
+        }
         // Touchers simulés : chaque toucher reconstruit le layout puis déclenche l'action visée.
         if let scroll = ProcessInfo.processInfo.environment["LSIM_SCROLL"].flatMap(Double.init) {
             updateLayout()
@@ -416,7 +422,7 @@ public final class SimulatorHost {
             let step = parts.first ?? 1.0 / 60, count = Int(parts.count > 1 ? parts[1] : 120)
             final class TimeBox { var t = 0.0 }
             let time = TimeBox()
-            let base = graph.animator.clock()
+            let base = graph.animator.clock() + 10
             graph.animator.clock = { base + time.t }
             var samples: [String: [[Double]]] = [:]
             for i in 0..<count {

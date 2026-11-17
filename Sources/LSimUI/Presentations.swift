@@ -151,7 +151,20 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
 
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
         let nodes = content(context)
-        guard isPresented.wrappedValue else { return nodes }
+        // Ouverture et fermeture animées : la feuille reste dessinée pendant sa sortie.
+        let state = context.graph.persistent(context.path + "#sheetState") { SheetState() }
+        let now = context.graph.animator.clock()
+        if isPresented.wrappedValue {
+            if state.presentedAt == nil || state.dismissedAt != nil { state.presentedAt = now; state.dismissedAt = nil }
+        } else {
+            guard state.presentedAt != nil else { return nodes }
+            if state.dismissedAt == nil { state.dismissedAt = now }
+            if now - state.dismissedAt! > 1.2 {
+                state.presentedAt = nil
+                state.dismissedAt = nil
+                return nodes
+            }
+        }
         let isPresented = self.isPresented, onDismiss = self.onDismiss
         let close = { isPresented.wrappedValue = false; onDismiss?() }
         var ctx = context.child("sheet")
@@ -164,7 +177,8 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
         let sheetNodes = LSimUI._makeNodes(sheet(), ctx)
         let dimID = ctx.path + "#dim"
         context.graph.registerAction(dimID, close)
-        context.graph.presentations.append(SheetNode(content: group(sheetNodes, axis: .vertical), detent: config.detents.first ?? .large, dimID: dimID))
+        context.graph.presentations.append(SheetNode(content: group(sheetNodes, axis: .vertical), detent: config.detents.first ?? .large,
+                                                     dimID: dimID, presentedAt: state.presentedAt ?? now, dismissedAt: state.dismissedAt))
         return nodes
     }
 }
@@ -198,44 +212,75 @@ extension View {
     public func interactiveDismissDisabled(_ disabled: Bool = true) -> some View { self }
 }
 
-/// Mesures des feuilles iOS 26 (estimations à calibrer).
+/// Instants d'ouverture et de fermeture d'une feuille (persistants d'une construction à l'autre).
+final class SheetState {
+    var presentedAt: Double?
+    var dismissedAt: Double?
+}
+
+/// Mesures des feuilles iOS 27.2 (iPhone 17 Pro Max, transitions relevées image par image).
 public enum SheetMetrics {
     public static var cornerRadius: CGFloat = 38
-    /// Retrait latéral et bas d'une feuille à mi-hauteur (« flottante »).
-    public static var floatingInset: CGFloat = 8
-    public static var largeTopGap: CGFloat = 10
+    /// Retrait latéral et bas d'une feuille à mi-hauteur (« flottante ») : 6,5 pt mesurés.
+    public static var floatingInset: CGFloat = 6.5
+    /// Feuille en grand : sommet au bas de la zone sûre (62 pt), l'écran derrière ne rétrécit pas.
+    public static var largeTopGap: CGFloat = 0
+    /// Feuille à mi-hauteur (.medium) : 52,3 % de la hauteur de l'écran (sommet à 449,6 pt sur 956).
+    public static var mediumFraction: CGFloat = 0.523
     public static var dimAlpha: Double = 0.2
+    /// Ouverture et fermeture : ressorts sans rebond mesurés.
+    public static var presentAnimation = Animation.spring(response: 0.35, dampingFraction: 1.0)
+    public static var presentMediumAnimation = Animation.spring(response: 0.33, dampingFraction: 1.02)
+    public static var dismissAnimation = Animation.spring(response: 0.33, dampingFraction: 1.04)
 }
 
 final class SheetNode: LayoutNode {
     let content: LayoutNode
     let detent: PresentationDetent
     let dimID: String
+    let presentedAt: Double
+    let dismissedAt: Double?
     private typealias M = SheetMetrics
 
-    init(content: LayoutNode, detent: PresentationDetent, dimID: String) {
+    init(content: LayoutNode, detent: PresentationDetent, dimID: String, presentedAt: Double, dismissedAt: Double?) {
         self.content = content
         self.detent = detent
         self.dimID = dimID
+        self.presentedAt = presentedAt
+        self.dismissedAt = dismissedAt
     }
 
     override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, lc.colorScheme == .dark ? 0.4 : M.dimAlpha)))
-        list.append(.hitRegion(id: dimID, screen))
-        let frame: CGRect
+        // Présence : 0 (sous l'écran) → 1 (en place), selon le ressort d'ouverture ou de fermeture.
+        let now = lc.animator?.frameTime ?? .infinity
+        var presence = 1.0
+        if let dismissedAt {
+            presence = M.dismissAnimation.displacement(at: now - dismissedAt, d0: 1, v0: 0)?.d ?? 0
+        } else {
+            let spec = detent.fraction < 1 ? M.presentMediumAnimation : M.presentAnimation
+            presence = 1 - (spec.displacement(at: now - presentedAt, d0: 1, v0: 0)?.d ?? 0)
+        }
+        if presence > 0.0005 && presence < 0.9995 { lc.animator?.requestFrame() }
+        let interactive = dismissedAt == nil
+        list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, (lc.colorScheme == .dark ? 0.4 : M.dimAlpha) * min(max(presence, 0), 1))))
+        if interactive { list.append(.hitRegion(id: dimID, screen)) }
+        var frame: CGRect
         if detent.fraction < 0 || detent.fraction < 1 {
-            let height = detent.fraction < 0 ? -detent.fraction : screen.height * detent.fraction
+            let height = detent.fraction < 0 ? -detent.fraction
+                : detent == .medium ? screen.height * M.mediumFraction : screen.height * detent.fraction
             frame = CGRect(x: screen.minX + M.floatingInset, y: screen.maxY - M.floatingInset - height,
                            width: screen.width - 2 * M.floatingInset, height: height)
         } else {
             let top = screen.minY + lc.safeArea.top + M.largeTopGap
             frame = CGRect(x: screen.minX, y: top, width: screen.width, height: screen.maxY - top)
         }
+        // Glissement depuis le bas de l'écran.
+        frame.origin.y += CGFloat(1 - presence) * (screen.maxY - frame.minY)
         let bg = lc.colorScheme == .light ? RGBA(1, 1, 1) : .rgb255(28, 28, 30)
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame.offsetBy(dx: 0, dy: -1), RGBA(0, 0, 0, 0.06)))
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame, bg))
         // Bloque les touchers vers ce qui est derrière la feuille.
-        list.append(.hitRegion(id: dimID + "-sheet", frame))
+        if interactive { list.append(.hitRegion(id: dimID + "-sheet", frame)) }
         list.append(.pushClip(.roundedRectangle(cornerRadius: M.cornerRadius), frame))
         let inner = frame.insetBy(dx: 0, dy: 0)
         let s = content.sizeThatFits(ProposedViewSize(inner.size), lc)

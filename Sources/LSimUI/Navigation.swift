@@ -38,6 +38,12 @@ public enum NavigationMetrics {
     /// Le grand titre Liquid Glass est un peu plus bas sous la barre.
     public static var glassLargeTitleTopOffset: CGFloat = 2.7
 
+    /// Transitions de pile mesurées sur iPhone (iOS 27.2).
+    public static var pushAnimation = Animation.spring(response: 0.25, dampingFraction: 1.06)
+    public static var popAnimation = Animation.spring(response: 0.21, dampingFraction: 1.24)
+    /// Recul de l'écran du dessous (fraction de la largeur).
+    public static var parallax: CGFloat = 0.3
+
     static var currentBarHeight: CGFloat {
         DesignStyle.current == .liquidGlass ? glassBarHeight : barHeight
     }
@@ -62,16 +68,31 @@ public final class NavigationModel {
     weak var graph: ViewGraph?
 
     func push(_ entry: Entry) {
+        let outgoing = path.last
         nextID += 1
         path.append((nextID, entry))
+        beginTransition(push: true, outgoing: outgoing)
         graph?.invalidate()
     }
 
     func pop() {
         guard !path.isEmpty else { return }
-        path.removeLast()
+        let popped = path.removeLast()
+        beginTransition(push: false, outgoing: popped)
         onPop?()
         graph?.invalidate()
+    }
+
+    /// Transition en cours : l'écran sortant (nil : racine) reste construit jusqu'à la fin.
+    struct Transition {
+        var push: Bool
+        var start: Double
+        var outgoing: (id: Int, entry: Entry)?
+    }
+    var transition: Transition?
+
+    func beginTransition(push: Bool, outgoing: (id: Int, entry: Entry)?) {
+        transition = Transition(push: push, start: graph?.animator.clock() ?? 0, outgoing: outgoing)
     }
 
     /// Ajout sans nouveau rendu (pile initiale d'une NavigationStack liée).
@@ -156,17 +177,16 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
         let model = context.graph.persistent(ctx.path + "#nav") { NavigationModel() }
         model.graph = context.graph
 
-        let sink = NavigationTitleSink()
         var pageCtx = ctx
         pageCtx.environment.navigation = model
-        pageCtx.environment.navigationTitleSink = sink
 
-        // Pile liée : écrans initiaux (la racine est construite une fois pour déclarer ses destinations).
+        // Pile liée : écrans initiaux (la racine est construite une fois pour déclarer ses destinations),
+        // puis suivi des changements de la liaison (ajouts : push ; retraits : pop), avec transition.
         if let boundPath {
             model.onPop = boundPath.pop
+            let values = boundPath.values()
             if !model.didSyncPath {
                 model.didSyncPath = true
-                let values = boundPath.values()
                 if !values.isEmpty {
                     var rootCtx = pageCtx
                     rootCtx.path = ctx.path + "/root"
@@ -174,55 +194,136 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
                     _ = LSimUI._makeNodes(root, rootCtx)
                     for value in values { model.pushSilently(.value(value.0, value.1)) }
                 }
+            } else if values.count > model.path.count {
+                for value in values[model.path.count...] {
+                    let outgoing = model.path.last
+                    model.pushSilently(.value(value.0, value.1))
+                    model.beginTransition(push: true, outgoing: outgoing)
+                }
+            } else if values.count < model.path.count {
+                while model.path.count > values.count {
+                    let popped = model.path.removeLast()
+                    model.beginTransition(push: false, outgoing: popped)
+                }
             }
         }
 
-        // Seul l'écran du dessus est construit ; l'état des écrans masqués est conservé.
+        // L'écran du dessus est construit (et l'écran sortant pendant une transition) ; l'état des
+        // écrans masqués est conservé.
         let rootPath = ctx.path + "/root"
-        var content: [LayoutNode]
-        if let top = model.path.last {
+        if !model.path.isEmpty {
             context.graph.retain(prefix: rootPath)
             for item in model.path.dropLast() { context.graph.retain(prefix: ctx.path + "/page\(item.id)") }
-            let page = pageCtx.child("page\(top.id)")
-            switch top.entry {
-            case let .view(view):
-                content = view._makeNodes(page)
-            case let .value(value, type):
-                content = model.destinations[type].map { $0(value)._makeNodes(page) } ?? []
-            }
-        } else {
-            var rootCtx = pageCtx
-            rootCtx.path = rootPath
-            content = LSimUI._makeNodes(root, rootCtx)
         }
+        let backID = ctx.path + "#back"
+        if !model.path.isEmpty { context.graph.registerAction(backID) { model.pop() } }
 
-        let isRoot = model.path.isEmpty
-        model.titles[model.path.last?.id ?? 0] = sink.title
-        let previousID = model.path.count >= 2 ? model.path[model.path.count - 2].id : 0
-        let backTitle = model.titles[previousID] ?? "Retour"
-        let large = sink.displayMode == .large || (sink.displayMode == .automatic && isRoot)
-        var titleNode: LayoutNode?
-        if let title = sink.title, large {
-            let text = TextNode(title, font: NavigationMetrics.largeTitleFont, color: .primary, alignment: .leading)
-            titleNode = FrameNode(
-                PaddingNode(text, insets: EdgeInsets(top: DesignStyle.current == .liquidGlass ? NavigationMetrics.glassLargeTitleTopOffset : 0, leading: NavigationMetrics.largeTitleLeading, bottom: 0, trailing: NavigationMetrics.largeTitleLeading)),
-                width: .init(max: .infinity), height: .init(fixed: NavigationMetrics.largeTitleHeight), alignment: .topLeading
+        func screen(_ item: (id: Int, entry: NavigationModel.Entry)?) -> NavigationNode {
+            let sink = NavigationTitleSink()
+            var screenCtx = pageCtx
+            screenCtx.environment.navigationTitleSink = sink
+            var content: [LayoutNode]
+            if let item {
+                let page = screenCtx.child("page\(item.id)")
+                switch item.entry {
+                case let .view(view):
+                    content = view._makeNodes(page)
+                case let .value(value, type):
+                    content = model.destinations[type].map { $0(value)._makeNodes(page) } ?? []
+                }
+            } else {
+                var rootCtx = screenCtx
+                rootCtx.path = rootPath
+                content = LSimUI._makeNodes(root, rootCtx)
+            }
+            let isRoot = item == nil
+            model.titles[item?.id ?? 0] = sink.title
+            // Écran précédent : celui sous l'écran construit dans la pile (ou l'écran révélé, pour un écran
+            // qui vient d'être retiré).
+            let previousID: Int
+            if let item, let index = model.path.firstIndex(where: { $0.id == item.id }) {
+                previousID = index >= 1 ? model.path[index - 1].id : 0
+            } else {
+                previousID = model.path.last?.id ?? 0
+            }
+            let backTitle = model.titles[previousID] ?? "Retour"
+            let large = sink.displayMode == .large || (sink.displayMode == .automatic && isRoot)
+            var titleNode: LayoutNode?
+            if let title = sink.title, large {
+                let text = TextNode(title, font: NavigationMetrics.largeTitleFont, color: .primary, alignment: .leading)
+                titleNode = FrameNode(
+                    PaddingNode(text, insets: EdgeInsets(top: DesignStyle.current == .liquidGlass ? NavigationMetrics.glassLargeTitleTopOffset : 0, leading: NavigationMetrics.largeTitleLeading, bottom: 0, trailing: NavigationMetrics.largeTitleLeading)),
+                    width: .init(max: .infinity), height: .init(fixed: NavigationMetrics.largeTitleHeight), alignment: .topLeading
+                )
+            }
+            let page: LayoutNode = content.count == 1
+                ? content[0]
+                : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: content)
+            return NavigationNode(
+                page: page, title: sink.title, largeTitle: titleNode,
+                backID: isRoot ? nil : backID, backTitle: backTitle, backPressed: context.graph.pressedID == backID,
+                tint: context.environment.tint ?? .accentColor,
+                leading: sink.toolbar.filter { $0.placement.side == .leading }.map { BarButtonNode($0.node) },
+                trailing: sink.toolbar.filter { $0.placement.side == .trailing }.map { BarButtonNode($0.node) }
             )
         }
 
-        let backID = ctx.path + "#back"
-        if !isRoot { context.graph.registerAction(backID) { model.pop() } }
+        let incoming = screen(model.path.last)
+        if let transition = model.transition {
+            if context.graph.animator.clock() - transition.start > 1.5 {
+                model.transition = nil
+            } else {
+                let outgoing = screen(transition.outgoing)
+                return [NavigationTransitionNode(top: transition.push ? incoming : outgoing,
+                                                 bottom: transition.push ? outgoing : incoming,
+                                                 push: transition.push, start: transition.start)]
+            }
+        }
+        return [incoming]
+    }
+}
 
-        let page: LayoutNode = content.count == 1
-            ? content[0]
-            : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: content)
-        return [NavigationNode(
-            page: page, title: sink.title, largeTitle: titleNode,
-            backID: isRoot ? nil : backID, backTitle: backTitle, backPressed: context.graph.pressedID == backID,
-            tint: context.environment.tint ?? .accentColor,
-            leading: sink.toolbar.filter { $0.placement.side == .leading }.map { BarButtonNode($0.node) },
-            trailing: sink.toolbar.filter { $0.placement.side == .trailing }.map { BarButtonNode($0.node) }
-        )]
+/// Transition de pile (push : l'écran du dessus arrive de la droite ; pop : il repart à droite) ; l'écran du
+/// dessous recule de 30 % de la largeur (parallaxe), les barres se croisent en fondu. Mesuré sur iPhone :
+/// ressorts sans rebond, push réponse 0,25 / amortissement 1,06, pop 0,21 / 1,24.
+final class NavigationTransitionNode: LayoutNode {
+    let top: NavigationNode
+    let bottom: NavigationNode
+    let push: Bool
+    let start: Double
+
+    init(top: NavigationNode, bottom: NavigationNode, push: Bool, start: Double) {
+        self.top = top
+        self.bottom = bottom
+        self.push = push
+        self.start = start
+    }
+
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        p.replacingUnspecifiedDimensions(by: CGSize(width: 375, height: 600))
+    }
+
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let spec = push ? NavigationMetrics.pushAnimation : NavigationMetrics.popAnimation
+        let now = lc.animator?.frameTime ?? .infinity
+        let d = spec.displacement(at: now - start, d0: 1, v0: 0)?.d ?? 0
+        if d == 0 {
+            // Transition terminée (ou rendu sans animateur) : seul l'écran d'arrivée est dessiné.
+            (push ? top : bottom).render(in: rect, lc, &list)
+            return
+        }
+        lc.animator?.requestFrame()
+        // Présence de l'écran du dessus : 0 (hors écran à droite) → 1 (en place).
+        let presence = CGFloat(push ? 1 - d : d)
+        let width = (lc.screen == .zero ? rect : lc.screen).width
+        bottom.pageOffset = -NavigationMetrics.parallax * width * presence
+        bottom.barAlpha = Double(1 - presence)
+        bottom.opaqueBackground = true
+        top.pageOffset = width * (1 - presence)
+        top.barAlpha = Double(presence)
+        top.opaqueBackground = true
+        bottom.render(in: rect, lc, &list)
+        top.render(in: rect, lc, &list)
     }
 }
 
@@ -240,6 +341,10 @@ final class NavigationNode: LayoutNode {
 
     let leading: [LayoutNode]
     let trailing: [LayoutNode]
+    /// Pendant une transition : décalage horizontal de l'écran, opacité de la barre, fond opaque.
+    var pageOffset: CGFloat = 0
+    var barAlpha: Double = 1
+    var opaqueBackground = false
 
     init(page: LayoutNode, title: String?, largeTitle: LayoutNode?, backID: String?, backTitle: String, backPressed: Bool, tint: Color,
          leading: [LayoutNode] = [], trailing: [LayoutNode] = []) {
@@ -277,6 +382,16 @@ final class NavigationNode: LayoutNode {
         // grand titre entièrement passé sous la barre.
         let collapseOffset = DesignStyle.current == .liquidGlass ? M.largeTitleHeight : M.collapseThreshold
 
+        // Transition : l'écran (contenu et grand titre) est décalé, sur un fond opaque.
+        let moving = pageOffset != 0 || opaqueBackground
+        if moving {
+            list.append(.pushTransform(dx: pageOffset, dy: 0, scale: 1, anchor: .zero))
+            if opaqueBackground {
+                let screen = lc.screen == .zero ? rect : lc.screen
+                list.append(.fill(.rectangle, screen, Color.systemBackground.resolve(in: lc.colorScheme)))
+            }
+        }
+
         if let largeTitle {
             if let scroll {
                 // Le grand titre défile avec le contenu, puis laisse place au titre centré.
@@ -302,6 +417,10 @@ final class NavigationNode: LayoutNode {
             let s = page.sizeThatFits(ProposedViewSize(contentRect.size), lc)
             page.render(in: Alignment.center.place(s, in: contentRect), lc, &list)
         }
+        if moving { list.append(.popTransform) }
+        // La barre (matière, titres, boutons) reste en place et se croise en fondu.
+        let fading = barAlpha < 0.999
+        if fading { list.append(.pushOpacity(max(0, barAlpha))) }
 
         // Effet de bord quand le contenu passe sous la barre.
         if let scroll, scroll.offset > 0, largeTitle == nil || scroll.offset >= collapseOffset || DesignStyle.current != .liquidGlass {
@@ -383,6 +502,7 @@ final class NavigationNode: LayoutNode {
             if backPressed { list.append(.popOpacity) }
             list.append(.hitRegion(id: backID, CGRect(x: bar.minX, y: bar.minY, width: backWidth + 8, height: bar.height)))
         }
+        if fading { list.append(.popOpacity) }
     }
 }
 

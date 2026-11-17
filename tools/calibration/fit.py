@@ -16,6 +16,7 @@ import argparse
 import copy
 import json
 import os
+import shutil
 import statistics
 import sys
 import time
@@ -393,6 +394,8 @@ def main():
             json.dump(fitter.profile, f, indent=2, sort_keys=True, ensure_ascii=False)
             f.write("\n")
         print(f"Profil écrit : {args.profile}")
+    # Rendus intermédiaires (plusieurs centaines de Mo par série) : supprimés une fois l'ajustement fini.
+    shutil.rmtree(os.path.join(fitter.work, "rendus"), ignore_errors=True)
     print(f"Rapport : {os.path.join(args.run, 'ajustement.md')}  —  {len(fitter.changes)} réglages modifiés, "
           f"{len(anomalies)} anomalies.")
 

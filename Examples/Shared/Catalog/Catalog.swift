@@ -41,6 +41,7 @@ enum Catalog {
         pages.append(CatalogPage(id: "image.scales") { AnyView(ImageScalesPage()) })
         pages.append(CatalogPage(id: "image.resizable") { AnyView(ImageResizablePage()) })
         pages += AnimationCatalog.pages
+        pages += TransitionCatalog.pages
         if #available(iOS 26, *) {
             pages.append(CatalogPage(id: "glass.refraction") { AnyView(GlassRefractionPage(background: .checker)) })
             // Fonds codés : mesure directe du champ de réfraction et de la lumière du verre.

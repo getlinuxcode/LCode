@@ -86,7 +86,25 @@ public struct DisplayList {
 
     /// Repères de mesure (identifiant → cadre).
     public var markers: [(id: String, rect: CGRect)] {
-        items.compactMap { if case let .marker(id, r) = $0 { (id, r) } else { nil } }
+        // Les transformations en cours (transitions) s'appliquent aux repères, comme au dessin.
+        var stack: [(dx: CGFloat, dy: CGFloat, scale: CGFloat, anchor: CGPoint)] = []
+        var out: [(id: String, rect: CGRect)] = []
+        for item in items {
+            switch item {
+            case let .pushTransform(dx, dy, scale, anchor): stack.append((dx, dy, scale, anchor))
+            case .popTransform: _ = stack.popLast()
+            case let .marker(id, r):
+                var rect = r
+                for t in stack.reversed() {
+                    rect = CGRect(x: t.anchor.x + (rect.minX - t.anchor.x) * t.scale + t.dx,
+                                  y: t.anchor.y + (rect.minY - t.anchor.y) * t.scale + t.dy,
+                                  width: rect.width * t.scale, height: rect.height * t.scale)
+                }
+                out.append((id, rect))
+            default: break
+            }
+        }
+        return out
     }
 
     /// Zone défilable la plus haute sous le point donné.

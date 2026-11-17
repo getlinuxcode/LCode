@@ -284,6 +284,9 @@ public final class Animator {
 
     private var stillAnimating = false
 
+    /// Demande l'image suivante (transitions dessinées hors des pistes : pile de navigation, feuilles).
+    func requestFrame() { if mode != .record { stillAnimating = true } }
+
     /// Rendu complet d'une image (une ou deux passes), à appeler par le layout racine.
     func frame(_ render: () -> DisplayList) -> DisplayList {
         let now = clock()

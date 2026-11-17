@@ -63,7 +63,12 @@ enum CalibrationRunner {
                 var payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
                 if let sampler, let trigger = AnimationProbe.triggerTime {
                     // Position du carré rouge à chaque image, en secondes depuis le déclenchement.
-                    payload["samples"] = sampler.samples.map { [$0.time - trigger, $0.frame.minX, $0.frame.minY, $0.frame.width, $0.frame.height] }
+                    // Carré rouge puis carré vert (−9999 : absent de cette image).
+                    payload["samples"] = sampler.samples.map { s -> [Double] in
+                        let r = s.frame ?? CGRect(x: -9999, y: -9999, width: 0, height: 0)
+                        let g = s.green ?? CGRect(x: -9999, y: -9999, width: 0, height: 0)
+                        return [s.time - trigger, r.minX, r.minY, r.width, r.height, g.minX, g.minY, g.width, g.height]
+                    }
                 }
                 // Permet au récepteur de savoir quand la série est complète (pages × 2 thèmes).
                 payload["pageCount"] = selected.count
@@ -271,7 +276,7 @@ extension View {
 @MainActor
 final class AnimationSampler: NSObject {
     let window: UIWindow
-    var samples: [(time: Double, frame: CGRect)] = []
+    var samples: [(time: Double, frame: CGRect?, green: CGRect?)] = []
     private var link: CADisplayLink?
 
     init(window: UIWindow) { self.window = window }
@@ -288,18 +293,22 @@ final class AnimationSampler: NSObject {
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        guard let frame = Self.redFrame(in: window.layer, root: window.layer) else { return }
-        samples.append((CACurrentMediaTime(), frame))
+        let red = Self.find(in: window.layer, root: window.layer, red: true)
+        let green = Self.find(in: window.layer, root: window.layer, red: false)
+        guard red != nil || green != nil else { return }
+        samples.append((CACurrentMediaTime(), red, green))
     }
 
-    static func redFrame(in layer: CALayer, root: CALayer) -> CGRect? {
+    /// Couche pure rouge (ou verte) de 50 à 70 pt de large, en coordonnées de la fenêtre présentée.
+    static func find(in layer: CALayer, root: CALayer, red: Bool) -> CGRect? {
         let presented = layer.presentation() ?? layer
-        if let c = presented.backgroundColor?.components, c.count >= 3, c[0] > 0.95, c[1] < 0.05, c[2] < 0.05,
+        if let c = presented.backgroundColor?.components, c.count >= 3,
+           red ? (c[0] > 0.95 && c[1] < 0.05) : (c[1] > 0.95 && c[0] < 0.05), c[2] < 0.05,
            presented.bounds.width > 50, presented.bounds.width < 70 {
             return presented.convert(presented.bounds, to: root.presentation() ?? root)
         }
         for sub in layer.sublayers ?? [] {
-            if let f = redFrame(in: sub, root: root) { return f }
+            if let f = find(in: sub, root: root, red: red) { return f }
         }
         return nil
     }
