@@ -272,6 +272,7 @@ final class PreviewPane {
         var env = Runner.environment
         env["LSIM_PREVIEW_ID"] = entry.preview.symbol
         env["LSIM_PREVIEW_FRAME"] = framePath
+        env["LSIM_FRAME_SCALE"] = String(screen.scaleForNewProcess())
         env["LSIM_DEVICE"] = device()
         env.merge(project.simulatorEnvironment) { _, n in n }
         if gtk_toggle_button_get_active(cast(raw(darkToggle))) != 0 { env["LSIM_DARK"] = "1" }

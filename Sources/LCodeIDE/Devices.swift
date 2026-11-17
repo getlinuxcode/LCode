@@ -1,3 +1,4 @@
+import CAdw
 import Foundation
 import LCodeKit
 
@@ -27,17 +28,27 @@ final class DeviceMonitor {
     private(set) var devices: [Destination] = []
     var onChange: ([Destination]) -> Void = { _ in }
     private var names: [String: String] = [:]
-    private var timer: Timer?
     private let queue = DispatchQueue(label: "lcode.devices")
 
     func start() {
         poll()
-        let timer = Timer(timeInterval: 4, repeats: true) { [weak self] _ in self?.poll() }
-        RunLoop.main.add(timer, forMode: .common)
-        self.timer = timer
+        // GTK timer: Foundation Timers never fire, the IDE runs GTK's main loop and not RunLoop.main.
+        final class Box { weak var monitor: DeviceMonitor?; init(_ m: DeviceMonitor) { monitor = m } }
+        let tick: @convention(c) (UnsafeMutableRawPointer?) -> gboolean = { data in
+            let box = Unmanaged<Box>.fromOpaque(data!)
+            guard let monitor = box.takeUnretainedValue().monitor else { box.release(); return 0 }
+            monitor.poll()
+            return 1
+        }
+        g_timeout_add(4000, tick, Unmanaged.passRetained(Box(self)).toOpaque())
     }
 
+    /// A scan in progress (scans can take seconds when a device stops answering): don't stack them.
+    private var polling = false
+
     private func poll() {
+        guard !polling else { return }
+        polling = true
         queue.async { [weak self] in
             guard let self else { return }
             let usb = Set(Self.list([:], network: false))
@@ -53,6 +64,7 @@ final class DeviceMonitor {
                 found.append(Destination(kind: .device(udid: udid, network: !isUSB), name: name, title: "\(name) (\(isUSB ? "USB" : "Wi-Fi"))"))
             }
             onMain {
+                self.polling = false
                 guard found != self.devices else { return }
                 self.devices = found
                 self.onChange(found)
@@ -68,19 +80,18 @@ final class DeviceMonitor {
     private static func name(_ udid: String, _ env: [String: String], network: Bool) -> String? {
         let output = (try? run(["ideviceinfo", "-u", udid] + (network ? ["-n"] : []) + ["-k", "DeviceName"], env))?
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Over Wi-Fi, lockdownd often refuses ideviceinfo: the device is then shown as "iPhone (Wi-Fi)".
+        // Not `xtool devices` as a fallback: launched from the IDE it never returns.
         if let output, !output.isEmpty, !output.hasPrefix("ERROR") { return output }
-        // Over Wi-Fi, lockdownd often refuses ideviceinfo; xtool still knows the name ("Name [network]: UDID").
-        let xtool = (try? run(["xtool", "devices"], env)) ?? ""
-        for line in xtool.split(separator: "\n") where line.hasSuffix(udid) {
-            if let bracket = line.range(of: " [") { return String(line[..<bracket.lowerBound]) }
-        }
         return nil
     }
 
     private static func run(_ args: [String], _ env: [String: String]) throws -> String {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        p.arguments = args
+        // Never wait on the IDE's stdin, and give up on a device that stops answering.
+        p.arguments = ["timeout", "8"] + args
+        p.standardInput = FileHandle.nullDevice
         p.environment = ProcessInfo.processInfo.environment.merging(env) { _, n in n }
         let pipe = Pipe()
         p.standardOutput = pipe

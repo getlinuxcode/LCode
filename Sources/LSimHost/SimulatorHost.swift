@@ -11,6 +11,7 @@ import Observation
 /// - `LSIM_DESIGN=compat`: iOS 18 style (apps linked against an SDK older than iOS 26)
 /// - `LSIM_ZOOM`: window scale factor (default 1)
 /// - `LSIM_SERVE_FRAME`: serve the IDE without a window (frames written to this file, gestures read from stdin)
+/// - `LSIM_FRAME_SCALE`: pixels per point of the frames served to the IDE (default 2; the IDE sends the displayed scale)
 /// - `LSIM_SCREENSHOT`: render a PNG to this file, then quit (no window)
 /// - `LSIM_SCROLL`: scroll offset (points) applied to the first scroll view before the screenshot
 /// - `LSIM_SCREEN_ONLY=1`: capture the screen content only, @3x (calibration)
@@ -26,7 +27,7 @@ public final class SimulatorHost {
     let buildRoot: (ViewGraph, EnvironmentValues) -> [LayoutNode]
     var colorScheme: ColorScheme
     /// Pixels per point of the frames served to the IDE (set by its `scale` command to match the displayed size).
-    var frameScale: CGFloat = 2
+    var frameScale: CGFloat = ProcessInfo.processInfo.environment["LSIM_FRAME_SCALE"].flatMap(Double.init).map { CGFloat($0) } ?? 2
     var zoom: CGFloat
     var displayList = DisplayList()
     var area: UnsafeMutablePointer<GtkWidget>?

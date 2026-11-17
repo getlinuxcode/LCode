@@ -67,6 +67,12 @@ final class SimulatorScreen {
         return min(w / Double(frameSize.width), h / Double(frameSize.height)) * monitor
     }
 
+    /// Render scale for a process about to start (passed as LSIM_FRAME_SCALE): its first frame is already sharp.
+    func scaleForNewProcess() -> Double {
+        requestedScale = displayScale ?? 2
+        return requestedScale
+    }
+
     /// Asks the process to render at the displayed size when it changed (window or pane resized).
     func syncRenderScale() {
         guard let wanted = displayScale, abs(wanted - requestedScale) / requestedScale > 0.02 else { return }

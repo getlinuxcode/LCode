@@ -130,6 +130,7 @@ final class Runner {
         env.merge(project.simulatorEnvironment) { _, n in n }
         if let screen {
             env["LSIM_SERVE_FRAME"] = screen.framePath
+            env["LSIM_FRAME_SCALE"] = String(screen.scaleForNewProcess())
             process.environment = env
             serveStreams(process, screen: screen)
         } else {
