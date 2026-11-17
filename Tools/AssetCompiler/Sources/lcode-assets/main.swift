@@ -24,8 +24,8 @@ guard fm.fileExists(atPath: catalog.path) else { fail("no asset catalog at \(cat
 let infoURL = app.appendingPathComponent("Info.plist")
 guard fm.fileExists(atPath: infoURL.path) else { fail("no Info.plist in \(app.path)") }
 
-/// Copy of the catalog without what Xcode accepts but AssetKit rejects: color entries with no value (the
-/// AccentColor of Xcode's and LCode's templates); a color set left empty is dropped.
+/// Copy of the catalog adjusted for what Xcode accepts but AssetKit rejects or encodes differently: empty
+/// color and icon slots, single-size icons, single-scale images.
 func sanitizedCopy(of catalog: URL) throws -> URL {
     let copy = fm.temporaryDirectory.appendingPathComponent("lcode-assets-\(getpid())").appendingPathComponent(catalog.lastPathComponent)
     try? fm.removeItem(at: copy.deletingLastPathComponent())
@@ -34,6 +34,10 @@ func sanitizedCopy(of catalog: URL) throws -> URL {
     guard let walker = fm.enumerator(at: copy, includingPropertiesForKeys: nil) else { return copy }
     for case let url as URL in walker where url.pathExtension == "appiconset" {
         try expandSingleSizeIcon(url)
+    }
+    guard let walker = fm.enumerator(at: copy, includingPropertiesForKeys: nil) else { return copy }
+    for case let url as URL in walker where url.pathExtension == "imageset" {
+        try giveSingleScaleImagesAScale(url)
     }
     guard let walker = fm.enumerator(at: copy, includingPropertiesForKeys: nil) else { return copy }
     for case let url as URL in walker where url.pathExtension == "colorset" {
@@ -84,6 +88,25 @@ func expandSingleSizeIcon(_ set: URL) throws {
     var updated = json
     updated["images"] = entries
     try JSONSerialization.data(withJSONObject: updated).write(to: contents)
+}
+
+/// Xcode's "Single Scale" images (no `scale`) would get scale 0 in Assets.car, which CoreUI's scale-keyed lookup
+/// never finds: on the iPhone, Image("name") came out empty. Bitmaps get 1x, like actool; SVGs keep their own path.
+func giveSingleScaleImagesAScale(_ set: URL) throws {
+    let contents = set.appendingPathComponent("Contents.json")
+    guard let data = try? Data(contentsOf: contents),
+          var json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let images = json["images"] as? [[String: Any]] else { return }
+    var changed = false
+    json["images"] = images.map { image -> [String: Any] in
+        guard image["scale"] == nil, let file = image["filename"] as? String,
+              ["png", "jpg", "jpeg"].contains((file as NSString).pathExtension.lowercased()) else { return image }
+        var image = image
+        image["scale"] = "1x"
+        changed = true
+        return image
+    }
+    if changed { try JSONSerialization.data(withJSONObject: json).write(to: contents) }
 }
 
 let source: URL
