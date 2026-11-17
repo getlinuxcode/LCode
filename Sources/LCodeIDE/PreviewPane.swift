@@ -219,7 +219,8 @@ final class PreviewPane {
                 self.onDiagnostics(diagnostics)
                 if p.terminationStatus != 0 {
                     let errors = diagnostics.filter(\.isError)
-                    let text = errors.isEmpty ? tr("Build failed.") : errors.prefix(4).map {
+                    let tail = output.split(separator: "\n").suffix(6).joined(separator: "\n")
+                    let text = errors.isEmpty ? tr("Build failed.") + (tail.isEmpty ? "" : "\n" + tail) : errors.prefix(4).map {
                         "\($0.file.lastPathComponent):\($0.line) — \($0.message)"
                     }.joined(separator: "\n")
                     self.showErrors(text)

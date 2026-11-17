@@ -13,6 +13,7 @@ signal(SIGPIPE, SIG_IGN)
 let lcodeRoot = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
+Shell.sanitizeEnvironment()
 Settings.shared.applyLanguage()
 
 let application = adw_application_new("fr.lcode.ide", G_APPLICATION_NON_UNIQUE)!

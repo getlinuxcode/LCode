@@ -34,6 +34,7 @@ final class Runner {
         var env = ProcessInfo.processInfo.environment
         let swiftly = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/swiftly/bin").path
         env["PATH"] = swiftly + ":" + (env["PATH"] ?? "/usr/bin:/bin")
+        env["SWIFTLY_PROXY_IN_PROGRESS"] = nil
         return env
     }
 

@@ -28,6 +28,7 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
+Shell.sanitizeEnvironment()
 var args = Array(CommandLine.arguments.dropFirst())
 // The IDE executable (lcode-ide) sits next to lcode.
 if args.first == "open" {

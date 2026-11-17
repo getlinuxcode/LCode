@@ -36,3 +36,12 @@ public enum Shell {
         return process.terminationStatus
     }
 }
+
+extension Shell {
+    /// Clears variables inherited from the launcher that break child `swift` commands. Launched through
+    /// `swift run` (swiftly's proxy), the process carries SWIFTLY_PROXY_IN_PROGRESS=1, and every `swift build`
+    /// it starts then fails with "Circular swiftly proxy invocation".
+    public static func sanitizeEnvironment() {
+        unsetenv("SWIFTLY_PROXY_IN_PROGRESS")
+    }
+}
