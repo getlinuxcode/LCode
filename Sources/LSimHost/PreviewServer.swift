@@ -3,13 +3,10 @@ import Foundation
 import LSimUI
 
 /// Headless mode driven by the IDE: the screen is rendered to a raw image file on every change
-/// (animations included) and announced on stdout as `frame <width> <height> <stride>`. Gestures arrive on stdin:
-///   press x y | move dx dy | release x y | tap x y | scroll x y dy | scheme light|dark | quit
+/// (animations included) and announced on stdout as `frame <width> <height> <stride> <scale>`. Commands on stdin:
+///   press x y | move dx dy | release x y | tap x y | scroll x y dy | scheme light|dark | scale s | quit
 /// (coordinates in simulated screen points).
 extension SimulatorHost {
-    /// Pixels per point of the frames sent to the IDE.
-    static let previewScale: CGFloat = 2
-
     func serve(framePath: String) {
         final class State { var dirty = true }
         let state = State()
@@ -55,6 +52,9 @@ extension SimulatorHost {
             wheel(dy: Double(n[2]) / 40)
         case "scheme" where parts.count == 2:
             colorScheme = parts[1] == "dark" ? .dark : .light
+        case "scale" where n.count == 1:
+            // Frames rendered at the displayed pixel size stay sharp (no downscaling in the IDE).
+            frameScale = min(max(n[0], 0.25), 6)
         case "quit":
             exit(0)
         default:
@@ -65,8 +65,8 @@ extension SimulatorHost {
 
     /// Screen only (rounded corners, status bar, home indicator), premultiplied ARGB32.
     func writeFrame(to path: String) {
-        let scale = Self.previewScale
-        let width = Int32(device.screenSize.width * scale), height = Int32(device.screenSize.height * scale)
+        let scale = frameScale
+        let width = Int32((device.screenSize.width * scale).rounded()), height = Int32((device.screenSize.height * scale).rounded())
         let surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height)!
         let cr = cairo_create(surface)!
         cairo_scale(cr, scale, scale)
@@ -88,7 +88,7 @@ extension SimulatorHost {
             if FileManager.default.createFile(atPath: tmp, contents: bytes) {
                 rename(tmp, path)
                 // Leading 0x01 byte tells this announcement apart from the app's own print() on the same stdout.
-                print("\u{1}frame \(width) \(height) \(stride)")
+                print("\u{1}frame \(width) \(height) \(stride) \(scale)")
             }
         }
         cairo_destroy(cr)

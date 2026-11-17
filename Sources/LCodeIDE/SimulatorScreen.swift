@@ -23,20 +23,62 @@ final class SimulatorScreen {
         gtk_widget_set_margin_start(picture, 16); gtk_widget_set_margin_end(picture, 16)
         gtk_widget_set_margin_bottom(picture, 16)
         installGestures()
+        watchSize()
+    }
+
+    /// Resizes have no signal on GtkPicture: check the displayed size a few times per second.
+    private func watchSize() {
+        final class Box { weak var screen: SimulatorScreen?; init(_ s: SimulatorScreen) { screen = s } }
+        let box = Unmanaged.passRetained(Box(self)).toOpaque()
+        let tick: @convention(c) (UnsafeMutableRawPointer?) -> gboolean = { data in
+            let box = Unmanaged<Box>.fromOpaque(data!)
+            guard let screen = box.takeUnretainedValue().screen else { box.release(); return 0 }
+            if gtk_widget_get_mapped(screen.picture) != 0 { screen.syncRenderScale() }
+            return 1
+        }
+        g_timeout_add(250, tick, box)
     }
 
     deinit { try? FileManager.default.removeItem(atPath: framePath) }
 
-    /// Parses a `frame <width> <height> <stride>` line (prefixed with 0x01 to tell it apart from the app's
-    /// print()s); nil for any other line.
-    static func parseFrame(_ line: String) -> (Int, Int, Int)? {
+    struct Frame { var width, height, stride: Int; var scale: Double }
+
+    /// Parses a `frame <width> <height> <stride> [<scale>]` line (prefixed with 0x01 to tell it apart from the
+    /// app's print()s); nil for any other line.
+    static func parseFrame(_ line: String) -> Frame? {
         let trimmed = line.hasPrefix("\u{1}") ? String(line.dropFirst()) : line
         guard trimmed.hasPrefix("frame ") else { return nil }
-        let n = trimmed.split(separator: " ").dropFirst().compactMap { Int($0) }
-        return n.count == 3 ? (n[0], n[1], n[2]) : nil
+        let n = trimmed.split(separator: " ").dropFirst().compactMap { Double($0) }
+        guard n.count == 3 || n.count == 4 else { return nil }
+        return Frame(width: Int(n[0]), height: Int(n[1]), stride: Int(n[2]), scale: n.count == 4 ? n[3] : 2)
     }
 
-    func loadFrame(width: Int, height: Int, stride: Int) {
+    /// Render scale last requested from the process.
+    private var requestedScale = 2.0
+
+    /// Pixels per point at which the frame is actually displayed (widget size × monitor scale).
+    private var displayScale: Double? {
+        let w = Double(gtk_widget_get_width(picture)), h = Double(gtk_widget_get_height(picture))
+        guard w > 1, h > 1 else { return nil }
+        var monitor = Double(gtk_widget_get_scale_factor(picture))
+        if let native = gtk_widget_get_native(picture), let surface = gtk_native_get_surface(native) {
+            monitor = gdk_surface_get_scale(surface)
+        }
+        return min(w / Double(frameSize.width), h / Double(frameSize.height)) * monitor
+    }
+
+    /// Asks the process to render at the displayed size when it changed (window or pane resized).
+    func syncRenderScale() {
+        guard let wanted = displayScale, abs(wanted - requestedScale) / requestedScale > 0.02 else { return }
+        requestedScale = wanted
+        send("scale \(wanted)")
+    }
+
+    func load(_ frame: Frame) {
+        loadFrame(width: frame.width, height: frame.height, stride: frame.stride, scale: frame.scale)
+    }
+
+    func loadFrame(width: Int, height: Int, stride: Int, scale: Double) {
         guard let data = FileManager.default.contents(atPath: framePath), data.count >= stride * height else { return }
         let bytes = data.withUnsafeBytes { g_bytes_new($0.baseAddress, gsize(data.count)) }
         let texture = gdk_memory_texture_new(Int32(width), Int32(height), GDK_MEMORY_B8G8R8A8_PREMULTIPLIED, bytes, gsize(stride))
@@ -44,7 +86,8 @@ final class SimulatorScreen {
         g_object_unref(UnsafeMutableRawPointer(texture))
         g_bytes_unref(bytes)
         gtk_widget_set_opacity(picture, 1)
-        frameSize = CGSize(width: CGFloat(width) / 2, height: CGFloat(height) / 2)
+        frameSize = CGSize(width: CGFloat(Double(width) / scale), height: CGFloat(Double(height) / scale))
+        syncRenderScale()
     }
 
     func clear() {

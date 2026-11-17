@@ -40,13 +40,15 @@ final class DeviceMonitor {
     private func poll() {
         queue.async { [weak self] in
             guard let self else { return }
-            let usb = Set(Self.list([:]))
+            let usb = Set(Self.list([:], network: false))
             let network = DeviceConnection.environment()
-            let all = network.isEmpty ? usb : Set(Self.list(network))
+            // `idevice_id -l` only reports USB devices; Wi-Fi ones (through netmuxd) need `-n`.
+            let wifi = network.isEmpty ? [] : Set(Self.list(network, network: true))
+            let all = usb.union(wifi)
             var found: [Destination] = []
             for udid in all.sorted() {
                 let isUSB = usb.contains(udid)
-                let name = self.names[udid] ?? Self.name(udid, isUSB ? [:] : network) ?? "iPhone"
+                let name = self.names[udid] ?? Self.name(udid, isUSB ? [:] : network, network: !isUSB) ?? "iPhone"
                 self.names[udid] = name
                 found.append(Destination(kind: .device(udid: udid, network: !isUSB), name: name, title: "\(name) (\(isUSB ? "USB" : "Wi-Fi"))"))
             }
@@ -58,14 +60,21 @@ final class DeviceMonitor {
         }
     }
 
-    private static func list(_ env: [String: String]) -> [String] {
-        let output = (try? run(["idevice_id", "-l"], env)) ?? ""
+    private static func list(_ env: [String: String], network: Bool) -> [String] {
+        let output = (try? run(["idevice_id", network ? "-n" : "-l"], env)) ?? ""
         return output.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
-    private static func name(_ udid: String, _ env: [String: String]) -> String? {
-        let output = (try? run(["ideviceinfo", "-u", udid, "-k", "DeviceName"], env))?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return output?.isEmpty == false ? output : nil
+    private static func name(_ udid: String, _ env: [String: String], network: Bool) -> String? {
+        let output = (try? run(["ideviceinfo", "-u", udid] + (network ? ["-n"] : []) + ["-k", "DeviceName"], env))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let output, !output.isEmpty, !output.hasPrefix("ERROR") { return output }
+        // Over Wi-Fi, lockdownd often refuses ideviceinfo; xtool still knows the name ("Name [network]: UDID").
+        let xtool = (try? run(["xtool", "devices"], env)) ?? ""
+        for line in xtool.split(separator: "\n") where line.hasSuffix(udid) {
+            if let bracket = line.range(of: " [") { return String(line[..<bracket.lowerBound]) }
+        }
+        return nil
     }
 
     private static func run(_ args: [String], _ env: [String: String]) throws -> String {

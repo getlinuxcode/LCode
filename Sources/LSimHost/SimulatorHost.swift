@@ -25,6 +25,8 @@ public final class SimulatorHost {
     let text = PangoText()
     let buildRoot: (ViewGraph, EnvironmentValues) -> [LayoutNode]
     var colorScheme: ColorScheme
+    /// Pixels per point of the frames served to the IDE (set by its `scale` command to match the displayed size).
+    var frameScale: CGFloat = 2
     var zoom: CGFloat
     var displayList = DisplayList()
     var area: UnsafeMutablePointer<GtkWidget>?

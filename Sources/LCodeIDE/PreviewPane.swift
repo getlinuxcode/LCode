@@ -288,8 +288,8 @@ final class PreviewPane {
             while let nl = buffer.firstIndex(of: 10) {
                 let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
                 buffer.removeSubrange(buffer.startIndex...nl)
-                if let (w, h, stride) = SimulatorScreen.parseFrame(line) {
-                    onMain { self?.screen.loadFrame(width: w, height: h, stride: stride) }
+                if let frame = SimulatorScreen.parseFrame(line) {
+                    onMain { self?.screen.load(frame) }
                 }
             }
         }
