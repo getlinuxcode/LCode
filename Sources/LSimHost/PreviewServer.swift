@@ -88,7 +88,8 @@ extension SimulatorHost {
             let tmp = path + ".tmp"
             if FileManager.default.createFile(atPath: tmp, contents: bytes) {
                 rename(tmp, path)
-                print("frame \(width) \(height) \(stride)")
+                // Octet 0x01 en tête : distingue l'annonce des print() de l'app sur la même sortie.
+                print("\u{1}frame \(width) \(height) \(stride)")
             }
         }
         cairo_destroy(cr)

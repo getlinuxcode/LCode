@@ -13,6 +13,9 @@ final class ProjectWindow {
     private let monitor = DeviceMonitor()
     private var navigator: FileNavigator!
     private var preview: PreviewPane!
+    /// Simulateur intégré (panneau de droite pendant l'exécution) et pile Aperçu / Simulateur.
+    private let simulator = SimulatorPane()
+    private var sideStack: UnsafeMutablePointer<GtkWidget>!
     /// Serveur de langage (sourcekit-lsp) pour l'autocomplétion, sur la copie d'aperçu du projet.
     private var language: LanguageServer!
 
@@ -199,7 +202,14 @@ final class ProjectWindow {
         language.start()
         previewRevealer = gtk_revealer_new()
         gtk_revealer_set_transition_type(cast(raw(previewRevealer)), GTK_REVEALER_TRANSITION_TYPE_SLIDE_LEFT)
-        gtk_revealer_set_child(cast(raw(previewRevealer)), preview.widget)
+        sideStack = gtk_stack_new()!
+        gtk_stack_set_transition_type(cast(raw(sideStack)), GTK_STACK_TRANSITION_TYPE_CROSSFADE)
+        gtk_stack_add_named(cast(raw(sideStack)), preview.widget, "apercu")
+        gtk_stack_add_named(cast(raw(sideStack)), simulator.widget, "simulateur")
+        gtk_stack_set_visible_child_name(cast(raw(sideStack)), "apercu")
+        runner.screen = simulator.screen
+        simulator.send = { [weak self] in self?.runner.sendToApp($0) }
+        gtk_revealer_set_child(cast(raw(previewRevealer)), sideStack)
         gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), Settings.shared.previewVisible ? 1 : 0)
         connect(raw(previewButton), "toggled") { [weak self] in
             guard let self else { return }
@@ -513,12 +523,34 @@ final class ProjectWindow {
         }
     }
 
+    /// Pendant une exécution dans le simulateur, le panneau de droite montre l'app (l'aperçu se met en pause) ;
+    /// à l'arrêt, l'aperçu revient.
+    private var simulatorShown = false
+    private func updateSidePanel(_ state: Runner.State) {
+        guard selectedDestination.simulatorID != nil else { return }
+        let device = selectedDestination.title.replacingOccurrences(of: " (simulateur)", with: "")
+        simulator.update(state, device: device, dark: Settings.isDark)
+        let show = state == .building || state == .running || (state == .failed && simulatorShown)
+        if show && !simulatorShown {
+            simulatorShown = true
+            preview.stopServer()
+            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "simulateur")
+            gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), 1)
+        } else if state == .idle && simulatorShown {
+            simulatorShown = false
+            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "apercu")
+            gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), Settings.shared.previewVisible ? 1 : 0)
+            if Settings.shared.previewVisible { preview.refresh() }
+        }
+    }
+
     private func stop() {
         runner.stop()
         runner.stopDeviceLog()
     }
 
     private func update(_ state: Runner.State) {
+        updateSidePanel(state)
         gtk_widget_set_sensitive(stopButton, state == .building || state == .running ? 1 : 0)
         let text: String
         switch state {

@@ -38,7 +38,8 @@ final class PreviewPane {
     let widget: UnsafeMutablePointer<GtkWidget>
     private let project: XtoolProject
     let build: PreviewBuild
-    private let picture: UnsafeMutablePointer<GtkWidget>
+    private let screen = SimulatorScreen(name: "apercu")
+    private var picture: UnsafeMutablePointer<GtkWidget> { screen.picture }
     private let status: UnsafeMutablePointer<GtkWidget>
     private let spinner: UnsafeMutablePointer<GtkWidget>
     private let banner: UnsafeMutablePointer<GtkWidget>
@@ -55,8 +56,7 @@ final class PreviewPane {
     private var building = false
     private var pending = false
     private var generation = 0
-    private let framePath: String
-    private var frameSize = CGSize(width: 440, height: 956)
+    private var framePath: String { screen.framePath }
     /// Texte non enregistré des fichiers ouverts, et appareil à simuler.
     var overrides: () -> [URL: String] = { [:] }
     var device: () -> String = { "iphone17promax" }
@@ -65,7 +65,6 @@ final class PreviewPane {
     init(project: XtoolProject) {
         self.project = project
         build = PreviewBuild(project: project, lcodeRoot: lcodeRoot)
-        framePath = FileManager.default.temporaryDirectory.appendingPathComponent("lcode-apercu-\(getpid())-\(UUID().uuidString.prefix(6)).raw").path
 
         // Barre : choix de l'aperçu, clair/sombre, actualiser, état.
         selectorModel = gtk_string_list_new(nil)!
@@ -95,13 +94,6 @@ final class PreviewPane {
         gtk_box_append(cast(raw(bar)), refresh)
 
         // Image de l'écran, bandeau d'erreurs, message sans aperçu.
-        picture = gtk_picture_new()!
-        gtk_picture_set_content_fit(cast(raw(picture)), GTK_CONTENT_FIT_CONTAIN)
-        gtk_picture_set_can_shrink(cast(raw(picture)), 1)
-        gtk_widget_set_vexpand(picture, 1)
-        gtk_widget_set_hexpand(picture, 1)
-        gtk_widget_set_margin_start(picture, 16); gtk_widget_set_margin_end(picture, 16)
-        gtk_widget_set_margin_bottom(picture, 16)
         placeholder = gtk_label_new("Ouvrez un fichier qui contient un #Preview.")!
         gtk_widget_add_css_class(placeholder, "dim-label")
         gtk_label_set_wrap(cast(raw(placeholder)), 1)
@@ -120,7 +112,7 @@ final class PreviewPane {
         gtk_widget_set_visible(banner, 0)
         let overlay = gtk_overlay_new()!
         let stack = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)!
-        gtk_box_append(cast(raw(stack)), picture)
+        gtk_box_append(cast(raw(stack)), screen.picture)
         gtk_overlay_set_child(cast(raw(overlay)), stack)
         gtk_overlay_add_overlay(cast(raw(overlay)), banner)
         gtk_widget_set_halign(placeholder, GTK_ALIGN_CENTER)
@@ -141,7 +133,7 @@ final class PreviewPane {
             self.send("scheme \(gtk_toggle_button_get_active(cast(raw(self.darkToggle))) != 0 ? "dark" : "light")")
         }
         connectArg(raw(selector), "notify::selected") { [weak self] _ in self?.restartServer() }
-        installGestures()
+        screen.send = { [weak self] in self?.send($0) }
     }
 
     // MARK: - Fichier suivi
@@ -292,9 +284,8 @@ final class PreviewPane {
             while let nl = buffer.firstIndex(of: 10) {
                 let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
                 buffer.removeSubrange(buffer.startIndex...nl)
-                let parts = line.split(separator: " ").compactMap { Int($0) }
-                if line.hasPrefix("frame"), parts.count == 3 {
-                    onMain { self?.loadFrame(width: parts[0], height: parts[1], stride: parts[2]) }
+                if let (w, h, stride) = SimulatorScreen.parseFrame(line) {
+                    onMain { self?.screen.loadFrame(width: w, height: h, stride: stride) }
                 }
             }
         }
@@ -309,77 +300,13 @@ final class PreviewPane {
     }
 
     func stopServer() {
-        serverInput?.write(Data("quit\n".utf8))
+        try? serverInput?.write(contentsOf: Data("quit\n".utf8))
         server?.terminate()
         server = nil
         serverInput = nil
     }
 
     private func send(_ command: String) {
-        serverInput?.write(Data((command + "\n").utf8))
-    }
-
-    private func loadFrame(width: Int, height: Int, stride: Int) {
-        guard let data = FileManager.default.contents(atPath: framePath), data.count >= stride * height else { return }
-        let bytes = data.withUnsafeBytes { g_bytes_new($0.baseAddress, gsize(data.count)) }
-        let texture = gdk_memory_texture_new(Int32(width), Int32(height), GDK_MEMORY_B8G8R8A8_PREMULTIPLIED, bytes, gsize(stride))
-        gtk_picture_set_paintable(cast(raw(picture)), texture)
-        g_object_unref(UnsafeMutableRawPointer(texture))
-        g_bytes_unref(bytes)
-        gtk_widget_set_opacity(picture, 1)
-        frameSize = CGSize(width: CGFloat(width) / 2, height: CGFloat(height) / 2)
-    }
-
-    // MARK: - Gestes → app
-
-    /// Point de l'écran simulé (en points) sous un point du widget image.
-    private func screenPoint(_ x: Double, _ y: Double) -> (Double, Double)? {
-        let w = Double(gtk_widget_get_width(picture)), h = Double(gtk_widget_get_height(picture))
-        let fw = Double(frameSize.width), fh = Double(frameSize.height)
-        guard w > 0, h > 0 else { return nil }
-        let s = min(w / fw, h / fh)
-        let ox = (w - fw * s) / 2, oy = (h - fh * s) / 2
-        let px = (x - ox) / s, py = (y - oy) / s
-        guard px >= 0, py >= 0, px <= fw, py <= fh else { return nil }
-        return (px, py)
-    }
-
-    private var dragStart: (Double, Double)?
-    private var scale: Double {
-        let w = Double(gtk_widget_get_width(picture)), h = Double(gtk_widget_get_height(picture))
-        return max(0.01, min(w / Double(frameSize.width), h / Double(frameSize.height)))
-    }
-
-    private func installGestures() {
-        let drag = gtk_gesture_drag_new()!
-        final class Box { weak var pane: PreviewPane?; init(_ p: PreviewPane) { pane = p } }
-        let box = Unmanaged.passRetained(Box(self)).toOpaque()
-        let begin: @convention(c) (OpaquePointer?, Double, Double, UnsafeMutableRawPointer?) -> Void = { _, x, y, data in
-            guard let pane = Unmanaged<Box>.fromOpaque(data!).takeUnretainedValue().pane, let p = pane.screenPoint(x, y) else { return }
-            pane.dragStart = p
-            pane.send("press \(p.0) \(p.1)")
-        }
-        let update: @convention(c) (OpaquePointer?, Double, Double, UnsafeMutableRawPointer?) -> Void = { _, dx, dy, data in
-            guard let pane = Unmanaged<Box>.fromOpaque(data!).takeUnretainedValue().pane, pane.dragStart != nil else { return }
-            pane.send("move \(dx / pane.scale) \(dy / pane.scale)")
-        }
-        let end: @convention(c) (OpaquePointer?, Double, Double, UnsafeMutableRawPointer?) -> Void = { _, dx, dy, data in
-            guard let pane = Unmanaged<Box>.fromOpaque(data!).takeUnretainedValue().pane, let s = pane.dragStart else { return }
-            pane.send("release \(s.0 + dx / pane.scale) \(s.1 + dy / pane.scale)")
-            pane.dragStart = nil
-        }
-        _ = lcode_connect(raw(drag), "drag-begin", unsafeBitCast(begin, to: GCallback.self), box)
-        _ = lcode_connect(raw(drag), "drag-update", unsafeBitCast(update, to: GCallback.self), box)
-        _ = lcode_connect(raw(drag), "drag-end", unsafeBitCast(end, to: GCallback.self), box)
-        gtk_widget_add_controller(picture, drag)
-
-        let scroll = gtk_event_controller_scroll_new(GTK_EVENT_CONTROLLER_SCROLL_VERTICAL)!
-        let onScroll: @convention(c) (OpaquePointer?, Double, Double, UnsafeMutableRawPointer?) -> gboolean = { _, _, dy, data in
-            guard let pane = Unmanaged<Box>.fromOpaque(data!).takeUnretainedValue().pane else { return 0 }
-            pane.send("scroll \(pane.frameSize.width / 2) \(pane.frameSize.height / 2) \(dy * 40)")
-            return 1
-        }
-        _ = lcode_connect(raw(scroll), "scroll", unsafeBitCast(onScroll, to: GCallback.self), box)
-        gtk_widget_add_controller(picture, scroll)
+        try? serverInput?.write(contentsOf: Data((command + "\n").utf8))
     }
 }

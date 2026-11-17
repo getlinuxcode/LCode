@@ -19,6 +19,9 @@ final class Runner {
     private var build: Process?
     private var app: Process?
     private var restartPending = false
+    /// Écran intégré à l'IDE : l'app y est servie (sinon, fenêtre séparée du simulateur).
+    var screen: SimulatorScreen?
+    private var appInput: FileHandle?
 
     init(project: XtoolProject, lcodeRoot: URL) {
         self.project = project
@@ -123,8 +126,14 @@ final class Runner {
         env["LSIM_DEVICE"] = device
         if dark { env["LSIM_DARK"] = "1" }
         env.merge(project.simulatorEnvironment) { _, n in n }
-        process.environment = env
-        stream(process, app: true)
+        if let screen {
+            env["LSIM_SERVE_FRAME"] = screen.framePath
+            process.environment = env
+            serveStreams(process, screen: screen)
+        } else {
+            process.environment = env
+            stream(process, app: true)
+        }
         process.terminationHandler = { [weak self] p in
             guard let self, self.app === p else { return }
             self.app = nil
@@ -152,12 +161,51 @@ final class Runner {
 
     private func stopApp() {
         guard let app else { return }
+        try? appInput?.write(contentsOf: Data("quit\n".utf8))
+        appInput = nil
         self.app = nil
         app.terminationHandler = nil
         app.terminate()
     }
 
     var isRunning: Bool { app != nil }
+
+    /// Geste ou commande (scheme dark…) envoyé à l'app servie dans l'IDE.
+    func sendToApp(_ command: String) {
+        try? appInput?.write(contentsOf: Data((command + "\n").utf8))
+    }
+
+    /// App servie dans l'IDE : les annonces d'image (« \u{1}frame … ») vont à l'écran, le reste de la sortie
+    /// à la console de l'app ; les gestes passent par son entrée standard.
+    private func serveStreams(_ process: Process, screen: SimulatorScreen) {
+        let input = Pipe(), output = Pipe(), errors = Pipe()
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = errors
+        appInput = input.fileHandleForWriting
+        var buffer = Data()
+        output.fileHandleForReading.readabilityHandler = { [weak self, weak screen] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+            buffer.append(data)
+            var text = ""
+            while let nl = buffer.firstIndex(of: 10) {
+                let line = String(decoding: buffer[buffer.startIndex..<nl], as: UTF8.self)
+                buffer.removeSubrange(buffer.startIndex...nl)
+                if let (w, h, stride) = SimulatorScreen.parseFrame(line) {
+                    onMain { screen?.loadFrame(width: w, height: h, stride: stride) }
+                } else {
+                    text += line + "\n"
+                }
+            }
+            if !text.isEmpty { self?.emitApp(text) }
+        }
+        errors.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+            self?.emitApp(String(decoding: data, as: UTF8.self))
+        }
+    }
 
     /// Sortie standard et d'erreur du processus, transmises au fil de l'eau.
     private func stream(_ process: Process, app: Bool = false) {

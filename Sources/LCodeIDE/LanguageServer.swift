@@ -169,7 +169,7 @@ final class LanguageServer {
     private func send(_ message: [String: Any]) {
         log("→ \(message["method"] ?? "réponse") \(message["id"] ?? "")")
         guard let input, let body = try? JSONSerialization.data(withJSONObject: message) else { return }
-        input.write(Data("Content-Length: \(body.count)\r\n\r\n".utf8) + body)
+        try? input.write(contentsOf: Data("Content-Length: \(body.count)\r\n\r\n".utf8) + body)
     }
 
     private func receive(_ data: Data) {

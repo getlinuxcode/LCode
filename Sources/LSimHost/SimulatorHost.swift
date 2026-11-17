@@ -10,6 +10,7 @@ import Observation
 /// - `LSIM_DARK=1`     : démarre en mode sombre
 /// - `LSIM_DESIGN=compat` : style iOS 18 (apps liées avec un SDK antérieur à iOS 26)
 /// - `LSIM_ZOOM`       : facteur d'échelle de la fenêtre (défaut 1)
+/// - `LSIM_SERVE_FRAME` : servie à l'IDE, sans fenêtre (images dans ce fichier, gestes sur l'entrée standard)
 /// - `LSIM_SCREENSHOT` : rend une image PNG dans ce fichier puis quitte (sans fenêtre)
 /// - `LSIM_SCROLL`     : défilement (en points) de la première zone défilante avant la capture
 /// - `LSIM_SCREEN_ONLY=1` : capture du seul contenu de l'écran, @3x (calibration)
@@ -46,7 +47,10 @@ public final class SimulatorHost {
         let host = SimulatorHost(device: device, colorScheme: scheme, zoom: zoom) { graph, environment in
             graph.build(environment: environment, app: app) { _rootView(of: app.body) }
         }
-        if let path = env["LSIM_SCREENSHOT"] {
+        if let frame = env["LSIM_SERVE_FRAME"] {
+            // Lancée depuis l'IDE : écran affiché dans sa fenêtre (comme un aperçu).
+            host.serve(framePath: frame)
+        } else if let path = env["LSIM_SCREENSHOT"] {
             host.screenshot(to: path, taps: env["LSIM_TAPS"] ?? "")
         } else {
             host.runWindow()

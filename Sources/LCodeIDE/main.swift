@@ -1,7 +1,11 @@
 import CAdw
 import CSource
 import Foundation
+
 import LCodeKit
+
+// Un processus fils (aperçu, app, serveur de langage) qui meurt ne doit pas faire tomber l'IDE.
+signal(SIGPIPE, SIG_IGN)
 
 // lcode-ide [<projet>] — l'IDE LCode. Sans projet : fenêtre d'accueil (récents, créer, ouvrir).
 
