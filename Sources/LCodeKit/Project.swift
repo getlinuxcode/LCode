@@ -49,11 +49,19 @@ public struct XtoolProject {
     /// Whether the iOS binary declares the right SDK (otherwise iOS runs the app in compatibility mode).
     public var hasSDKVersionFix: Bool { manifest.contains("platform_version") }
 
+    /// Build caches from LCode versions with French folder names, now unused.
+    static func removeLegacyBuildFolders(in root: URL) {
+        for name in ["simulateur", "apercu", "paquets"] {
+            try? FileManager.default.removeItem(at: root.appendingPathComponent(".lcode/\(name)"))
+        }
+    }
+
     public static func load(at root: URL) throws -> XtoolProject {
         let manifestURL = root.appendingPathComponent("Package.swift")
         guard let manifest = try? String(contentsOf: manifestURL, encoding: .utf8) else {
             throw LCodeError("No Package.swift in \(root.path): not an xtool project.")
         }
+        removeLegacyBuildFolders(in: root)
         let dump = try Shell.capture(["swift", "package", "dump-package", "--package-path", root.path])
         guard let json = try JSONSerialization.jsonObject(with: Data(dump.utf8)) as? [String: Any] else {
             throw LCodeError("Unreadable package description.")
