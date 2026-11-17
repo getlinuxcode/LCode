@@ -95,6 +95,17 @@ public struct SimulatorBuild {
     }
 }
 
+extension SimulatorBuild {
+    /// Chemin d'un fichier de la copie → fichier d'origine (pour les erreurs du compilateur).
+    public func originalPath(for copyPath: String) -> String {
+        for t in project.targets {
+            let prefix = directory.appendingPathComponent("Cibles/\(t.name)").path + "/"
+            if copyPath.hasPrefix(prefix) { return t.path.path + "/" + copyPath.dropFirst(prefix.count) }
+        }
+        return copyPath
+    }
+}
+
 /// Options de lancement dans le simulateur (variables LSIM_* de LSimHost).
 public struct SimulatorOptions {
     public var device = "iphone17promax"

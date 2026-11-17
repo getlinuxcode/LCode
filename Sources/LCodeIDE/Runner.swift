@@ -5,8 +5,13 @@ import LCodeKit
 final class Runner {
     let project: XtoolProject
     let lcodeRoot: URL
-    /// Sortie (compilation, app) et changements d'état, appelés sur le fil principal.
+    /// Sorties (compilation, app, journal de l'appareil) et changements d'état, sur le fil principal.
     var onOutput: (String) -> Void = { _ in }
+    var onAppOutput: (String) -> Void = { _ in }
+    var onDeviceLog: (String) -> Void = { _ in }
+    /// Sortie complète de la dernière compilation (pour la liste des problèmes).
+    private(set) var lastBuildOutput = ""
+    var onBuildFinished: (String) -> Void = { _ in }
     var onState: (State) -> Void = { _ in }
 
     enum State: Equatable { case idle, building, running, failed }
@@ -36,16 +41,29 @@ final class Runner {
     /// Séquences de couleur du terminal (ESC [ … m) : retirées pour la console.
     private static let ansi = try! NSRegularExpression(pattern: "\u{1B}\\[[0-9;?]*[A-Za-z]")
 
+    private static func clean(_ text: String) -> String {
+        Self.ansi.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+    }
+
     private func emit(_ text: String) {
-        let range = NSRange(text.startIndex..., in: text)
-        let clean = Self.ansi.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+        let clean = Self.clean(text)
+        buildBuffer.append(clean)
         onMain { self.onOutput(clean) }
     }
+
+    private func emitApp(_ text: String) {
+        let clean = Self.clean(text)
+        onMain { self.onAppOutput(clean) }
+    }
+
+    private var buildBuffer = ""
+    private var syslog: Process?
 
     /// Compile puis lance l'app dans le simulateur (arrête d'abord l'exécution en cours).
     func run(device: String, dark: Bool) {
         if build != nil { restartPending = true; return }
         stopApp()
+        buildBuffer = ""
         set(.building)
         emit("▸ Compilation de \(project.name) pour le simulateur…\n")
         let simulator = SimulatorBuild(project: project, lcodeRoot: lcodeRoot)
@@ -66,6 +84,9 @@ final class Runner {
         process.terminationHandler = { [weak self] p in
             guard let self else { return }
             self.build = nil
+            self.lastBuildOutput = self.buildBuffer
+            let output = self.buildBuffer
+            onMain { self.onBuildFinished(output) }
             if self.restartPending {
                 self.restartPending = false
                 onMain { self.run(device: device, dark: dark) }
@@ -102,7 +123,7 @@ final class Runner {
         env["LSIM_DEVICE"] = device
         if dark { env["LSIM_DARK"] = "1" }
         process.environment = env
-        stream(process)
+        stream(process, app: true)
         process.terminationHandler = { [weak self] p in
             guard let self, self.app === p else { return }
             self.app = nil
@@ -138,14 +159,83 @@ final class Runner {
     var isRunning: Bool { app != nil }
 
     /// Sortie standard et d'erreur du processus, transmises au fil de l'eau.
-    private func stream(_ process: Process) {
+    private func stream(_ process: Process, app: Bool = false) {
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard !data.isEmpty else { handle.readabilityHandler = nil; return }
-            self?.emit(String(decoding: data, as: UTF8.self))
+            let text = String(decoding: data, as: UTF8.self)
+            if app { self?.emitApp(text) } else { self?.emit(text) }
         }
+    }
+
+    // MARK: - iPhone
+
+    /// Compile, signe et installe sur l'iPhone choisi (xtool), puis suit son journal système.
+    func runOnDevice(udid: String, network: Bool) {
+        if build != nil { return }
+        stopApp()
+        buildBuffer = ""
+        set(.building)
+        if !project.hasSDKVersionFix {
+            emit("⚠︎ Le Package.swift ne déclare pas la version du SDK : iOS affichera l'app sans Liquid Glass.\n")
+        }
+        emit("▸ Compilation, signature et installation sur l'iPhone (\(network ? "Wi-Fi" : "USB"))…\n")
+        let env = DeviceConnection.environment()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["xtool", "dev", "run", "--udid", udid, network ? "--network" : "--usb"]
+        process.currentDirectoryURL = project.root
+        process.environment = Self.environment.merging(env) { _, n in n }
+        stream(process)
+        process.terminationHandler = { [weak self] p in
+            guard let self else { return }
+            self.build = nil
+            self.lastBuildOutput = self.buildBuffer
+            let output = self.buildBuffer
+            onMain { self.onBuildFinished(output) }
+            if p.terminationStatus == 0 || output.contains("Installed") || output.contains("Installing") && !output.contains("error:") {
+                self.emit("✓ Installé. Touchez l'icône de l'app sur l'iPhone pour la lancer.\n")
+                self.set(.idle)
+                self.startDeviceLog(udid: udid, env: env)
+            } else {
+                self.emit("✗ Échec (code \(p.terminationStatus)).\n")
+                self.set(.failed)
+            }
+        }
+        do {
+            try process.run()
+            build = process
+        } catch {
+            emit("✗ xtool introuvable : \(error)\n")
+            set(.failed)
+        }
+    }
+
+    /// Journal système de l'iPhone, filtré sur l'app (idevicesyslog).
+    func startDeviceLog(udid: String, env: [String: String]) {
+        syslog?.terminate()
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["idevicesyslog", "-u", udid, "-p", project.appTarget]
+        process.environment = ProcessInfo.processInfo.environment.merging(env) { _, n in n }
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            guard !data.isEmpty else { handle.readabilityHandler = nil; return }
+            let text = Self.clean(String(decoding: data, as: UTF8.self))
+            onMain { self?.onDeviceLog(text) }
+        }
+        try? process.run()
+        syslog = process
+    }
+
+    func stopDeviceLog() {
+        syslog?.terminate()
+        syslog = nil
     }
 }

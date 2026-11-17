@@ -1,0 +1,5 @@
+module CSource [system] {
+    header "shim.h"
+    link "gtksourceview-5"
+    export *
+}

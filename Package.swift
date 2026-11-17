@@ -30,7 +30,13 @@ let package = Package(
             providers: [.apt(["libadwaita-1-dev"])]
         ),
         // L'IDE : fenêtre GTK4/libadwaita façon Xcode (navigateur, éditeur, console, simulateur).
-        .executableTarget(name: "lcode-ide", dependencies: ["LCodeKit", "CAdw"], path: "Sources/LCodeIDE", swiftSettings: v5),
+        .systemLibrary(
+            name: "CSource",
+            pkgConfig: "gtksourceview-5",
+            providers: [.apt(["libgtksourceview-5-dev"])]
+        ),
+        .executableTarget(name: "lcode-ide", dependencies: ["LCodeKit", "CAdw", "CSource"], path: "Sources/LCodeIDE",
+                          exclude: ["Styles"], swiftSettings: v5),
         .executableTarget(
             name: "CounterExample",
             dependencies: ["SwiftUI"],
