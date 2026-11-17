@@ -143,6 +143,10 @@ do {
         print("▸ Building, signing and installing on the iPhone (xtool, \(connection.isEmpty ? "USB" : "USB or Wi-Fi"))…")
         let transport = DeviceConnection.transportFlag(connection)
         print("  (\(transport == "--usb" ? "USB" : "Wi-Fi"))")
+        if let catalog = DeviceBuild.assetCatalog(of: project) {
+            let script = DeviceBuild.script(project: project, catalog: catalog, lcodeRoot: lcodeRoot, udid: nil, transport: transport)
+            exit(try Shell.run(["bash", "-c", script], cwd: project.root, environment: connection))
+        }
         exit(try Shell.run(["xtool", "dev", "run", transport], cwd: project.root, environment: connection))
     }
 

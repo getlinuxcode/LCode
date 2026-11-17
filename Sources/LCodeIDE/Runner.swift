@@ -232,9 +232,8 @@ final class Runner {
         set(.building)
         let catalogs = project.assetCatalogsBlockingDeviceBuild
         if !catalogs.isEmpty {
-            emit("✗ " + tr("Asset catalogs can’t be compiled for iPhone on Linux yet. In Package.swift, add next to resources:") + "\n"
-                 + "    exclude: [\(catalogs.map { "\"\($0)\"" }.joined(separator: ", "))],\n"
-                 + tr("The simulator keeps using the catalog; on iPhone, its images and colors won’t be available.") + "\n")
+            emit("✗ " + tr("SwiftPM can’t compile asset catalogs on Linux; LCode compiles them itself. In Package.swift, add next to resources:") + "\n"
+                 + "    exclude: [\(catalogs.map { "\"\($0)\"" }.joined(separator: ", "))],\n")
             set(.failed)
             return
         }
@@ -245,7 +244,12 @@ final class Runner {
         let env = DeviceConnection.environment()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["xtool", "dev", "run", "--udid", udid, network ? "--network" : "--usb"]
+        if let catalog = DeviceBuild.assetCatalog(of: project) {
+            process.arguments = ["bash", "-c", DeviceBuild.script(project: project, catalog: catalog, lcodeRoot: lcodeRoot,
+                                                                  udid: udid, transport: network ? "--network" : "--usb")]
+        } else {
+            process.arguments = ["xtool", "dev", "run", "--udid", udid, network ? "--network" : "--usb"]
+        }
         process.currentDirectoryURL = project.root
         process.environment = Self.environment.merging(env) { _, n in n }
         // No stdin: without an account, xtool fails instead of waiting for invisible input.

@@ -291,7 +291,6 @@ extension Localization {
         "The asset and its files will be moved to the trash.": "L'asset et ses fichiers iront à la corbeille.",
         "Bluetooth": "Bluetooth",
         "Face ID": "Face ID",
-        "Asset catalogs can’t be compiled for iPhone on Linux yet. In Package.swift, add next to resources:": "Les catalogues d’assets ne peuvent pas encore être compilés pour l’iPhone sous Linux. Dans Package.swift, ajoutez à côté de resources :",
-        "The simulator keeps using the catalog; on iPhone, its images and colors won’t be available.": "Le simulateur continue d’utiliser le catalogue ; sur l’iPhone, ses images et couleurs ne seront pas disponibles.",
+        "SwiftPM can’t compile asset catalogs on Linux; LCode compiles them itself. In Package.swift, add next to resources:": "SwiftPM ne sait pas compiler les catalogues d’assets sous Linux ; LCode les compile lui-même. Dans Package.swift, ajoutez à côté de resources :",
     ]
 }

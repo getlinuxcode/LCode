@@ -36,8 +36,8 @@ public enum Templates {
             targets: [
                 .target(
                     name: "\(safe)",
-                    // Asset catalogs need Apple's actool (macOS only): the simulator reads the catalog
-                    // directly, iPhone builds leave it out until xtool compiles catalogs.
+                    // Asset catalogs need Apple's actool (macOS only): LCode compiles the catalog itself
+                    // (simulator and iPhone), so SwiftPM must leave it alone.
                     exclude: ["Resources/Assets.xcassets"],
                     resources: [.process("Resources")],
                     linkerSettings: [

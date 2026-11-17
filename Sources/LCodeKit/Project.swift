@@ -67,10 +67,9 @@ public struct XtoolProject {
     /// Message explaining how to unblock an iPhone build that would compile asset catalogs.
     public static func assetCatalogAdvice(_ catalogs: [String]) -> String {
         """
-        Asset catalogs can't be compiled for the iPhone on Linux yet (Apple's actool only runs on macOS, \
-        and xtool doesn't compile them). Exclude them in Package.swift, next to `resources:`:
+        SwiftPM can't compile asset catalogs on Linux (Apple's actool only runs on macOS): LCode compiles them \
+        itself. Exclude them from SwiftPM in Package.swift, next to `resources:`:
             exclude: [\(catalogs.map { "\"\($0)\"" }.joined(separator: ", "))],
-        The simulator keeps using them; on the iPhone, images and colors from the catalog won't be available.
         """
     }
 
@@ -134,5 +133,54 @@ public struct XtoolProject {
         let dependencies = (json["dependencies"] as? [[String: Any]] ?? []).compactMap(PackageDependency.init(dump:))
         return XtoolProject(root: root, name: name, bundleID: bundleID, appTarget: appTarget,
                             targets: ordered, manifest: manifest, dependencies: dependencies)
+    }
+}
+
+/// iPhone builds of apps with an asset catalog. SwiftPM would hand the catalog to Apple's actool (macOS only),
+/// so the catalog is excluded from SwiftPM and compiled into the built app by `lcode-assets` (AssetKit, in
+/// Tools/AssetCompiler) before xtool signs and installs it.
+public enum DeviceBuild {
+    /// The app target's asset catalog, if any.
+    public static func assetCatalog(of project: XtoolProject) -> URL? {
+        guard let target = project.targets.first(where: { $0.name == project.appTarget }),
+              let walker = FileManager.default.enumerator(at: target.path, includingPropertiesForKeys: nil) else { return nil }
+        for case let url as URL in walker where url.pathExtension == "xcassets" { return url }
+        return nil
+    }
+
+    public static func tool(lcodeRoot: URL) -> URL {
+        lcodeRoot.appendingPathComponent("Tools/AssetCompiler/.build/release/lcode-assets")
+    }
+
+    /// iOS deployment target declared in Package.swift (`.iOS(.v17)` → "17.0").
+    static func deploymentTarget(_ manifest: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"\.iOS\(\.v(\d+)(?:_(\d+))?\)"#),
+              let m = regex.firstMatch(in: manifest, range: NSRange(manifest.startIndex..., in: manifest)),
+              let major = Range(m.range(at: 1), in: manifest).map({ String(manifest[$0]) }) else { return "17.0" }
+        let minor = Range(m.range(at: 2), in: manifest).map { String(manifest[$0]) } ?? "0"
+        return "\(major).\(minor)"
+    }
+
+    /// Shell script: build with xtool, compile the catalog into the app, then sign and install it.
+    /// `transport` is `--usb` or `--network`; `udid` picks the device (nil: xtool chooses).
+    public static func script(project: XtoolProject, catalog: URL, lcodeRoot: URL, udid: String?, transport: String) -> String {
+        func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
+        let tool = tool(lcodeRoot: lcodeRoot)
+        let package = lcodeRoot.appendingPathComponent("Tools/AssetCompiler")
+        let device = (udid.map { "--udid \(q($0)) " } ?? "") + transport
+        return """
+        set -e
+        cd \(q(project.root.path))
+        if [ ! -x \(q(tool.path)) ]; then
+          echo "▸ Building the asset catalog compiler (first time only)…"
+          swift build -c release --package-path \(q(package.path)) 2>&1 | grep -E "error|Fetching|Build complete" || true
+          [ -x \(q(tool.path)) ] || { echo "✗ Couldn't build lcode-assets."; exit 1; }
+        fi
+        xtool dev build
+        app=$(ls -td xtool/*.app | head -1)
+        \(q(tool.path)) \(q(catalog.path)) "$app" --deployment-target \(deploymentTarget(project.manifest))
+        echo "▸ Signing and installing $(basename "$app")…"
+        xtool install \(device) "$app"
+        """
     }
 }
