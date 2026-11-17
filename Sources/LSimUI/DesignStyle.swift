@@ -1,9 +1,7 @@
 import Foundation
 
-/// Génération de design iOS reproduite par le simulateur.
-///
-/// iOS n'active Liquid Glass que pour les apps liées avec le SDK d'iOS 26 ou plus ;
-/// les autres s'affichent en mode compatibilité (style iOS 18).
+/// iOS design generation the simulator reproduces. iOS only enables Liquid Glass for apps linked
+/// against the iOS 26 SDK or later; others run in compatibility mode (iOS 18 look).
 public enum DesignStyle: Sendable {
     case liquidGlass
     case compatibility

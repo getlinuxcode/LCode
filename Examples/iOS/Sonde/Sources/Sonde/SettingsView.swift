@@ -10,11 +10,11 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Général") {
+                Section("General") {
                     Toggle("Notifications", isOn: $notifications)
                     Slider(value: $volume, in: 0...1)
-                    Stepper("Nombre : \(count)", value: $count, in: 0...10)
-                    Picker("Priorité", selection: $priority) {
+                    Stepper("Count: \(count)", value: $count, in: 0...10)
+                    Picker("Priority", selection: $priority) {
                         ForEach(TaskItem.Priority.allCases) { Text($0.rawValue).tag($0) }
                     }
                     DatePicker("Date", selection: $date)
@@ -28,15 +28,15 @@ struct SettingsView: View {
                         }
                     }
                     GeometryReader { proxy in
-                        Text("Largeur \(Int(proxy.size.width))")
+                        Text("Width \(Int(proxy.size.width))")
                     }
                     .frame(height: 30)
                     ScrollView(.horizontal) { LazyHStack { ForEach(0..<10) { Text("\($0)") } } }
-                    Link("Site", destination: URL(string: "https://example.com")!)
+                    Link("Website", destination: URL(string: "https://example.com")!)
                     AsyncImage(url: URL(string: "https://example.com/a.png"))
                 }
             }
-            .navigationTitle("Réglages")
+            .navigationTitle("Settings")
         }
     }
 }

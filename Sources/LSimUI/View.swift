@@ -11,15 +11,15 @@ extension Never: View {
 }
 
 extension View where Body == Never {
-    public var body: Never { fatalError("\(Self.self) est une vue primitive : son body ne doit pas être appelé") }
+    public var body: Never { fatalError("\(Self.self) is a primitive view: its body must not be called") }
 }
 
-/// Vue primitive : sait produire directement ses nœuds de layout.
+/// Primitive view: produces its layout nodes directly.
 public protocol _PrimitiveView {
     func _makeNodes(_ context: BuildContext) -> [LayoutNode]
 }
 
-/// Contexte de construction : position dans l'arbre (identité), environnement, graphe.
+/// Build context: position in the tree (identity), environment, graph.
 public struct BuildContext {
     public var path: String
     public var environment: EnvironmentValues
@@ -38,7 +38,7 @@ public struct BuildContext {
     }
 }
 
-/// Transforme une vue (primitive ou composée) en nœuds de layout.
+/// Turns a view (primitive or composed) into layout nodes.
 public func _makeNodes<V: View>(_ view: V, _ context: BuildContext) -> [LayoutNode] {
     let nodes: [LayoutNode]
     if let primitive = view as? _PrimitiveView {
@@ -48,7 +48,7 @@ public func _makeNodes<V: View>(_ view: V, _ context: BuildContext) -> [LayoutNo
         installDynamicProperties(of: view, ctx)
         nodes = _makeNodes(view.body, ctx)
     }
-    // Identité stable pour les animations : chemin de construction (le plus profond l'emporte), rang et type.
+    // Stable identity for animations: build path (deepest wins), index and type.
     for (i, node) in nodes.enumerated() where node.identity == nil {
         node.identity = "\(context.path)#\(i):\(type(of: node))"
         node.animation = context.environment.animation
@@ -57,7 +57,7 @@ public func _makeNodes<V: View>(_ view: V, _ context: BuildContext) -> [LayoutNo
     return nodes
 }
 
-// MARK: - Propriétés dynamiques (@State, @Environment…)
+// MARK: - Dynamic properties (@State, @Environment…)
 
 public struct _InstallContext {
     public let key: String

@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDisplayName</key>
-    <string>LCode Catalogue</string>
+    <string>LCode Catalog</string>
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Envoie les mesures de calibration au simulateur LCode sur votre ordinateur.</string>
+    <string>Sends calibration measurements to the LCode simulator on your computer.</string>
     <key>NSAppTransportSecurity</key>
     <dict>
         <key>NSAllowsLocalNetworking</key>

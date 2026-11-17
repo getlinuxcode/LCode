@@ -2,7 +2,7 @@ import CAdw
 import Foundation
 import LCodeKit
 
-/// Erreur ou avertissement du compilateur, rattaché au fichier d'origine.
+/// Compiler error or warning, mapped back to the original file.
 struct Diagnostic {
     let file: URL
     let line: Int
@@ -10,11 +10,10 @@ struct Diagnostic {
     let isError: Bool
     let message: String
 
-    /// Lignes « chemin:ligne:colonne: error|warning: message » d'une sortie de swift build.
+    /// Parses `path:line:column: error|warning: message` lines from swift build output.
     static func parse(_ output: String, mapPath: (String) -> String) -> [Diagnostic] {
         var seen = Set<String>()
         var result: [Diagnostic] = []
-        // Codes de couleur du terminal retirés avant l'analyse.
         let ansi = try! NSRegularExpression(pattern: "\u{1B}\\[[0-9;?]*[A-Za-z]")
         let plain = ansi.stringByReplacingMatches(in: output, range: NSRange(output.startIndex..., in: output), withTemplate: "")
         for line in plain.split(separator: "\n") {
@@ -32,13 +31,13 @@ struct Diagnostic {
     }
 }
 
-/// Aperçu intégré (comme les « Previews » d'Xcode) : le `#Preview` du fichier ouvert tourne dans LSim,
-/// affiché ici et interactif ; il se recompile et se recharge à chaque modification du texte.
+/// Embedded canvas (like Xcode Previews): the open file's `#Preview` runs in LSim, interactive, and rebuilds
+/// as the text changes.
 final class PreviewPane {
     let widget: UnsafeMutablePointer<GtkWidget>
     private(set) var project: XtoolProject
     private(set) var build: PreviewBuild
-    private let screen = SimulatorScreen(name: "apercu")
+    private let screen = SimulatorScreen(name: "preview")
     private var picture: UnsafeMutablePointer<GtkWidget> { screen.picture }
     private let status: UnsafeMutablePointer<GtkWidget>
     private let spinner: UnsafeMutablePointer<GtkWidget>
@@ -57,7 +56,7 @@ final class PreviewPane {
     private var pending = false
     private var generation = 0
     private var framePath: String { screen.framePath }
-    /// Texte non enregistré des fichiers ouverts, et appareil à simuler.
+    /// Unsaved text of open files, and the device to simulate.
     var overrides: () -> [URL: String] = { [:] }
     var device: () -> String = { "iphone17promax" }
     var onDiagnostics: ([Diagnostic]) -> Void = { _ in }
@@ -66,15 +65,14 @@ final class PreviewPane {
         self.project = project
         build = PreviewBuild(project: project, lcodeRoot: lcodeRoot)
 
-        // Barre : choix de l'aperçu, clair/sombre, actualiser, état.
         selectorModel = gtk_string_list_new(nil)!
         selector = gtk_drop_down_new(cast(raw(selectorModel)), nil)!
-        gtk_widget_set_tooltip_text(selector, "Aperçu (#Preview) du fichier")
+        gtk_widget_set_tooltip_text(selector, tr("Preview (#Preview) in This File"))
         darkToggle = gtk_toggle_button_new()!
         gtk_button_set_icon_name(cast(raw(darkToggle)), "weather-clear-night-symbolic")
-        gtk_widget_set_tooltip_text(darkToggle, "Aperçu en mode sombre")
+        gtk_widget_set_tooltip_text(darkToggle, tr("Preview in Dark Mode"))
         let refresh = gtk_button_new_from_icon_name("view-refresh-symbolic")!
-        gtk_widget_set_tooltip_text(refresh, "Recharger l'aperçu")
+        gtk_widget_set_tooltip_text(refresh, tr("Refresh Preview"))
         spinner = gtk_spinner_new()!
         status = gtk_label_new("")!
         gtk_widget_add_css_class(status, "dim-label")
@@ -84,7 +82,7 @@ final class PreviewPane {
         let bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)!
         gtk_widget_set_margin_start(bar, 8); gtk_widget_set_margin_end(bar, 8)
         gtk_widget_set_margin_top(bar, 6); gtk_widget_set_margin_bottom(bar, 6)
-        let titleLabel = gtk_label_new("Aperçu")!
+        let titleLabel = gtk_label_new(tr("Preview"))!
         gtk_widget_add_css_class(titleLabel, "heading")
         gtk_box_append(cast(raw(bar)), titleLabel)
         gtk_box_append(cast(raw(bar)), selector)
@@ -93,8 +91,7 @@ final class PreviewPane {
         gtk_box_append(cast(raw(bar)), darkToggle)
         gtk_box_append(cast(raw(bar)), refresh)
 
-        // Image de l'écran, bandeau d'erreurs, message sans aperçu.
-        placeholder = gtk_label_new("Ouvrez un fichier qui contient un #Preview.")!
+        placeholder = gtk_label_new(tr("Open a file that contains a #Preview."))!
         gtk_widget_add_css_class(placeholder, "dim-label")
         gtk_label_set_wrap(cast(raw(placeholder)), 1)
         gtk_label_set_justify(cast(raw(placeholder)), GTK_JUSTIFY_CENTER)
@@ -136,23 +133,22 @@ final class PreviewPane {
         screen.send = { [weak self] in self?.send($0) }
     }
 
-    /// Le projet a changé (paquets ajoutés…) : nouvelle description, aperçu recompilé.
+    /// The project changed (packages added…): rebuild the preview.
     func reload(project: XtoolProject) {
         self.project = project
         build = PreviewBuild(project: project, lcodeRoot: lcodeRoot)
         refresh()
     }
 
-    // MARK: - Fichier suivi
+    // MARK: - Current file
 
-    /// Le fichier affiché dans l'éditeur a changé : on prévisualise ses `#Preview`.
     func show(_ url: URL?) {
         guard url != currentFile else { return }
         currentFile = url
         refresh()
     }
 
-    /// Le texte a changé : nouvel aperçu après un court délai (une seule compilation par rafale).
+    /// Debounced: one rebuild per burst of edits.
     func textChanged() {
         generation += 1
         let g = generation
@@ -165,19 +161,19 @@ final class PreviewPane {
     func refresh() {
         guard let file = currentFile, file.pathExtension == "swift" else {
             stopServer()
-            setPlaceholder("Ouvrez un fichier qui contient un #Preview.")
+            setPlaceholder(tr("Open a file that contains a #Preview."))
             return
         }
         if building { pending = true; return }
         do {
             entries = try build.prepare(overrides: overrides()).filter { $0.file.standardizedFileURL == file.standardizedFileURL }
         } catch {
-            showErrors("Préparation de l'aperçu impossible : \(error)")
+            showErrors(tr("Couldn’t prepare the preview: %@", "\(error)"))
             return
         }
         guard !entries.isEmpty else {
             stopServer()
-            setPlaceholder("Ce fichier n'a pas de #Preview.\nAjoutez par exemple :\n\n#Preview {\n    MaVue()\n}")
+            setPlaceholder(tr("This file has no #Preview.\nAdd one, for example:\n\n#Preview {\n    MyView()\n}"))
             onDiagnostics([])
             return
         }
@@ -186,7 +182,7 @@ final class PreviewPane {
     }
 
     private func updateSelector() {
-        let titles = entries.enumerated().map { i, e in e.preview.name ?? (entries.count > 1 ? "Aperçu \(i + 1)" : "Aperçu") }
+        let titles = entries.enumerated().map { i, e in e.preview.name ?? (entries.count > 1 ? tr("Preview %d", i + 1) : tr("Preview")) }
         let current = Int(gtk_drop_down_get_selected(cast(raw(selector))))
         let n = Int(g_list_model_get_n_items(selectorModel))
         var same = n == titles.count
@@ -199,12 +195,12 @@ final class PreviewPane {
         gtk_widget_set_visible(selector, titles.count > 1 ? 1 : 0)
     }
 
-    // MARK: - Compilation
+    // MARK: - Build
 
     private func compile() {
         building = true
         gtk_spinner_start(cast(raw(spinner)))
-        gtk_label_set_text(cast(raw(status)), "Compilation…")
+        gtk_label_set_text(cast(raw(status)), tr("Building…"))
         let started = Date()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -223,14 +219,14 @@ final class PreviewPane {
                 self.onDiagnostics(diagnostics)
                 if p.terminationStatus != 0 {
                     let errors = diagnostics.filter(\.isError)
-                    let text = errors.isEmpty ? "La compilation a échoué." : errors.prefix(4).map {
+                    let text = errors.isEmpty ? tr("Build failed.") : errors.prefix(4).map {
                         "\($0.file.lastPathComponent):\($0.line) — \($0.message)"
                     }.joined(separator: "\n")
                     self.showErrors(text)
-                    gtk_label_set_text(cast(raw(self.status)), "\(errors.count) erreur\(errors.count > 1 ? "s" : "")")
+                    gtk_label_set_text(cast(raw(self.status)), errors.count == 1 ? tr("1 error") : tr("%d errors", errors.count))
                 } else {
                     gtk_widget_set_visible(self.banner, 0)
-                    gtk_label_set_text(cast(raw(self.status)), String(format: "À jour (%.1f s)", Date().timeIntervalSince(started)))
+                    gtk_label_set_text(cast(raw(self.status)), tr("Up to date (%.1f s)", Date().timeIntervalSince(started)))
                     self.restartServer()
                 }
                 if self.pending { self.pending = false; self.refresh() }
@@ -238,7 +234,7 @@ final class PreviewPane {
         }
         do { try process.run() } catch {
             building = false
-            showErrors("swift build introuvable : \(error)")
+            showErrors(tr("swift build not found: %@", "\(error)"))
         }
     }
 
@@ -257,7 +253,7 @@ final class PreviewPane {
         gtk_label_set_text(cast(raw(status)), "")
     }
 
-    // MARK: - Serveur d'aperçu
+    // MARK: - Preview server
 
     private var binary: URL {
         let bin = (try? Shell.capture(["swift", "build", "--package-path", build.directory.path, "--show-bin-path"]))?
@@ -302,7 +298,7 @@ final class PreviewPane {
             serverInput = input.fileHandleForWriting
             gtk_widget_set_visible(placeholder, 0)
         } catch {
-            showErrors("Lancement de l'aperçu impossible : \(error)")
+            showErrors(tr("Couldn’t launch the preview: %@", "\(error)"))
         }
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-// CoreMedia pour le simulateur LSim : le temps des médias (CMTime, CMTimeRange) et ses opérations.
+// CoreMedia for LSim: media time (CMTime, CMTimeRange) and its arithmetic.
 
 public typealias CMTimeValue = Int64
 public typealias CMTimeScale = Int32
@@ -67,7 +67,7 @@ public struct CMTime: Hashable, Comparable, Sendable, CustomStringConvertible {
         CMTime(seconds: seconds, preferredTimescale: newTimescale)
     }
 
-    public var description: String { isNumeric ? "CMTime(\(seconds) s)" : "CMTime(invalide)" }
+    public var description: String { isNumeric ? "CMTime(\(seconds) s)" : "CMTime(invalid)" }
 
     public static func < (a: CMTime, b: CMTime) -> Bool { a.seconds < b.seconds }
     public static func == (a: CMTime, b: CMTime) -> Bool {

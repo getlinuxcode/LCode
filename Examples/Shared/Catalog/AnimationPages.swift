@@ -4,13 +4,12 @@ import SwiftUI
 import QuartzCore
 #endif
 
-// Pages de calibration des animations : un carré rouge (couleur repérée sur iPhone) se déplace de 260 pt
-// avec une animation donnée. Sur iPhone, la page se déclenche seule 0,4 s après son apparition et
-// l'app échantillonne la position du carré à chaque image de l'écran ; dans LSim, un toucher la
-// déclenche et les images sont rendues aux mêmes instants.
+// Animation calibration pages: a red square (colour detected on the iPhone) moves 260 pt with a given
+// animation. On iPhone the page triggers itself 0.4 s after appearing and the app samples the square's
+// position every display frame; in LSim a tap triggers it and frames are rendered at the same times.
 
 enum AnimationProbe {
-    /// Instant (CACurrentMediaTime) du déclenchement de la dernière animation.
+    /// CACurrentMediaTime of the last animation trigger.
     nonisolated(unsafe) static var triggerTime: Double?
 }
 

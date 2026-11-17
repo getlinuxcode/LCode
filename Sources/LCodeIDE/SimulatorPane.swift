@@ -1,24 +1,25 @@
 import CAdw
 import Foundation
+import LCodeKit
 
-/// Simulateur intégré à la fenêtre (comme celui d'Xcode) : l'app lancée par Ctrl+R s'affiche ici, au doigt
-/// (souris), molette et mode sombre ; sa sortie va dans la console « Sortie de l'app ».
+/// Simulator embedded in the window: the app launched with Ctrl+R shows here and takes pointer, scroll and
+/// dark mode input; its output goes to the App Output console.
 final class SimulatorPane {
     let widget: UnsafeMutablePointer<GtkWidget>
-    let screen = SimulatorScreen(name: "simulateur")
+    let screen = SimulatorScreen(name: "simulator")
     private let title: UnsafeMutablePointer<GtkWidget>
     private let status: UnsafeMutablePointer<GtkWidget>
     private let spinner: UnsafeMutablePointer<GtkWidget>
     private let placeholder: UnsafeMutablePointer<GtkWidget>
     private let darkToggle: UnsafeMutablePointer<GtkWidget>
     private var syncing = false
-    /// Commande envoyée à l'app (gestes, apparence).
+    /// Sends a command to the app (gestures, appearance).
     var send: (String) -> Void = { _ in } {
         didSet { screen.send = send }
     }
 
     init() {
-        title = gtk_label_new("Simulateur")!
+        title = gtk_label_new(tr("Simulator"))!
         gtk_widget_add_css_class(title, "heading")
         spinner = gtk_spinner_new()!
         status = gtk_label_new("")!
@@ -28,7 +29,7 @@ final class SimulatorPane {
         gtk_widget_set_hexpand(status, 1)
         darkToggle = gtk_toggle_button_new()!
         gtk_button_set_icon_name(cast(raw(darkToggle)), "weather-clear-night-symbolic")
-        gtk_widget_set_tooltip_text(darkToggle, "Mode sombre")
+        gtk_widget_set_tooltip_text(darkToggle, tr("Dark Mode"))
         let bar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)!
         gtk_widget_set_margin_start(bar, 8); gtk_widget_set_margin_end(bar, 8)
         gtk_widget_set_margin_top(bar, 6); gtk_widget_set_margin_bottom(bar, 6)
@@ -61,29 +62,28 @@ final class SimulatorPane {
         }
     }
 
-    /// Nouvel état de l'exécution.
     func update(_ state: Runner.State, device: String, dark: Bool) {
         gtk_label_set_text(cast(raw(status)), device)
         switch state {
         case .building:
             gtk_spinner_start(cast(raw(spinner)))
             gtk_widget_set_opacity(screen.picture, 0.45)
-            if gtk_picture_get_paintable(cast(raw(screen.picture))) == nil { message("Compilation…") }
+            if gtk_picture_get_paintable(cast(raw(screen.picture))) == nil { message(tr("Building…")) }
         case .running:
             gtk_spinner_stop(cast(raw(spinner)))
             gtk_widget_set_visible(placeholder, 0)
-            // Apparence de départ de l'app (sans renvoyer de commande).
+            // Reflect the app's initial appearance without sending a command back.
             syncing = true
             gtk_toggle_button_set_active(cast(raw(darkToggle)), dark ? 1 : 0)
             syncing = false
         case .failed:
             gtk_spinner_stop(cast(raw(spinner)))
             screen.clear()
-            message("La compilation a échoué : voir l'onglet Problèmes.")
+            message(tr("Build failed: see the Issues tab."))
         case .idle:
             gtk_spinner_stop(cast(raw(spinner)))
             screen.clear()
-            message("Lancez l'app avec ▶ ou Ctrl+R.")
+            message(tr("Run the app with ▶ or Ctrl+R."))
         }
     }
 

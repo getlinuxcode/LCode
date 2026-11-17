@@ -1,18 +1,19 @@
 import CAdw
 import Foundation
+import LCodeKit
 
-/// Boîtes de dialogue libadwaita : saisie, confirmation, choix de dossier ou de fichier.
+/// libadwaita dialogs: text input, confirmation, folder or file chooser.
 enum Dialogs {
-    /// Demande du texte (nom de fichier, de dossier…). `completion` reçoit nil si l'utilisateur annule.
+    /// Asks for text; `completion` gets nil on cancel.
     static func prompt(_ parent: UnsafeMutablePointer<GtkWidget>, title: String, message: String = "", placeholder: String = "",
-                       initial: String = "", confirm: String = "Créer", completion: @escaping (String?) -> Void) {
+                       initial: String = "", confirm: String = tr("Create"), completion: @escaping (String?) -> Void) {
         let dialog = adw_alert_dialog_new(title, message.isEmpty ? nil : message)!
         let entry = gtk_entry_new()!
         gtk_entry_set_placeholder_text(cast(raw(entry)), placeholder)
         gtk_editable_set_text(OpaquePointer(entry), initial)
         gtk_entry_set_activates_default(cast(raw(entry)), 1)
         adw_alert_dialog_set_extra_child(cast(raw(dialog)), entry)
-        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", "Annuler")
+        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", tr("Cancel"))
         adw_alert_dialog_add_response(cast(raw(dialog)), "ok", confirm)
         adw_alert_dialog_set_response_appearance(cast(raw(dialog)), "ok", ADW_RESPONSE_SUGGESTED)
         adw_alert_dialog_set_default_response(cast(raw(dialog)), "ok")
@@ -26,11 +27,11 @@ enum Dialogs {
         gtk_widget_grab_focus(entry)
     }
 
-    /// Confirmation (action destructive en rouge).
+    /// Confirmation (destructive actions in red).
     static func confirm(_ parent: UnsafeMutablePointer<GtkWidget>, title: String, message: String, action: String,
                         destructive: Bool = true, completion: @escaping (Bool) -> Void) {
         let dialog = adw_alert_dialog_new(title, message)!
-        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", "Annuler")
+        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", tr("Cancel"))
         adw_alert_dialog_add_response(cast(raw(dialog)), "ok", action)
         adw_alert_dialog_set_response_appearance(cast(raw(dialog)), "ok", destructive ? ADW_RESPONSE_DESTRUCTIVE : ADW_RESPONSE_SUGGESTED)
         adw_alert_dialog_set_close_response(cast(raw(dialog)), "cancel")
@@ -46,7 +47,6 @@ enum Dialogs {
         adw_dialog_present(cast(raw(dialog)), parent)
     }
 
-    /// Choix d'un dossier (sélecteur natif de GTK).
     static func chooseFolder(_ parent: UnsafeMutablePointer<GtkWidget>, title: String, completion: @escaping (URL?) -> Void) {
         let dialog = gtk_file_dialog_new()!
         gtk_file_dialog_set_title(dialog, title)
@@ -61,7 +61,6 @@ enum Dialogs {
         gtk_file_dialog_select_folder(dialog, cast(raw(parent)), nil, callback, box)
     }
 
-    /// Choix d'un fichier (image pour les assets…).
     static func chooseFile(_ parent: UnsafeMutablePointer<GtkWidget>, title: String, completion: @escaping (URL?) -> Void) {
         let dialog = gtk_file_dialog_new()!
         gtk_file_dialog_set_title(dialog, title)

@@ -1,21 +1,17 @@
 import Foundation
 
-// Moteur d'animations de LSim.
-//
-// Chaque nœud de layout porte une identité stable (son chemin dans l'arbre de vues). À chaque image, le
-// rendu se fait en deux passes quand une animation est possible : la première relève la position cible
-// de chaque nœud, la seconde dessine la position présentée, interpolée depuis la position précédente par
-// la courbe de l'animation (ressort ou Bézier). Les positions sont absolues : parents et enfants
-// s'interpolent ensemble, sans se décaler. Un nœud qui apparaît pendant une transaction animée arrive en
-// fondu (transition .opacity par défaut). L'hôte redessine tant qu'une animation tourne.
+// Animation engine. Each layout node has a stable identity (its path in the view tree). When something
+// can move, a frame renders in two passes: the first records each node's target frame, the second draws
+// the presented frame interpolated along the curve. Frames are absolute so parents and children move
+// together. Nodes inserted during an animated transaction fade in (default .opacity transition).
 
 // MARK: - Animation
 
 public struct Animation: Equatable, Sendable {
     enum Curve: Equatable, Sendable {
-        /// Courbe de Bézier cubique (x1, y1, x2, y2) sur une durée fixe.
+        /// Cubic Bezier (x1, y1, x2, y2) over a fixed duration.
         case bezier(Double, Double, Double, Double, duration: Double)
-        /// Ressort : réponse (période non amortie, s) et taux d'amortissement (1 : critique).
+        /// Spring: response (undamped period, s) and damping fraction (1 = critical).
         case spring(response: Double, damping: Double)
     }
 
@@ -23,7 +19,7 @@ public struct Animation: Equatable, Sendable {
     var delay: Double = 0
     var speed: Double = 1
 
-    // Courbes de base (CSS / Core Animation).
+    // Base curves (CSS / Core Animation).
     public static func linear(duration: Double) -> Animation { Animation(curve: .bezier(0, 0, 1, 1, duration: duration)) }
     public static func easeIn(duration: Double) -> Animation { Animation(curve: .bezier(0.42, 0, 1, 1, duration: duration)) }
     public static func easeOut(duration: Double) -> Animation { Animation(curve: .bezier(0, 0, 0.58, 1, duration: duration)) }
@@ -36,11 +32,11 @@ public struct Animation: Equatable, Sendable {
     public static var easeOut: Animation { preset("easeOut", easeOut(duration: 0.35)) }
     public static var easeInOut: Animation { preset("easeInOut", easeInOut(duration: 0.35)) }
 
-    // Ressorts (iOS 17+).
+    // Springs (iOS 17+).
     public static func spring(response: Double = 0.5, dampingFraction: Double = 0.825, blendDuration: Double = 0) -> Animation {
         Animation(curve: .spring(response: response, damping: dampingFraction))
     }
-    /// Durée perçue et rebond (−1…1), convention d'Apple : amortissement 1 − rebond (rebond ≥ 0).
+    /// Perceived duration and bounce (−1…1); Apple's convention: damping = 1 − bounce (bounce ≥ 0).
     public static func spring(duration: Double = 0.5, bounce: Double = 0, blendDuration: Double = 0) -> Animation {
         let damping = bounce >= 0 ? 1 - bounce : 1 / (1 + bounce)
         return Animation(curve: .spring(response: duration, damping: damping))
@@ -56,7 +52,7 @@ public struct Animation: Equatable, Sendable {
     public static func snappy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation { spring(duration: duration, bounce: 0.15 + extraBounce) }
     public static func bouncy(duration: Double = 0.5, extraBounce: Double = 0) -> Animation { spring(duration: duration, bounce: 0.3 + extraBounce) }
 
-    /// Préréglages : valeurs mesurées sur iPhone (profil de design), sinon valeurs documentées par Apple.
+    /// Presets: values measured on iPhone (design profile), otherwise Apple's documented values.
     static func preset(_ name: String, _ fallback: Animation) -> Animation {
         guard let setting = DesignProfile.current.animations?[name] else { return fallback }
         if let s = setting.spring { return Animation(curve: .spring(response: s.response, damping: s.damping)) }
@@ -76,7 +72,7 @@ public struct Animation: Equatable, Sendable {
     public static var smooth: Animation { preset("smooth", smooth()) }
     public static var snappy: Animation { preset("snappy", snappy()) }
     public static var bouncy: Animation { preset("bouncy", bouncy()) }
-    /// iOS 17+ : ressort sans rebond (mesuré sur iPhone : identique à .spring et .smooth).
+    /// iOS 17+: spring without bounce (measured on iPhone: identical to .spring and .smooth).
     public static var `default`: Animation { preset("default", spring(duration: 0.55, bounce: 0)) }
 
     public func speed(_ speed: Double) -> Animation { var a = self; a.speed = speed; return a }
@@ -85,11 +81,11 @@ public struct Animation: Equatable, Sendable {
     public func repeatForever(autoreverses: Bool = true) -> Animation { self }
 }
 
-// MARK: - Courbes
+// MARK: - Curves
 
 extension Animation {
-    /// Déplacement restant (1 au départ, 0 à l'arrivée) et vitesse (par seconde) au temps `t`, pour un
-    /// écart initial d0 et une vitesse initiale v0 (dans l'unité de l'écart). Nil : animation terminée.
+    /// Remaining displacement (1 → 0) and velocity (per second) at time `t`, for initial offset d0 and
+    /// initial velocity v0 (in offset units). Nil: finished.
     func displacement(at t: Double, d0: Double, v0: Double) -> (d: Double, v: Double)? {
         let time = max(0, (t - delay) * speed)
         switch curve {
@@ -120,13 +116,12 @@ extension Animation {
                 d = c1 * exp(r1 * time) + c2 * exp(r2 * time)
                 v = c1 * r1 * exp(r1 * time) + c2 * r2 * exp(r2 * time)
             }
-            // Arrêt : à moins d'un centième de point et presque immobile (ou au bout de 10 s).
+            // Stop below 0.01 pt and nearly still (or after 10 s).
             if (abs(d) < 0.01 && abs(v) < 0.1) || time > 10 { return nil }
             return (d, v)
         }
     }
 
-    /// y de la courbe de Bézier cubique (0,0)-(x1,y1)-(x2,y2)-(1,1) pour une abscisse x.
     static func cubicBezier(_ x: Double, _ x1: Double, _ y1: Double, _ x2: Double, _ y2: Double) -> Double {
         func bx(_ t: Double) -> Double { 3 * (1 - t) * (1 - t) * t * x1 + 3 * (1 - t) * t * t * x2 + t * t * t }
         func by(_ t: Double) -> Double { 3 * (1 - t) * (1 - t) * t * y1 + 3 * (1 - t) * t * t * y2 + t * t * t }
@@ -141,8 +136,7 @@ extension Animation {
 
 // MARK: - Transactions
 
-/// Animation en cours de déclaration (`withAnimation`) : les changements d'état faits dans le bloc
-/// l'emportent avec eux jusqu'à la prochaine image.
+/// Animation being declared (`withAnimation`): state changes made in the block carry it to the next frame.
 public enum Transaction {
     nonisolated(unsafe) static var current: Animation?
 }
@@ -155,9 +149,9 @@ public func withAnimation<Result>(_ animation: Animation? = .default, _ body: ()
     return try body()
 }
 
-// MARK: - Animateur
+// MARK: - Animator
 
-/// Valeurs présentées de chaque nœud, d'une image à l'autre.
+/// Presented values of each node, frame to frame.
 public final class Animator {
     enum Mode { case direct, record, present }
 
@@ -176,17 +170,16 @@ public final class Animator {
     private var seen: Set<String> = []
     private var previousSeen: Set<String> = []
     private var counts: [String: Int] = [:]
-    /// Animation de la transaction en cours (posée par `withAnimation` au moment du changement d'état).
+    /// Current transaction's animation (set by `withAnimation` when state changes).
     public var pending: Animation?
-    /// Horloge (secondes) ; remplaçable pour des captures image par image déterministes.
+    /// Clock (seconds); replaceable for deterministic frame-by-frame captures.
     public var clock: () -> Double = { Date().timeIntervalSinceReferenceDate }
     public private(set) var isAnimating = false
-    /// Une modification `.animation(_:value:)` a changé de valeur pendant cette construction.
+    /// An `.animation(_:value:)` value changed during this build.
     var implicitChange = false
 
     public init() {}
 
-    /// Deux passes sont nécessaires si quelque chose peut bouger.
     var needsTwoPasses: Bool { pending != nil || isAnimating || implicitChange }
 
     func beginFrame() {
@@ -194,14 +187,14 @@ public final class Animator {
         seen = []
     }
 
-    /// Clé unique dans l'image (deux nœuds de même identité sont numérotés dans l'ordre de parcours).
+    /// Unique key within the frame (nodes with the same identity are numbered in traversal order).
     func key(_ identity: String) -> String {
         let n = counts[identity, default: 0]
         counts[identity] = n + 1
         return n == 0 ? identity : "\(identity)~\(n)"
     }
 
-    /// Valeur présentée d'une grandeur animable (rectangle, opacité…) pour cette image.
+    /// Presented value of an animatable quantity (rect, opacity…) for this frame.
     func present(_ key: String, _ target: [Double], animation: Animation?, now: Double) -> [Double] {
         seen.insert(key)
         switch mode {
@@ -219,7 +212,7 @@ public final class Animator {
             }
             if !Self.same(track.to, goal) {
                 if let spec = animation ?? pending {
-                    // Nouvelle cible : on repart de la valeur présentée, avec sa vitesse (ressorts).
+                    // New target: start from the presented value, keeping its velocity (springs).
                     let v = currentVelocity(track, now: now)
                     track = Track(from: track.presented, velocity: v, to: goal, start: now, animation: spec, presented: track.presented)
                 } else {
@@ -254,15 +247,14 @@ public final class Animator {
         }
     }
 
-    /// Nœud absent de l'image précédente (apparition) ?
     func isNew(_ key: String) -> Bool { !previousSeen.contains(key) && !previousSeen.isEmpty }
 
     private var insertedDepth = 0
     func enterInserted() { insertedDepth += 1 }
     func leaveInserted() { insertedDepth -= 1 }
 
-    /// Avancement (0 → 1) de la transition d'apparition d'un nœud, ou nil s'il n'en a pas : seule la
-    /// racine d'un sous-arbre apparu pendant une transaction animée en reçoit une.
+    /// Progress (0 → 1) of a node's insertion transition, or nil. Only the root of a subtree inserted
+    /// during an animated transaction gets one.
     func insertionProgress(_ key: String, animation: Animation?) -> Double? {
         let tkey = key + "#insert"
         switch mode {
@@ -284,15 +276,15 @@ public final class Animator {
 
     private var stillAnimating = false
 
-    /// Demande l'image suivante (transitions dessinées hors des pistes : pile de navigation, feuilles).
+    /// Requests the next frame (transitions drawn outside tracks: navigation stack, sheets).
     func requestFrame() {
         if mode != .record { stillAnimating = true }
         externalFrame = true
     }
-    /// Image demandée hors du rendu (pendant la construction de l'arbre).
+    /// Frame requested outside rendering (while building the tree).
     private var externalFrame = false
 
-    /// Rendu complet d'une image (une ou deux passes), à appeler par le layout racine.
+    /// Renders a full frame (one or two passes); called by the root layout.
     func frame(_ render: () -> DisplayList) -> DisplayList {
         let now = clock()
         frameTime = now
@@ -310,7 +302,7 @@ public final class Animator {
         let list = render()
         isAnimating = stillAnimating || externalFrame
         externalFrame = false
-        // Les pistes des nœuds disparus sont oubliées.
+        // Forget tracks of removed nodes.
         tracks = tracks.filter { seen.contains($0.key) }
         previousSeen = seen
         pending = nil
@@ -328,13 +320,13 @@ public final class Animator {
     }
 }
 
-// MARK: - Modificateurs
+// MARK: - Modifiers
 
 private struct AnimationKey: EnvironmentKey { static let defaultValue: Animation? = nil }
 private struct TransitionKey: EnvironmentKey { static let defaultValue: AnyTransition? = nil }
 
 extension EnvironmentValues {
-    /// Animation implicite des nœuds construits ici (`.animation(_:value:)` dont la valeur vient de changer).
+    /// Implicit animation for nodes built here (`.animation(_:value:)` whose value just changed).
     var animation: Animation? {
         get { self[AnimationKey.self] }
         set { self[AnimationKey.self] = newValue }
@@ -355,7 +347,6 @@ struct _AnimationValueModifier<V: Equatable>: _PrimitiveModifier {
         let current = AnyHashable(String(describing: value))
         var ctx = context
         if box.initialized, box.value != current {
-            // La valeur a changé : les changements de ce sous-arbre s'animent pendant cette image.
             ctx.environment.animation = animation
             context.graph.animator.implicitChange = true
         }

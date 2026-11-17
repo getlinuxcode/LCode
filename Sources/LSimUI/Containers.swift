@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Form
 
-/// Formulaire : sur iPhone, c'est une liste groupée avec marges.
+/// On iPhone, a Form is an inset grouped list.
 public struct Form<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let content: Content
@@ -13,7 +13,7 @@ public struct Form<Content: View>: View, _PrimitiveView {
     }
 }
 
-// MARK: - Piles « paresseuses » (rendues comme des piles ordinaires)
+// MARK: - Lazy stacks (rendered as plain stacks)
 
 public struct PinnedScrollableViews: OptionSet, Sendable {
     public let rawValue: Int
@@ -42,7 +42,7 @@ public struct LazyHStack<Content: View>: View, _PrimitiveView {
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] { stack._makeNodes(context) }
 }
 
-// MARK: - Grilles
+// MARK: - Grids
 
 public struct GridItem: Sendable {
     public enum Size: Sendable {
@@ -92,7 +92,7 @@ public struct LazyHGrid<Content: View>: View, _PrimitiveView {
     }
 }
 
-/// Grille : `axis` = sens de défilement (vertical : colonnes définies, lignes ajoutées au besoin).
+/// Grid: `axis` = scroll direction (vertical: fixed columns, rows added as needed).
 final class GridNode: LayoutNode {
     let axis: Axis
     let tracks: [GridItem]
@@ -107,7 +107,7 @@ final class GridNode: LayoutNode {
         self.children = children
     }
 
-    /// Tailles des pistes (colonnes en grille verticale) pour l'étendue disponible.
+    /// Track sizes (columns in a vertical grid) for the available extent.
     private func trackSizes(_ available: CGFloat) -> [(size: CGFloat, spacing: CGFloat)] {
         var expanded: [(GridItem.Size, CGFloat)] = []
         let fixedTotal = tracks.reduce(CGFloat(0)) { acc, t in
@@ -198,8 +198,8 @@ public struct GeometryProxy: Sendable {
     }
 }
 
-/// Le contenu dépend de la taille finale : il est construit avec la taille de la passe précédente,
-/// et une nouvelle passe est demandée si la taille a changé.
+/// Content depends on the final size: it is built with the previous pass's size, and a new pass is
+/// requested if the size changed.
 public struct GeometryReader<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let content: (GeometryProxy) -> Content
@@ -244,7 +244,7 @@ final class GeometryNode: LayoutNode {
 
 // MARK: - TabView
 
-/// Onglets déclarés dans une TabView (collectés pendant la construction).
+/// Tabs declared in a TabView (collected during the build).
 final class TabCollector {
     struct Item {
         let title: String
@@ -265,7 +265,7 @@ extension EnvironmentValues {
     }
 }
 
-/// `Tab("Titre", systemImage: "…") { contenu }` (iOS 18+).
+/// `Tab("Title", systemImage: "…") { content }` (iOS 18+).
 public struct Tab<Value: Hashable, Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let title: String
@@ -321,7 +321,7 @@ extension Tab {
 
 public struct TabRole: Hashable, Sendable { public static let search = TabRole() }
 
-/// `.tabItem { Label(…) }` (ancienne API) : déclare la vue comme un onglet.
+/// `.tabItem { Label(…) }` (older API): declares the view as a tab.
 struct _TabItemModifier<L: View>: _PrimitiveModifier {
     let label: L
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
@@ -331,7 +331,7 @@ struct _TabItemModifier<L: View>: _PrimitiveModifier {
         let labelNodes = LSimUI._makeNodes(label, labelCtx)
         let title = labelNodes.lazy.compactMap(firstText(in:)).first ?? ""
         let symbol = labelNodes.lazy.compactMap(firstSymbol(in:)).first
-        // Le contenu est reconstruit par la TabView quand l'onglet est affiché.
+        // The TabView rebuilds the content when the tab is shown.
         var buildCtx = context
         buildCtx.environment.tabCollector = nil
         let nodes = content(buildCtx)
@@ -385,7 +385,7 @@ public struct TabView<SelectionValue: Hashable, Content: View>: View, _Primitive
         let items = collector.items
         guard !items.isEmpty else { return [] }
 
-        // Onglet sélectionné : par la liaison si fournie (valeur ou .tag), sinon état interne.
+        // Selected tab: from the binding if given (value or .tag), else internal state.
         let indexBox = context.graph.persistent(ctx.path + "#tab") { TabIndexBox() }
         var selected = min(indexBox.index, items.count - 1)
         if let selection {
@@ -420,17 +420,17 @@ extension TabView where SelectionValue == Int {
     }
 }
 
-/// Barre d'onglets Liquid Glass, mesurée sur iPhone 17 Pro Max (iOS 27.2, couches Core Animation).
+/// Liquid Glass tab bar, measured on iPhone 17 Pro Max (iOS 27.2, Core Animation layers).
 public enum TabBarMetrics {
     public static var height: CGFloat = 62
     public static var bottomMargin: CGFloat = 21
     public static var sideMargin: CGFloat = 21
-    /// Pas entre deux onglets à largeur naturelle ; un onglet est 9,5 % plus large que le pas (ils se
-    /// chevauchent légèrement) : 94 pt tous les 86 pt.
+    /// Step between two natural-width tabs; a tab is 9.5% wider than the step (they overlap slightly):
+    /// 94 pt every 86 pt.
     public static var itemPitch: CGFloat = 86
     public static var itemOverlap: CGFloat = 0.095
     public static var inset: CGFloat = 4
-    /// Au-delà de 85 % de la largeur disponible, la barre prend toute la largeur (4 onglets : 398 pt).
+    /// Beyond 85% of the available width the bar takes the full width (4 tabs: 398 pt).
     public static var fullWidthThreshold: CGFloat = 0.85
     public static var iconTop: CGFloat = 6
     public static var iconHeight: CGFloat = 28
@@ -439,7 +439,7 @@ public enum TabBarMetrics {
     public static var labelFont = Font.system(size: 10, weight: .semibold)
 }
 
-/// Contenu plein écran + barre d'onglets flottante en verre.
+/// Full-screen content + floating glass tab bar.
 final class TabBarNode: LayoutNode {
     let page: LayoutNode
     let items: [(title: String, symbol: String?)]
@@ -478,19 +478,18 @@ override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayLi
         let itemWidth = pitch * (1 + M.itemOverlap)
         let bar = CGRect(x: screen.midX - width / 2, y: screen.maxY - M.bottomMargin - M.height, width: width, height: M.height)
         let dark = lc.colorScheme == .dark
-        // Barre en vrai verre : le contenu qui passe dessous est réfracté.
+        // Real glass bar: content passing under it is refracted.
         list.append(.glass(.capsule, bar, Glass.regular.render(lc.colorScheme)))
 
         for (i, item) in items.enumerated() {
             let cell = CGRect(x: bar.minX + M.inset + CGFloat(i) * pitch, y: bar.minY + M.inset, width: itemWidth, height: bar.height - 2 * M.inset)
             if i == selected {
-                // Pastille de sélection : verre sur le verre (capsule de rayon 27 sur le cadre de l'onglet),
-                // plus dépolie en clair, plus sombre en sombre.
-                // Flou large (les couleurs du fond se mélangent), puis voile clair ou sombre.
+                // Selection pill: glass on glass (radius 27 capsule on the tab frame), frostier in light, darker
+                // in dark. Wide blur (background colors blend), then a light or dark veil.
                 list.append(.backdrop(cell, blur: 5, tint: dark ? RGBA(0, 0.04, 0, 0.3) : RGBA(0.9, 0.92, 0.93, 0.22), shape: .capsule))
             }
             var color = (i == selected ? tint : Color.primary).resolve(in: lc.colorScheme)
-            // Onglet sélectionné en sombre : teinte éclaircie (plus lisible sur la pastille sombre).
+            // Selected tab in dark mode: lightened tint (more readable on the dark pill).
             if i == selected && dark { color = RGBA(color.r + (1 - color.r) * 0.3, color.g + (1 - color.g) * 0.3, color.b + (1 - color.b) * 0.3, color.a) }
             if pressed == ids[i] { list.append(.pushOpacity(0.5)) }
             if let symbol = item.symbol {

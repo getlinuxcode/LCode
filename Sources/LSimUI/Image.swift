@@ -1,9 +1,7 @@
 import Foundation
 
-/// Image : symbole SF Symbols (`Image(systemName:)`) ou image nommée.
-///
-/// Les symboles sont dessinés avec le glyphe correspondant des polices SF Pro de l'utilisateur ;
-/// la table nom → glyphe est construite par le banc de calibration à partir de son iPhone.
+/// Image: SF Symbol (`Image(systemName:)`) or named image. Symbols are drawn with the matching glyph
+/// from the user's SF Pro fonts; the name → glyph table is built by the calibration bench from their iPhone.
 public struct Image: View, _PrimitiveView, Equatable {
     public typealias Body = Never
 
@@ -42,7 +40,7 @@ public struct Image: View, _PrimitiveView, Equatable {
             return [SymbolNode(name: name, font: font, scale: env.imageScale, color: color.resolvingTint(env),
                                resizable: isResizable, contentMode: env.imageContentMode ?? .fit)]
         case let .named(name):
-            // Image du catalogue d'assets de l'app ; absente : rien (comme iOS), signalée dans la sortie.
+            // App asset catalog image; if missing: draws nothing (like iOS) and is reported in the output.
             guard AssetCatalog.shared.image(name, scheme: .light) != nil || AssetCatalog.shared.image(name, scheme: .dark) != nil else {
                 AssetCatalog.shared.warnMissing("image", name)
                 return [MissingImageNode(name: name, resizable: isResizable)]
@@ -77,9 +75,9 @@ extension View {
     public func scaledToFill() -> some View { aspectRatio(contentMode: .fill) }
 }
 
-/// Mesures d'un symbole fournies par le moteur de rendu.
+/// Symbol metrics provided by the renderer.
 public struct SymbolMetrics: Sendable {
-    /// Taille du cadre du symbole à cette police et cette échelle.
+    /// Symbol frame size at this font and scale.
     public var size: CGSize
     public init(size: CGSize) { self.size = size }
 }
@@ -105,7 +103,7 @@ final class SymbolNode: LayoutNode {
 
     func natural(_ lc: LayoutContext) -> CGSize {
         if let m = lc.measurer.measureSymbol(name, font: font, scale: scale) { return m.size }
-        // Symbole inconnu (table absente) : carré du corps de la police.
+        // Unknown symbol (no table): square of the font's body size.
         let side = font.size * CGFloat(DesignProfile.current.image.factor(scale))
         return CGSize(width: side, height: side)
     }
@@ -113,7 +111,7 @@ final class SymbolNode: LayoutNode {
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let n = natural(lc)
         guard resizable else { return n }
-        // Image redimensionnable : prend la place proposée (en gardant le rapport si scaledToFit/Fill).
+        // Resizable image: takes the proposed space (keeping the ratio if scaledToFit/Fill).
         let proposed = p.replacingUnspecifiedDimensions(by: n)
         guard n.width > 0, n.height > 0 else { return proposed }
         let kw = proposed.width / n.width, kh = proposed.height / n.height
@@ -127,7 +125,7 @@ final class SymbolNode: LayoutNode {
     }
 }
 
-/// Image du catalogue d'assets : taille naturelle = pixels / échelle du fichier (1x, 2x, 3x).
+/// Asset catalog image: natural size = pixels / file scale (1x, 2x, 3x).
 final class AssetImageNode: LayoutNode {
     let name: String
     let resizable: Bool
@@ -155,7 +153,7 @@ final class AssetImageNode: LayoutNode {
         guard resizable else { return n }
         let proposed = p.replacingUnspecifiedDimensions(by: n)
         guard n.width > 0, n.height > 0 else { return proposed }
-        // Sans aspectRatio : l'image s'étire sur la place proposée ; sinon le rapport est gardé.
+        // Without aspectRatio the image stretches to the proposed space; otherwise the ratio is kept.
         guard let mode = contentMode else { return proposed }
         let kw = proposed.width / n.width, kh = proposed.height / n.height
         let k = mode == .fit ? min(kw, kh) : max(kw, kh)

@@ -2,11 +2,10 @@ import CGtk
 import Foundation
 import LSimUI
 
-/// Rendu Liquid Glass : réfraction de ce qui est déjà dessiné derrière la forme.
+/// Liquid Glass rendering: refracts what is already drawn behind the shape.
 extension CairoRenderer {
     func drawGlass(_ shape: ShapeKind, _ rect: CGRect, _ g: GlassRender) {
         guard rect.width > 1, rect.height > 1 else { return }
-        // Ombre portée douce (sous le verre, visible autour).
         if g.shadowAlpha > 0, g.table?.edge == nil {
             fill(shape, rect.offsetBy(dx: 0, dy: g.shadowOffset), RGBA(0, 0, 0, g.shadowAlpha))
         }
@@ -27,15 +26,14 @@ extension CairoRenderer {
         let stride = Int(cairo_image_surface_get_stride(target)) / 4
         let pixels = UnsafeMutableRawPointer(raw).assumingMemoryBound(to: UInt32.self)
 
-        // Rectangle du verre et zone source élargie (la réfraction lit au-delà du bord).
         let gx0 = x0 - offX, gy0 = y0 - offY
-        // La réfraction peut lire loin (jusqu'à `maxShift` × la bande de bord, au-delà du centre).
+        // Refraction can read far beyond the edge (up to `maxShift` × the bezel band, past the center).
         let halfMin = Double(min(rect.width, rect.height)) / 2
         var reach = g.curvature == nil ? abs(g.refraction) : min(abs(g.refraction) * 40, g.maxShift * g.bezel)
         if let table = g.table {
             reach = (table.shift.map(abs).max() ?? 0) * (table.relative ? halfMin : 1)
         }
-        // Contour mesuré : il déborde à l'extérieur de la forme (liseré sombre).
+        // The measured edge spills outside the shape (dark rim).
         let edgePad = max(0, -(g.table?.edge?.d.first ?? 0)) * scale
         let maxBlur = max(g.blur, g.table?.blur?.max() ?? 0)
         let margin = Int(((reach + 3 * maxBlur + 2) * scale + edgePad).rounded(.up))
@@ -49,14 +47,12 @@ extension CairoRenderer {
 
         var original = [UInt32](repeating: 0, count: sw * sh)
         for y in 0..<sh { for x in 0..<sw { original[y * sw + x] = pixels[(srcT + y) * stride + srcL + x] } }
-        // Fond flouté à plusieurs niveaux (écart-type en points) ; le verre mesuré choisit son flou selon
-        // la distance au bord en interpolant entre deux niveaux.
+        // Measured glass picks its blur by distance to the edge, interpolating between two levels.
         let levels: [Double] = g.table?.blur != nil ? [0, 0.6, 1.2, 2, 3, 4.5, 6.5, 9] : [g.blur]
-        // Niveaux calculés à la demande : seuls ceux que la forme utilise réellement.
         let layers = BlurPyramid(original, sw, sh, levels: levels, scale: scale)
         let blurred = layers[0]
 
-        // Géométrie de la forme (champ de distance d'un rectangle arrondi, centré).
+        // Shape geometry: centered rounded-rect signed distance field.
         let hw = Double(rect.width) / 2, hh = Double(rect.height) / 2
         var radius: Double
         switch shape {
@@ -98,7 +94,7 @@ extension CairoRenderer {
             return (mix(16), mix(8), mix(0))
         }
 
-        // Colonnes des tables extraites une fois (pas d'allocation par pixel).
+        // Extract table columns once (no per-pixel allocation).
         func columns(_ rows: [[Double]]) -> ([Double], [Double], [Double]) {
             (rows.map { $0[0] }, rows.map { $0[1] }, rows.map { $0[2] })
         }
@@ -108,7 +104,7 @@ extension CairoRenderer {
         let eTop = edgeT.map { columns($0.betaTop) }, eBottom = edgeT.map { columns($0.betaBottom) }
         let edgeTableD = edgeT.map { GlassTable(relative: false, d: $0.d, shift: [], alpha: [], betaTop: [], betaBottom: []) }
 
-        // Lumière venant du haut à gauche (liseré spéculaire).
+        // Light from the top left (specular rim).
         let lx = -0.55, ly = -0.835
         let tint = g.tint
         let ow = outR - outL, oh = outB - outT
@@ -124,24 +120,23 @@ extension CairoRenderer {
                 let edgeTable = edgeT
                 if coverage <= 0, edgeTable == nil || -d < edgeTable!.d[0] { out[py * ow + px] = orig; continue }
                 let inside = -d
-                // Normale sortante au bord.
                 var nx = sdf(ux + e, uy) - sdf(ux - e, uy), ny = sdf(ux, uy + e) - sdf(ux, uy - e)
                 let nl = (nx * nx + ny * ny).squareRoot()
                 if nl > 0 { nx /= nl; ny /= nl }
-                // Réfraction : décalage le long de la normale, maximal au bord.
+                // Refraction: shift along the normal, strongest at the edge.
                 if let table = g.table {
-                    // Comportement mesuré sur iPhone : décalage, flou, transmission et lumière selon le bord.
+                    // Behavior measured on iPhone: shift, blur, transmission and light by distance to the edge.
                     let o = (channel(orig, 16), channel(orig, 8), channel(orig, 0), channel(orig, 24))
-                    let w = (1 + (nx * lx + ny * ly)) / 2   // 1 face à la lumière, 0 à l'opposé
+                    let w = (1 + (nx * lx + ny * ly)) / 2   // 1 facing the light, 0 opposite
                     var cr = o.0, cg = o.1, cb = o.2
-                    var ap = 1.0, bp = (0.0, 0.0, 0.0)      // transmission et lumière du rendu intérieur
+                    var ap = 1.0, bp = (0.0, 0.0, 0.0)      // transmission and light of the inner rendering
                     if inside > 0 {
                         let x = table.relative ? inside / max(halfMin, 0.01) : inside
                         let unit = table.relative ? halfMin : 1
                         let toAxis = min(max((halfMin - inside) / max(halfMin * 0.2, 0.01), 0), 1)
                         let shift = table.value(table.shift, at: x) * unit * toAxis * toAxis * (3 - 2 * toAxis)
-                        // Flou mesuré, plus anticrénelage là où la réfraction comprime le fond (pente forte du
-                        // décalage) : le fond y est sous-échantillonné, l'iPhone le lisse.
+                        // Measured blur, plus anti-aliasing where refraction compresses the background (steep
+                        // shift slope): it is undersampled there and the iPhone smooths it.
                         let dx = 0.5 / scale / (table.relative ? max(halfMin, 0.01) : 1)
                         let slope = abs(table.value(table.shift, at: x + dx) - table.value(table.shift, at: max(x - dx, 0))) * unit
                             / (2 * 0.5 / scale)
@@ -151,7 +146,7 @@ extension CairoRenderer {
                         let sx = (ux - nx * shift + hw) * scale + gx0 - Double(srcL) - 0.5
                         let sy = (uy - ny * shift + hh) * scale + gy0 - Double(srcT) - 0.5
                         (cr, cg, cb) = sample(sx, sy, sigma: sigma)
-                        // Verre teinté : seule la luminance du fond traverse (mesuré sur iPhone).
+                        // Tinted glass: only background luminance passes through (measured on iPhone).
                         let sat = g.tintOverride == nil ? table.saturation ?? 1 : 0
                         let lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb
                         cr = lum + (cr - lum) * sat; cg = lum + (cg - lum) * sat; cb = lum + (cb - lum) * sat
@@ -174,7 +169,7 @@ extension CairoRenderer {
                     }
                     var cov = coverage
                     if let edge = edgeTable, inside < edge.d[edge.d.count - 1] {
-                        // Contour : écart entre le contour mesuré (α·fond + β) et le rendu intérieur.
+                        // Edge: difference between the measured edge (α·background + β) and the inner rendering.
                         let ed = edgeTableD!, et = eTop!, eb = eBottom!
                         let ae = ed.value(edge.alpha, at: inside)
                         let te = (ed.value(et.0, at: inside), ed.value(et.1, at: inside), ed.value(et.2, at: inside))
@@ -183,7 +178,7 @@ extension CairoRenderer {
                         cr += (ae - ap) * o.0 + 255 * (bx.0 - bp.0)
                         cg += (ae - ap) * o.1 + 255 * (bx.1 - bp.1)
                         cb += (ae - ap) * o.2 + 255 * (bx.2 - bp.2)
-                        cov = 1   // l'anticrénelage est déjà dans la mesure
+                        cov = 1   // anti-aliasing is already in the measurement
                     }
                     let fr = o.0 + (min(max(cr, 0), 255) - o.0) * cov
                     let fg = o.1 + (min(max(cg, 0), 255) - o.1) * cov
@@ -195,8 +190,8 @@ extension CairoRenderer {
                 let t = min(max(inside / max(g.bezel, 0.01), 0), 1)
                 var shift: Double
                 if let c = g.curvature {
-                    // Bord en arc : décalage proportionnel à la pente de la surface, x / √(1 − c·x²),
-                    // faible à l'intérieur et très fort au bord (frontières courbes, effet miroir).
+                    // Arched edge: shift follows the surface slope x / √(1 − c·x²), weak inside and very
+                    // strong at the edge (curved boundaries, mirror effect).
                     let x = 1 - t
                     shift = g.refraction * x / max(1 - c * x * x, 0.0004).squareRoot()
                     let limit = g.maxShift * g.bezel
@@ -207,7 +202,7 @@ extension CairoRenderer {
                 let sx = (ux - nx * shift + hw) * scale + gx0 - Double(srcL) - 0.5
                 let sy = (uy - ny * shift + hh) * scale + gy0 - Double(srcT) - 0.5
                 var (cr, cg, cb) = sample(sx, sy)
-                // Saturation et luminosité, puis voile.
+                // Saturation and brightness, then tint.
                 let lum = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb
                 cr = (lum + (cr - lum) * g.saturation) * g.brightness
                 cg = (lum + (cg - lum) * g.saturation) * g.brightness
@@ -215,7 +210,7 @@ extension CairoRenderer {
                 cr = cr * (1 - tint.a) + tint.r * 255 * tint.a
                 cg = cg * (1 - tint.a) + tint.g * 255 * tint.a
                 cb = cb * (1 - tint.a) + tint.b * 255 * tint.a
-                // Liseré : clair face à la lumière, légèrement sombre à l'opposé.
+                // Rim: light facing the light source, slightly dark opposite.
                 if inside < g.rimWidth {
                     let edge = 1 - inside / max(g.rimWidth, 0.01)
                     let facing = nx * lx + ny * ly
@@ -225,14 +220,14 @@ extension CairoRenderer {
                     cg = (cg + (255 - cg) * light) * (1 - shade)
                     cb = (cb + (255 - cb) * light) * (1 - shade)
                 }
-                // Filet lumineux net au bord extérieur.
+                // Sharp bright line on the outer edge.
                 if g.edgeLine > 0, inside < 1.0 {
                     let k = g.edgeLine * (1 - inside)
                     cr += (255 - cr) * k
                     cg += (255 - cg) * k
                     cb += (255 - cb) * k
                 }
-                // Mélange anticrénelé avec l'original au bord.
+                // Anti-aliased blend with the original at the edge.
                 let o = (channel(orig, 16), channel(orig, 8), channel(orig, 0), channel(orig, 24))
                 let fr = o.0 + (min(max(cr, 0), 255) - o.0) * coverage
                 let fg = o.1 + (min(max(cg, 0), 255) - o.1) * coverage
@@ -242,7 +237,7 @@ extension CairoRenderer {
             }
         }
 
-        // Recomposition via Cairo (respecte les découpages en cours).
+        // Composite through Cairo so the current clip applies.
         let surface = out.withUnsafeMutableBytes { bytes -> OpaquePointer? in
             cairo_image_surface_create_for_data(bytes.baseAddress!.assumingMemoryBound(to: UInt8.self),
                                                 CAIRO_FORMAT_ARGB32, Int32(ow), Int32(oh), Int32(ow * 4))

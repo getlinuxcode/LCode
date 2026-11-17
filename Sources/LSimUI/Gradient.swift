@@ -1,6 +1,6 @@
 import Foundation
 
-// Dégradés : LinearGradient (vue et style de remplissage), Gradient, Color.gradient.
+// Gradients: LinearGradient (view and fill style), Gradient, Color.gradient.
 
 public struct Gradient: Hashable, Sendable {
     public struct Stop: Hashable, Sendable {
@@ -47,7 +47,7 @@ public struct LinearGradient: View, _PrimitiveView, ShapeStyle {
     }
 }
 
-/// Remplit la place proposée avec un dégradé linéaire.
+/// Fills the proposed space with a linear gradient.
 final class GradientNode: LayoutNode {
     let gradient: Gradient
     let start: UnitPoint
@@ -74,7 +74,6 @@ final class GradientNode: LayoutNode {
 }
 
 extension Shape {
-    /// `.fill(LinearGradient(…))`.
     public func fill(_ gradient: LinearGradient) -> some View {
         _GradientShape(kind: _kind, gradient: gradient)
     }

@@ -4,19 +4,17 @@ import SwiftUI
 import UIKit
 #endif
 
-// Pages de calibration de la barre de navigation Liquid Glass (iOS 26+) : écran poussé (bouton retour en
-// verre), bouton d'outil, grand titre, contenu défilé à un décalage précis.
-//  - nav.bar.<décalage> : damier sous la barre, pour la géométrie du titre et la transition grand titre
-//    → titre centré ;
-//  - nav.edge.<fond> : fonds codés (gris bas/haut, ondes verticales) défilés loin, pour mesurer ligne par
-//    ligne l'effet de bord de défilement (transmission, voile, flou progressif).
+// Liquid Glass navigation bar calibration pages (iOS 26+): pushed screen (glass back button), toolbar
+// button, large title, content scrolled to a precise offset.
+//  - nav.bar.<offset>: checkerboard under the bar, for title geometry and the large → inline transition;
+//  - nav.edge.<background>: coded backgrounds scrolled far, to measure the scroll edge effect row by row
+//    (transmission, veil, progressive blur).
 
 enum NavigationCatalog {
-    /// Décalages réels du contenu depuis le repos (grand titre déployé). `ScrollPosition(y:)` d'iOS se compte
-    /// depuis la barre repliée (y = décalage − 52 pt) et refuse les y négatifs : la transition du titre
-    /// n'est pas atteignable ainsi. Sur iPhone, la page règle donc directement la UIScrollView.
-    /// (Les décalages intermédiaires 8 à 48 pt ne sont pas capturés : un défilement lancé par le code ne fait
-    /// pas suivre le grand titre sur la capture, alors qu'il suit le doigt ; comportement vérifié à la main.)
+    /// Content offsets from rest (large title expanded). iOS's `ScrollPosition(y:)` counts from the collapsed
+    /// bar (y = offset − 52 pt) and rejects negative y, so the title transition is unreachable that way:
+    /// on iPhone the page drives the UIScrollView directly. (Offsets 8–48 pt are not captured: a programmatic
+    /// scroll doesn't drag the large title along in the capture, while a finger does; checked by hand.)
     static let offsets: [Int] = [0, 56, 70, 120, 352]
     static let largeTitle: CGFloat = 52
     static let buttonBackgrounds: [(String, GlassBackground)] = [
@@ -37,8 +35,8 @@ enum NavigationCatalog {
                 AnyView(NavigationBarPage(offset: CGFloat(offset), background: .checker))
             })
         }
-        // Boutons de barre posés directement sur des fonds codés (sans défilement ni matière) : mesure du
-        // verre des boutons, qui s'adapte au contenu qu'il recouvre.
+        // Bar buttons straight over coded backgrounds (no scrolling, no material): measures the button glass,
+        // which adapts to the content beneath it.
         for (name, bg) in buttonBackgrounds {
             pages.append(CatalogPage(id: "nav.button.\(name)") { AnyView(NavigationButtonPage(background: bg)) })
         }
@@ -53,7 +51,7 @@ enum NavigationCatalog {
 
 @available(iOS 26, *)
 struct NavigationBarPage: View {
-    /// Décalage réel du contenu depuis le repos (grand titre déployé).
+    /// Content offset from rest (large title expanded).
     let offset: CGFloat
     let background: GlassBackground
     @State private var path = [1]
@@ -67,15 +65,15 @@ struct NavigationBarPage: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Text("Accueil")
-                .navigationTitle("Accueil")
+            Text("Home")
+                .navigationTitle("Home")
                 .navigationDestination(for: Int.self) { _ in
                     ScrollView {
                         CodedBackground(kind: background, width: 440, height: 1800)
                             .calibrate("nav.content")
                     }
                     .scrollPosition($position)
-                    .navigationTitle("Réglages")
+                    .navigationTitle("Settings")
                     .navigationBarTitleDisplayMode(.large)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {
@@ -89,18 +87,18 @@ struct NavigationBarPage: View {
 
     private func scroll() {
         #if canImport(UIKit)
-        // Comme un doigt : décalage de la UIScrollView, que la barre suit (transition du titre comprise).
+        // Like a finger: offset the UIScrollView, which the bar follows (title transition included).
         let target = offset
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
             guard let scrollView = Self.findScrollView() else { return }
-            // Repos réel (grand titre déployé) : la marge ajustée, elle, exclut le grand titre.
+            // True rest position (large title expanded); the adjusted inset excludes the large title.
             let rest = scrollView.contentOffset.y
-            // Animé : même circuit qu'un défilement réel, que la barre (grand titre) suit image par image.
+            // Animated: same path as a real scroll, which the bar (large title) follows frame by frame.
             scrollView.setContentOffset(CGPoint(x: 0, y: rest + target), animated: true)
         }
         #else
-        // LSim accepte un y négatif (grand titre en partie déployé), iOS non.
+        // LSim accepts a negative y (large title partly expanded); iOS does not.
         position.scrollTo(y: offset - NavigationCatalog.largeTitle)
         #endif
     }
@@ -120,7 +118,7 @@ struct NavigationBarPage: View {
     #endif
 }
 
-/// Écran poussé, fond codé plein écran immobile (pas de zone défilante : pas d'effet de bord).
+/// Pushed screen with a static full-screen coded background (no scroll view, so no edge effect).
 @available(iOS 26, *)
 struct NavigationButtonPage: View {
     let background: GlassBackground
@@ -128,15 +126,15 @@ struct NavigationButtonPage: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Text("Accueil")
-                .navigationTitle("Accueil")
+            Text("Home")
+                .navigationTitle("Home")
                 .navigationDestination(for: Int.self) { _ in
                     ZStack(alignment: .topLeading) {
                         CodedBackground(kind: background, width: 440, height: 956)
                             .calibrate("board.nav.button")
                     }
                     .ignoresSafeArea()
-                    .navigationTitle("Réglages")
+                    .navigationTitle("Settings")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .topBarTrailing) {

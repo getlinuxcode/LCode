@@ -1,8 +1,7 @@
 import CoreVideo
 import Foundation
 
-/// Image vidéo (CVPixelBuffer) ajustée à la place proposée en gardant ses proportions — base de
-/// `VideoPlayer` (AVKit) et des surfaces de lecture des doublures.
+/// Video frame (CVPixelBuffer) aspect-fitted into the proposed size; backs AVKit's `VideoPlayer`.
 public struct _PixelBufferView: View, _PrimitiveView {
     public typealias Body = Never
     let buffer: CVPixelBuffer
@@ -28,7 +27,7 @@ final class PixelBufferNode: LayoutNode {
     }
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
-        // Comme une image redimensionnable : toute la place proposée.
+        // Like a resizable image: takes all the proposed space.
         p.replacingUnspecifiedDimensions(by: CGSize(width: buffer.width / 2, height: buffer.height / 2))
     }
 

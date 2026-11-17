@@ -1,6 +1,6 @@
 import Foundation
 
-/// Stockage persistant d'une valeur @State, détenu par le graphe.
+/// Persistent storage for a @State value, owned by the graph.
 final class StateStorage {
     var value: Any
     weak var graph: ViewGraph?
@@ -40,7 +40,7 @@ public struct State<Value>: _DynamicProperty {
             if let storage = box.storage {
                 storage.set(newValue)
             } else {
-                print("[LSimUI] Avertissement : modification d'un @State hors de l'arbre de vues — ignorée.")
+                print("[LSimUI] Warning: @State modified outside the view tree — ignored.")
             }
         }
     }
@@ -96,7 +96,7 @@ public struct Binding<Value> {
     }
 }
 
-/// Le graphe de vues : état persistant, actions des boutons, invalidation.
+/// The view graph: persistent state, button actions, invalidation.
 public final class ViewGraph {
     private var storages: [String: StateStorage] = [:]
     private var touchedKeys: Set<String> = []
@@ -104,18 +104,18 @@ public final class ViewGraph {
     private var pendingAppear: [() -> Void] = []
     private var currentAppear: Set<String> = []
 
-    /// Actions enregistrées lors de la dernière construction (identifiant de zone → action).
+    /// Actions registered during the last build (hit area id → action).
     public private(set) var actions: [String: () -> Void] = [:]
-    /// Zone actuellement pressée (pour l'effet de surbrillance des boutons).
+    /// Currently pressed area (for button highlight).
     public var pressedID: String?
-    /// Appelé quand l'état change et qu'un nouveau rendu est nécessaire.
+    /// Called when state changes and a new render is needed.
     public var onInvalidate: (() -> Void)?
 
     public init() {}
 
-    // MARK: Saisie et glissers
+    // MARK: Input and drags
 
-    /// Champ de texte actuellement actif (reçoit le clavier).
+    /// Text field currently focused (receives the keyboard).
     public var focusedID: String?
     struct TextInput {
         let get: () -> String
@@ -123,13 +123,13 @@ public final class ViewGraph {
         let submit: () -> Void
     }
     private(set) var textInputs: [String: TextInput] = [:]
-    /// Contrôles qui suivent le doigt (Slider) : reçoivent la position du pointeur, en points écran.
+    /// Controls that track the finger (Slider): receive the pointer position, in screen points.
     public private(set) var dragHandlers: [String: (CGPoint) -> Void] = [:]
-    /// Zones défilant horizontalement (le glisser utilise alors le déplacement en x).
+    /// Horizontally scrolling areas (the drag then uses the x delta).
     public internal(set) var horizontalScrolls: Set<String> = []
-    /// Cadres des GeometryReader lors de la dernière passe (leur contenu dépend de leur taille).
+    /// GeometryReader frames from the last pass (their content depends on their size).
     var geometryFrames: [String: CGRect] = [:]
-    /// Présentations (feuilles, alertes) collectées pendant la construction, dessinées au-dessus de tout.
+    /// Presentations (sheets, alerts) collected during the build, drawn above everything.
     public internal(set) var presentations: [LayoutNode] = []
 
     func registerTextInput(_ id: String, get: @escaping () -> String, set: @escaping (String) -> Void, submit: @escaping () -> Void) {
@@ -140,8 +140,8 @@ public final class ViewGraph {
         dragHandlers[id] = handler
     }
 
-    /// Geste de glisser suivi par une vue système (retour par balayage, feuille) : translation depuis le
-    /// début du geste, puis translation et vitesse (points/s) au lâcher.
+    /// Drag tracked by a system view (swipe back, sheet): translation since the start, then translation
+    /// and velocity (points/s) on release.
     public struct PanHandler {
         public let changed: (CGSize) -> Void
         public let ended: (CGSize, CGSize) -> Void
@@ -154,7 +154,7 @@ public final class ViewGraph {
 
     public var hasFocusedTextField: Bool { focusedID.flatMap { textInputs[$0] } != nil }
 
-    /// Frappe au clavier dans le champ actif.
+    /// Key typed into the focused field.
     public func insertText(_ text: String) {
         guard let id = focusedID, let input = textInputs[id] else { return }
         input.set(input.get() + text)
@@ -167,7 +167,7 @@ public final class ViewGraph {
         input.set(value)
     }
 
-    /// Entrée : valide le champ (onSubmit) et rend le clavier.
+    /// Return: submits the field (onSubmit) and dismisses the keyboard.
     public func submitText() {
         guard let id = focusedID, let input = textInputs[id] else { return }
         focusedID = nil
@@ -199,16 +199,16 @@ public final class ViewGraph {
     }
 
     public func invalidate() {
-        // Changement fait dans `withAnimation` : l'image suivante l'anime.
+        // Change made inside `withAnimation`: the next frame animates it.
         if let animation = Transaction.current { animator.pending = animation }
         onInvalidate?()
     }
 
-    /// Valeurs présentées d'une image à l'autre (animations).
+    /// Presented values from frame to frame (animations).
     public let animator = Animator()
 
-    /// Construit les nœuds de layout d'une vue racine.
-    /// - Parameter app: objet racine optionnel (la structure `App`) dont l'état est installé avant `root`.
+    /// Builds the layout nodes of a root view.
+    /// - Parameter app: optional root object (the `App` struct) whose state is installed before `root`.
     public func build<Root: View>(environment: EnvironmentValues, app: Any? = nil, root: () -> Root) -> [LayoutNode] {
         actions = [:]
         textInputs = [:]
@@ -223,8 +223,8 @@ public final class ViewGraph {
         }
         let ctx = BuildContext(path: "", environment: environment, graph: self)
         let nodes = _makeNodes(root(), ctx)
-        // L'état des vues qui ont disparu est libéré, comme dans SwiftUI — sauf les écrans
-        // masqués d'une pile de navigation, qui restent vivants sous l'écran affiché.
+        // State of views that disappeared is released, as in SwiftUI, except hidden screens of a
+        // navigation stack, which stay alive under the visible one.
         let retained = retainedPrefixes
         storages = storages.filter { key, _ in
             touchedKeys.contains(key) || retained.contains { key.hasPrefix($0) }
@@ -241,18 +241,18 @@ public final class ViewGraph {
         actions[id]?()
     }
 
-    // MARK: - Navigation et défilement
+    // MARK: - Navigation and scrolling
 
     private var retainedPrefixes: [String] = []
-    /// Objets Combine (ObservableObject) suivis par le graphe.
+    /// Combine objects (ObservableObject) tracked by the graph.
     var observed: [ObjectIdentifier: ObservedEntry] = [:]
 
-    /// Conserve l'état d'un sous-arbre non construit pendant cette passe (écran masqué d'une pile).
+    /// Keeps the state of a subtree not built in this pass (hidden screen in a stack).
     func retain(prefix: String) {
         retainedPrefixes.append(prefix)
     }
 
-    /// Objet persistant associé à une clé (créé au premier accès).
+    /// Persistent object for a key (created on first access).
     func persistent<T: AnyObject>(_ key: String, _ make: () -> T) -> T {
         touchedKeys.insert(key)
         if let existing = storages[key]?.value as? T { return existing }
@@ -266,12 +266,12 @@ public final class ViewGraph {
         return storages[id]?.value as? CGFloat ?? 0
     }
 
-    /// Écrit le décalage sans déclencher de nouveau rendu (utilisé pendant le layout pour le borner).
+    /// Writes the offset without triggering a render (used during layout to clamp it).
     func setScrollOffsetSilently(_ id: String, _ value: CGFloat) {
         if let s = storages[id] { s.value = value } else { storages[id] = StateStorage(value: value, graph: self) }
     }
 
-    /// Fait défiler une zone (appelé par l'hôte lors d'un glisser ou de la molette).
+    /// Scrolls an area (called by the host on drag or mouse wheel).
     public func scroll(_ id: String, by delta: CGFloat) {
         let current = storages[id]?.value as? CGFloat ?? 0
         setScrollOffsetSilently(id, max(0, current + delta))

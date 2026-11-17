@@ -16,8 +16,8 @@ extension Color {
     static let chevronGray = Color(light: .rgb255(60, 60, 67, 0.3), dark: .rgb255(235, 235, 245, 0.3))
 }
 
-/// Mesures du style `.insetGrouped`, relevées sur iPhone 17 Pro Max sous iOS 27.2,
-/// en Liquid Glass (SDK ≥ 26) et en mode compatibilité.
+/// `.insetGrouped` metrics measured on iPhone 17 Pro Max (iOS 27.2), with Liquid Glass (SDK ≥ 26) and in
+/// compatibility mode.
 public enum ListMetrics {
     static var glass: Bool { DesignStyle.current == .liquidGlass }
 
@@ -26,39 +26,39 @@ public enum ListMetrics {
     public static var rowMinHeight: CGFloat { glass ? 52 : 44 }
     public static var rowPaddingH: CGFloat { 20 }
     public static var rowPaddingV: CGFloat { glass ? 15 : 8.5 }
-    /// Espace avant la première section (avec / sans en-tête).
+    /// Space before the first section (with / without header).
     public static var topInsetWithHeader: CGFloat { glass ? 8.5 : 13 }
     public static var topInset: CGFloat { 20 }
     public static var sectionSpacing: CGFloat { glass ? 34.7 : 35 }
     public static var headerBottomGap: CGFloat { glass ? 11.5 : 6 }
     public static var footerTopGap: CGFloat { 7 }
-    /// En-tête de section : majuscules en footnote (compatibilité), casse normale en 17 pt medium (Liquid Glass).
+    /// Section header: uppercase footnote (compatibility), normal case 17 pt medium (Liquid Glass).
     public static var headerFont: Font { glass ? .system(size: 17, weight: .medium) : .footnote }
     public static var headerTextCase: Text.Case? { glass ? nil : .uppercase }
-    /// Le séparateur s'arrête avant le bord droit de la carte en Liquid Glass.
+    /// With Liquid Glass the separator stops short of the card's right edge.
     public static var separatorTrailingInset: CGFloat { glass ? 20 : 0 }
-    /// Rectangle du tracé du chevron (l'encre déborde de la moitié du trait) et marge droite de son encre.
+    /// Chevron stroke rect (ink overflows by half the stroke) and right margin of its ink.
     public static var chevronSize: CGSize { glass ? CGSize(width: 4.7, height: 9.5) : CGSize(width: 7, height: 12) }
     public static var chevronTrailing: CGFloat { glass ? 23 : 20 }
     public static var bottomInset: CGFloat { 20 }
 }
 
-// MARK: - Défilement
+// MARK: - Scrolling
 
-/// Conteneur défilant verticalement. Prend toute la place proposée.
+/// Vertically scrolling container. Takes all the proposed space.
 final class ScrollNode: LayoutNode {
     let id: String
     let content: LayoutNode
     let graph: ViewGraph
     let background: Color?
     let centerContent: Bool
-    /// En-tête défilant avec le contenu (grand titre de navigation).
+    /// Header that scrolls with the content (navigation large title).
     var header: LayoutNode?
     var bottomInset: CGFloat = 0
-    /// Marge haute du contenu (le contenu défile sous la barre de navigation).
+    /// Content top inset (content scrolls under the navigation bar).
     var topInset: CGFloat = 0
-    /// Position demandée par `.scrollPosition` : comme sur iOS, y est compté depuis l'état où le grand
-    /// titre est replié (y = 0 : contenu juste sous la barre ; négatif : grand titre en partie déployé).
+    /// Position requested by `.scrollPosition`: as on iOS, y counts from the collapsed large title state
+    /// (y = 0: content just under the bar; negative: large title partly expanded).
     var pendingRequest: CGFloat?
 
     init(id: String, content: LayoutNode, graph: ViewGraph, background: Color?, centerContent: Bool) {
@@ -68,8 +68,8 @@ final class ScrollNode: LayoutNode {
         self.background = background
         self.centerContent = centerContent
         super.init()
-        // Marque le décalage comme utilisé pendant la construction, sinon le nettoyage
-        // de fin de passe le supprimerait (il n'est relu qu'au moment du dessin).
+        // Mark the offset as used during the build, otherwise end-of-pass cleanup would drop it (it is only
+        // read back at draw time).
         _ = graph.scrollOffset(id)
     }
 
@@ -122,7 +122,7 @@ public struct ScrollView<Content: View>: View, _PrimitiveView {
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         var ctx = context.child("ScrollView")
-        ctx.environment.scrollPosition = nil   // la position ne concerne que cette zone, pas les zones imbriquées
+        ctx.environment.scrollPosition = nil   // applies to this area only, not nested ones
         let children = LSimUI._makeNodes(content, ctx)
         if horizontal {
             let stack = StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)
@@ -132,7 +132,7 @@ public struct ScrollView<Content: View>: View, _PrimitiveView {
         let stack = StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: children)
         let id = ctx.path + "#scroll"
         var pending: CGFloat?
-        // `.scrollPosition($position)` : chaque nouvelle demande déplace le contenu une fois.
+        // `.scrollPosition($position)`: each new request moves the content once.
         if let position = context.environment.scrollPosition {
             let applied = context.graph.persistent(id + "#request") { AppliedScrollRequest() }
             let request = position.wrappedValue
@@ -147,7 +147,7 @@ public struct ScrollView<Content: View>: View, _PrimitiveView {
     }
 }
 
-/// Défilement horizontal : hauteur du contenu, largeur proposée.
+/// Horizontal scrolling: content height, proposed width.
 final class HorizontalScrollNode: LayoutNode {
     let id: String
     let content: LayoutNode
@@ -178,9 +178,9 @@ final class HorizontalScrollNode: LayoutNode {
     }
 }
 
-// MARK: - List et Section
+// MARK: - List and Section
 
-/// Ligne interactive d'une liste (Button ou NavigationLink) : toute la ligne est touchable.
+/// Interactive list row (Button or NavigationLink): the whole row is tappable.
 final class RowActionNode: SingleChildNode {
     let id: String
     let isLink: Bool
@@ -196,7 +196,7 @@ final class RowActionNode: SingleChildNode {
     }
 }
 
-/// Marqueur produit par `Section`, regroupé par `List`.
+/// Marker produced by `Section`, grouped by `List`.
 final class SectionNode: LayoutNode {
     let header: LayoutNode?
     let rows: [LayoutNode]
@@ -285,8 +285,8 @@ final class ListContentNode: LayoutNode {
                 let cw = contentWidth(rowWidth, row)
                 let size = row.sizeThatFits(ProposedViewSize(width: cw, height: nil), lc)
                 let contentRect = CGRect(x: textX, y: rowRect.midY - size.height / 2, width: min(size.width, cw), height: size.height)
-                // Le contenu est d'abord rendu à part pour trouver où commence le premier texte :
-                // iOS aligne le séparateur sur ce texte (et non sur l'icône éventuelle).
+                // Render the content separately first to find where the first text starts: iOS aligns the
+                // separator with that text (not with any icon).
                 var rowItems = DisplayList()
                 (action?.child ?? row).render(in: contentRect, lc, &rowItems)
                 let separatorX = rowItems.items.lazy.compactMap { item -> CGFloat? in
@@ -333,7 +333,7 @@ public struct List<Content: View>: View, _PrimitiveView {
         ctx.environment.isInList = true
         let nodes = LSimUI._makeNodes(content, ctx)
 
-        // Regroupe les lignes hors Section dans des sections implicites.
+        // Wrap rows outside a Section in implicit sections.
         var sections: [SectionNode] = []
         var loose: [LayoutNode] = []
         func flush() {

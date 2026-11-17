@@ -1,8 +1,8 @@
 import Foundation
 
-// Feuilles, alertes, barre d'outils. Gabarits iOS 26 estimés, à calibrer.
+// Sheets, alerts, toolbar.
 
-// MARK: - Barre d'outils
+// MARK: - Toolbar
 
 public struct ToolbarItemPlacement: Hashable, Sendable {
     enum Side: Hashable { case leading, trailing, principal, bottom }
@@ -22,7 +22,7 @@ public struct ToolbarItemPlacement: Hashable, Sendable {
     public static let keyboard = ToolbarItemPlacement(side: .bottom)
 }
 
-/// Marqueur produit par ToolbarItem, rangé par la NavigationStack.
+/// Marker produced by ToolbarItem, collected by the NavigationStack.
 final class ToolbarItemNode: SingleChildNode {
     let placement: ToolbarItemPlacement
     init(_ child: LayoutNode, placement: ToolbarItemPlacement) {
@@ -65,10 +65,9 @@ struct _ToolbarModifier<C: View>: _PrimitiveModifier {
     func _apply(_ context: BuildContext, _ body: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
         if let sink = context.environment.navigationTitleSink {
             var ctx = context.child("toolbar")
-            // iOS 26 : boutons de barre monochromes, dans des pastilles de verre.
+            // iOS 26: monochrome bar buttons in glass pills.
             ctx.environment.foregroundColor = ctx.environment.foregroundColor ?? .primary
-            // Mesuré sur iPhone (iOS 27.2) : symboles de barre en échelle large
-            // (« + » de 17,7 pt d’encre).
+            // Measured on iPhone (iOS 27.2): bar symbols use the large scale ("+" ink is 17.7 pt).
             ctx.environment.imageScale = .large
             ctx.environment.font = ctx.environment.font ?? .system(size: 17, weight: .regular)
             ctx.environment.isInList = false
@@ -97,13 +96,13 @@ public struct ToolbarPlacement: Hashable, Sendable {
     public static let navigationBar = ToolbarPlacement(), tabBar = ToolbarPlacement(), bottomBar = ToolbarPlacement(), automatic = ToolbarPlacement()
 }
 
-/// Bouton de barre iOS 26 : contenu au centre d'une pastille de verre (cercle de 44 pt, ou capsule pour du texte).
+/// iOS 26 bar button: content centered in a glass pill (44 pt circle, or a capsule for text).
 final class BarButtonNode: SingleChildNode {
     static let size: CGFloat = 44
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let s = child.sizeThatFits(.unspecified, lc)
-        // Un symbole tient dans un cercle de 44 pt (mesuré sur iPhone) ; un libellé élargit la capsule.
+        // A symbol fits a 44 pt circle (measured on iPhone); a text label widens the capsule.
         return CGSize(width: max(Self.size, s.width + 20), height: Self.size)
     }
 
@@ -114,7 +113,7 @@ final class BarButtonNode: SingleChildNode {
     }
 }
 
-// MARK: - Feuilles
+// MARK: - Sheets
 
 public struct PresentationDetent: Hashable, Sendable {
     let fraction: CGFloat
@@ -124,7 +123,7 @@ public struct PresentationDetent: Hashable, Sendable {
     public static func height(_ h: CGFloat) -> PresentationDetent { PresentationDetent(fraction: -h) }
 }
 
-/// Réglages d'une feuille, remplis par les modificateurs `presentation…` de son contenu.
+/// Sheet settings, filled by the `presentation…` modifiers of its content.
 final class SheetConfig {
     var detents: [PresentationDetent] = [.large]
 }
@@ -137,7 +136,7 @@ extension EnvironmentValues {
         get { self[SheetConfigKey.self] }
         set { self[SheetConfigKey.self] = newValue }
     }
-    /// Fermeture de l'alerte en cours : les boutons d'une alerte la ferment après leur action.
+    /// Dismisses the current alert: alert buttons dismiss it after their action.
     var presentationDismiss: (() -> Void)? {
         get { self[PresentationDismissKey.self] }
         set { self[PresentationDismissKey.self] = newValue }
@@ -151,7 +150,7 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
 
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
         let nodes = content(context)
-        // Ouverture et fermeture animées : la feuille reste dessinée pendant sa sortie.
+        // Animated presentation and dismissal: the sheet stays drawn while it leaves.
         let state = context.graph.persistent(context.path + "#sheetState") { SheetState() }
         let now = context.graph.animator.clock()
         if isPresented.wrappedValue {
@@ -182,7 +181,7 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
         let sheetNodes = LSimUI._makeNodes(sheet(), ctx)
         let dimID = ctx.path + "#dim"
         context.graph.registerAction(dimID, close)
-        // Feuille tirée vers le bas : elle suit le doigt, puis se ferme ou revient selon la position projetée.
+        // Sheet pulled down: follows the finger, then dismisses or springs back based on projected position.
         let panID = dimID + "#pan"
         if isPresented.wrappedValue {
             let graph = context.graph
@@ -242,30 +241,30 @@ extension View {
     public func interactiveDismissDisabled(_ disabled: Bool = true) -> some View { self }
 }
 
-/// Mouvement d'une feuille, persistant d'une construction à l'autre : ouverture, fermeture, geste.
+/// Sheet motion persisted across builds: presentation, dismissal, gesture.
 final class SheetState {
     var presentedAt: Double?
     var dismissedAt: Double?
-    /// Feuille tirée par le doigt : décalage vers le bas (points).
+    /// Sheet dragged by the finger: downward offset (points).
     var dragOffset: CGFloat?
-    /// Après le geste : ressort de la présence `from` vers `to` (1 : en place, 0 : sortie), vitesse initiale.
+    /// After the gesture: spring of presence `from` → `to` (1: in place, 0: gone), initial velocity.
     var release: (start: Double, from: Double, to: Double, velocity: Double, animation: Animation)?
-    /// Course (du sommet de la feuille au bas de l'écran) et hauteur, relevées au dessin.
+    /// Travel (sheet top to screen bottom) and height, recorded at draw time.
     var travel: CGFloat = 900
     var height: CGFloat = 900
 }
 
-/// Mesures des feuilles iOS 27.2 (iPhone 17 Pro Max, transitions relevées image par image).
+/// iOS 27.2 sheet metrics (iPhone 17 Pro Max, transitions recorded frame by frame).
 public enum SheetMetrics {
     public static var cornerRadius: CGFloat = 38
-    /// Retrait latéral et bas d'une feuille à mi-hauteur (« flottante ») : 6,5 pt mesurés.
+    /// Side and bottom inset of a medium ("floating") sheet: 6.5 pt measured.
     public static var floatingInset: CGFloat = 6.5
-    /// Feuille en grand : sommet au bas de la zone sûre (62 pt), l'écran derrière ne rétrécit pas.
+    /// Large sheet: top at the safe area bottom (62 pt); the screen behind does not shrink.
     public static var largeTopGap: CGFloat = 0
-    /// Feuille à mi-hauteur (.medium) : 52,3 % de la hauteur de l'écran (sommet à 449,6 pt sur 956).
+    /// Medium sheet (.medium): 52.3% of the screen height (top at 449.6 pt of 956).
     public static var mediumFraction: CGFloat = 0.523
     public static var dimAlpha: Double = 0.2
-    /// Ouverture et fermeture : ressorts sans rebond mesurés.
+    /// Presentation and dismissal: measured springs without bounce.
     public static var presentAnimation = Animation.spring(response: 0.35, dampingFraction: 1.0)
     public static var presentMediumAnimation = Animation.spring(response: 0.33, dampingFraction: 1.02)
     public static var dismissAnimation = Animation.spring(response: 0.33, dampingFraction: 1.04)
@@ -288,12 +287,12 @@ final class SheetNode: LayoutNode {
     }
 
     override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        // Présence : 0 (sous l'écran) → 1 (en place) : doigt, ressort après le geste, ou ouverture/fermeture.
+        // Presence: 0 (below the screen) → 1 (in place): finger, post-gesture spring, or present/dismiss.
         let now = lc.animator?.frameTime ?? .infinity
         var presence = 1.0
         var moving = false
         if let drag = state.dragOffset {
-            // Vers le haut, la feuille résiste (élastique).
+            // Dragging up, the sheet resists (rubber band).
             let offset = drag >= 0 ? drag : -pow(-drag, 0.7)
             presence = 1 - Double(offset / max(state.travel, 1))
         } else if let r = state.release {
@@ -326,14 +325,14 @@ final class SheetNode: LayoutNode {
             let top = screen.minY + lc.safeArea.top + M.largeTopGap
             frame = CGRect(x: screen.minX, y: top, width: screen.width, height: screen.maxY - top)
         }
-        // Glissement depuis le bas de l'écran.
+        // Slides up from the bottom of the screen.
         state.travel = screen.maxY - frame.minY
         state.height = frame.height
         frame.origin.y += CGFloat(1 - presence) * (screen.maxY - frame.minY)
         let bg = lc.colorScheme == .light ? RGBA(1, 1, 1) : .rgb255(28, 28, 30)
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame.offsetBy(dx: 0, dy: -1), RGBA(0, 0, 0, 0.06)))
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame, bg))
-        // Bloque les touchers vers ce qui est derrière la feuille.
+        // Blocks touches to whatever is behind the sheet.
         if interactive { list.append(.hitRegion(id: dimID + "-sheet", frame)) }
         if let panID, interactive { list.append(.panRegion(id: panID, frame, vertical: true)) }
         list.append(.pushClip(.roundedRectangle(cornerRadius: M.cornerRadius), frame))
@@ -345,7 +344,7 @@ final class SheetNode: LayoutNode {
     }
 }
 
-// MARK: - Alertes
+// MARK: - Alerts
 
 final class AlertButtonNode: SingleChildNode {
     let id: String
@@ -381,12 +380,12 @@ struct _AlertModifier<A: View, M: View>: _PrimitiveModifier {
         ctx.environment.presentationDismiss = { isPresented.wrappedValue = false }
         var buttons = LSimUI._makeNodes(actions(), ctx.child("actions")).compactMap { $0 as? AlertButtonNode }
         if buttons.isEmpty {
-            // Sans action, SwiftUI ajoute un bouton « OK ».
+            // With no actions, SwiftUI adds an "OK" button.
             buttons = LSimUI._makeNodes(Button("OK") {}, ctx.child("ok")).compactMap { $0 as? AlertButtonNode }
         }
         var messageCtx = ctx.child("message")
         messageCtx.environment.isInAlert = false
-        // Message (mesuré sur iPhone) : 15 pt, gris secondaire, aligné à gauche.
+        // Message (measured on iPhone): 15 pt, secondary grey, leading-aligned.
         messageCtx.environment.font = AlertMetrics.messageFont
         messageCtx.environment.foregroundColor = messageCtx.environment.foregroundColor ?? .secondary
         messageCtx.environment.multilineTextAlignment = .leading
@@ -415,9 +414,8 @@ extension View {
     }
 }
 
-/// Mesures des alertes iOS 26 (estimations à calibrer).
-/// Alertes iOS 27.2, mesurées dans les captures iPhone 17 Pro Max : carte de 320 pt centrée dans la zone
-/// sûre, titre et message alignés à gauche (retrait de 30 pt), boutons en capsules de 48 pt.
+/// iOS 27.2 alerts, measured on iPhone 17 Pro Max captures: 320 pt card centered in the safe area,
+/// title and message leading-aligned (30 pt inset), 48 pt capsule buttons.
 public enum AlertMetrics {
     public static var width: CGFloat = 320
     public static var cornerRadius: CGFloat = 34
@@ -430,7 +428,7 @@ public enum AlertMetrics {
     public static var buttonHeight: CGFloat = 48
     public static var buttonSpacing: CGFloat = 8.7
     public static var titleFont = Font.system(size: 17, weight: .semibold)
-    /// Message : 15 pt (largeur mesurée : 178 pt pour « Cette action est définitive. »).
+    /// Message: 15 pt (measured width: 178 pt for a 30-character French message).
     public static var messageFont = Font.system(size: 15)
 }
 
@@ -461,13 +459,13 @@ final class AlertNode: LayoutNode {
         let buttonsHeight = CGFloat(buttonRows) * M.buttonHeight + CGFloat(max(0, buttonRows - 1)) * M.buttonSpacing
         let height = M.topPadding + titleSize.height + (messageNode == nil ? 0 : M.titleMessageGap + messageSize.height)
             + M.textButtonsGap + buttonsHeight + M.bottomPadding
-        // Centrée dans la zone sûre (entre l'encoche et l'indicateur d'accueil).
+        // Centered in the safe area (between the notch and the home indicator).
         let safe = CGRect(x: screen.minX, y: screen.minY + lc.safeArea.top, width: screen.width,
                           height: screen.height - lc.safeArea.top - lc.safeArea.bottom)
         let card = CGRect(x: screen.midX - M.width / 2, y: safe.midY - height / 2, width: M.width, height: height)
         let shape = ShapeKind.roundedRectangle(cornerRadius: M.cornerRadius)
-        // Ombre large et douce, puis carte presque opaque (gris 236 / 32 mesurés) et liseré fin.
-        // Ombre en dégradé continu : nombreux paliers très légers (pas d'anneaux visibles).
+        // Wide soft shadow drawn as many very light steps (no visible rings), then a nearly opaque card
+        // (grey 236 / 32 measured) and a thin rim.
         for spread in stride(from: 18.0, through: 1.0, by: -1.0) {
             let alpha = 0.006 * (1 - spread / 20)
             list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius + spread),
@@ -490,7 +488,7 @@ final class AlertNode: LayoutNode {
         for (i, button) in buttons.enumerated() {
             let x = card.minX + M.buttonInset + (sideBySide ? CGFloat(i) * (buttonWidth + M.buttonSpacing) : 0)
             let rect = CGRect(x: x, y: y, width: buttonWidth, height: M.buttonHeight)
-            // Capsules grises (205 sur 236 en clair, 60 sur 32 en sombre).
+            // Grey capsules (205 on 236 in light, 60 on 32 in dark).
             list.append(.fill(.capsule, rect, dark ? RGBA(1, 1, 1, 0.125) : RGBA(0, 0, 0, 0.13)))
             let s = button.child.sizeThatFits(ProposedViewSize(width: buttonWidth - 16, height: nil), lc)
             button.child.render(in: Alignment.center.place(s, in: rect), lc, &list)
@@ -500,7 +498,7 @@ final class AlertNode: LayoutNode {
     }
 }
 
-// MARK: - Modificateurs de liste acceptés (sans effet pour l'instant)
+// MARK: - List modifiers accepted (no effect yet)
 
 public struct HorizontalEdge: Hashable, Sendable {
     public static let leading = HorizontalEdge(), trailing = HorizontalEdge()

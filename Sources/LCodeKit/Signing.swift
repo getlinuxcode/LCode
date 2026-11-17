@@ -1,21 +1,20 @@
 import Foundation
 
-// Signature et capabilities (« Signing & Capabilities » d'Xcode) pour un projet xtool.
+// Signing & Capabilities for an xtool project.
 //
-// Ce que fait xtool (sources v1.24, PackLib/PackSchema.swift et XKit/DeveloperServices) :
-// - `xtool.yml` porte `bundleID` (ou `orgID`), `infoPath` (Info.plist fusionné dans celui qu'xtool génère)
-//   et `entitlementsPath` (plist d'entitlements, chemin relatif au projet) ;
-// - à la signature, xtool active sur l'App ID les capabilities qu'il sait relier à un entitlement
-//   (App Groups, Push, HealthKit…), retire celles des comptes gratuits qui exigent le programme payant,
-//   et remplace lui-même `application-identifier`, `team-identifier` et `keychain-access-groups`.
+// What xtool does (v1.24 sources, PackLib/PackSchema.swift and XKit/DeveloperServices):
+// - `xtool.yml` holds `bundleID` (or `orgID`), `infoPath` (merged into the Info.plist xtool generates)
+//   and `entitlementsPath` (relative to the project);
+// - when signing, it enables on the App ID the capabilities it can map to an entitlement (App Groups,
+//   Push, HealthKit…), drops paid-only ones for free teams, and overwrites `application-identifier`,
+//   `team-identifier` and `keychain-access-groups` itself.
 
 // MARK: - xtool.yml
 
-/// Lecture et modification des clés simples de `xtool.yml`, sans toucher au reste du fichier.
+/// Reads and edits simple top-level keys of `xtool.yml`, leaving the rest of the file untouched.
 public enum XtoolConfig {
     public static func url(in root: URL) -> URL { root.appendingPathComponent("xtool.yml") }
 
-    /// Valeur d'une clé de premier niveau (`bundleID: com.exemple.App` → `com.exemple.App`).
     public static func value(_ key: String, in text: String) -> String? {
         for line in text.split(separator: "\n", omittingEmptySubsequences: false) where line.hasPrefix(key + ":") {
             var v = line.dropFirst(key.count + 1).trimmingCharacters(in: .whitespaces)
@@ -26,7 +25,7 @@ public enum XtoolConfig {
         return nil
     }
 
-    /// Le texte avec la clé remplacée, ajoutée à la fin, ou retirée (`value` nil).
+    /// The text with the key replaced, appended, or removed (`value` nil).
     public static func setting(_ key: String, to value: String?, in text: String) -> String {
         var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         if lines.last == "" { lines.removeLast() }
@@ -44,7 +43,7 @@ public enum XtoolConfig {
         v.contains(": ") || v.contains(" #") || v.hasPrefix("'") || v.hasPrefix("\"") ? "\"\(v)\"" : v
     }
 
-    /// Un bundle ID valide : lettres, chiffres, tirets et points, au moins deux composants.
+    /// Letters, digits, hyphens and dots, at least two components.
     public static func isValidBundleID(_ id: String) -> Bool {
         let parts = id.split(separator: ".", omittingEmptySubsequences: false)
         return parts.count >= 2 && parts.allSatisfy { p in
@@ -55,27 +54,28 @@ public enum XtoolConfig {
 
 // MARK: - Capabilities
 
-/// Une capability Apple : entitlement(s) et clés Info.plist qui l'accompagnent.
+/// An Apple capability: its entitlement(s) and related Info.plist keys.
+/// Titles are Apple's names; summaries, hints and labels are English and translated by the IDE.
 public struct Capability: Sendable {
-    /// Ce qu'xtool en fait à la signature.
+    /// What xtool does with it when signing.
     public enum Support: Sendable, Equatable {
-        /// xtool active la capability sur l'App ID et la garde dans le profil.
+        /// xtool enables it on the App ID and keeps it in the profile.
         case xtool
-        /// Simple clé d'Info.plist : rien à activer côté Apple.
+        /// Plain Info.plist key: nothing to enable on Apple's side.
         case infoPlist
-        /// Prise en charge partielle (explication).
+        /// Partial support (explanation).
         case partial(String)
-        /// xtool ne sait pas l'activer : iOS refusera probablement l'installation (explication).
+        /// xtool cannot enable it: iOS will likely refuse to install (explanation).
         case unsupported(String)
     }
 
-    /// Où est rangée la valeur principale (qui dit si la capability est active).
+    /// Where the main value lives (its presence means the capability is on).
     public enum Storage: Sendable, Equatable { case entitlement(String), infoPlist(String) }
 
     public enum Value: Sendable, Equatable {
         case bool(Bool)
         case string(String)
-        /// Liste modifiable dans l'IDE (groupes, domaines, modes…). `$(BundleID)` est remplacé.
+        /// List editable in the IDE (groups, domains, modes…). `$(BundleID)` is expanded.
         case list([String])
     }
 
@@ -84,14 +84,13 @@ public struct Capability: Sendable {
     public let summary: String
     public let storage: Storage
     public let value: Value
-    /// Entitlements ajoutés en même temps (iCloud…).
+    /// Entitlements added alongside (iCloud…).
     public let companions: [(key: String, value: Value)]
-    /// Descriptions d'usage (Info.plist) demandées par iOS : clé, libellé.
+    /// Usage descriptions (Info.plist) iOS requires: key, label.
     public let usageKeys: [(key: String, label: String)]
-    /// Réservée aux membres du programme payant (xtool la retire pour une équipe gratuite).
+    /// Paid program only (xtool drops it for a free team).
     public let requiresPaidAccount: Bool
     public let support: Support
-    /// Aide pour la liste (« groupes, séparés par des virgules »…).
     public let listHint: String?
 
     public var key: String {
@@ -106,78 +105,78 @@ public struct Capability: Sendable {
         self.listHint = listHint
     }
 
-    /// Capabilities courantes, dans l'ordre de la page.
+    /// Common capabilities, in page order.
     public static let all: [Capability] = [
-        Capability("app-groups", "App Groups", "Partage de données entre l'app et ses extensions.",
+        Capability("app-groups", "App Groups", "Share data between the app and its extensions.",
                    .entitlement("com.apple.security.application-groups"), .list(["group.$(BundleID)"]),
-                   paid: false, listHint: "Groupes (group.…), séparés par des virgules — un seul avec un compte gratuit"),
-        Capability("push", "Push Notifications", "Notifications à distance (APNs).",
+                   paid: false, listHint: "Groups (group.…), comma-separated — only one with a free account"),
+        Capability("push", "Push Notifications", "Remote notifications (APNs).",
                    .entitlement("aps-environment"), .string("development"), paid: true),
-        Capability("background-modes", "Background Modes", "Exécution en arrière-plan (audio, position, téléchargements…).",
+        Capability("background-modes", "Background Modes", "Run in the background (audio, location, downloads…).",
                    .infoPlist("UIBackgroundModes"), .list(["audio"]), paid: false, support: .infoPlist,
-                   listHint: "Modes : audio, location, fetch, remote-notification, processing, voip, bluetooth-central…"),
-        Capability("icloud", "iCloud", "CloudKit et stockage clé-valeur iCloud.",
+                   listHint: "Modes: audio, location, fetch, remote-notification, processing, voip, bluetooth-central…"),
+        Capability("icloud", "iCloud", "CloudKit and iCloud key-value storage.",
                    .entitlement("com.apple.developer.icloud-services"), .list(["CloudKit"]),
                    companions: [("com.apple.developer.icloud-container-identifiers", .list(["iCloud.$(BundleID)"])),
                                 ("com.apple.developer.ubiquity-kvstore-identifier", .string("$(TeamIdentifierPrefix)$(BundleID)"))],
-                   paid: true, support: .unsupported("xtool n'active pas iCloud sur l'App ID : le profil ne contiendra pas "
-                       + "l'entitlement et iOS refusera l'installation."),
-                   listHint: "Services : CloudKit, CloudDocuments"),
-        Capability("keychain-sharing", "Keychain Sharing", "Partage du trousseau entre vos apps.",
+                   paid: true, support: .unsupported("xtool does not enable iCloud on the App ID: the profile will lack "
+                       + "the entitlement and iOS will refuse to install the app."),
+                   listHint: "Services: CloudKit, CloudDocuments"),
+        Capability("keychain-sharing", "Keychain Sharing", "Share the keychain between your apps.",
                    .entitlement("keychain-access-groups"), .list(["$(AppIdentifierPrefix)$(BundleID)"]), paid: false,
-                   support: .partial("xtool remplace la liste par le seul groupe de l'app (ÉQUIPE.bundleID).")),
-        Capability("healthkit", "HealthKit", "Lecture et écriture des données Santé.",
+                   support: .partial("xtool replaces the list with the app's own group (TEAM.bundleID).")),
+        Capability("healthkit", "HealthKit", "Read and write Health data.",
                    .entitlement("com.apple.developer.healthkit"), .bool(true),
-                   usage: [("NSHealthShareUsageDescription", "Lecture des données Santé"),
-                           ("NSHealthUpdateUsageDescription", "Écriture des données Santé")], paid: false),
-        Capability("homekit", "HomeKit", "Contrôle des accessoires de la maison.",
+                   usage: [("NSHealthShareUsageDescription", "Read Health data"),
+                           ("NSHealthUpdateUsageDescription", "Write Health data")], paid: false),
+        Capability("homekit", "HomeKit", "Control home accessories.",
                    .entitlement("com.apple.developer.homekit"), .bool(true),
-                   usage: [("NSHomeKitUsageDescription", "Accès à la maison")], paid: false),
-        Capability("sign-in-with-apple", "Sign in with Apple", "Connexion avec un identifiant Apple.",
+                   usage: [("NSHomeKitUsageDescription", "Home access")], paid: false),
+        Capability("sign-in-with-apple", "Sign in with Apple", "Sign in with an Apple Account.",
                    .entitlement("com.apple.developer.applesignin"), .list(["Default"]), paid: true),
-        Capability("associated-domains", "Associated Domains", "Liens universels, identifiants web partagés.",
-                   .entitlement("com.apple.developer.associated-domains"), .list(["applinks:exemple.com"]), paid: true,
-                   listHint: "Domaines (applinks:…, webcredentials:…), séparés par des virgules"),
-        Capability("siri", "Siri", "Intents et raccourcis Siri.",
+        Capability("associated-domains", "Associated Domains", "Universal links, shared web credentials.",
+                   .entitlement("com.apple.developer.associated-domains"), .list(["applinks:example.com"]), paid: true,
+                   listHint: "Domains (applinks:…, webcredentials:…), comma-separated"),
+        Capability("siri", "Siri", "Siri intents and shortcuts.",
                    .entitlement("com.apple.developer.siri"), .bool(true),
-                   usage: [("NSSiriUsageDescription", "Utilisation de Siri")], paid: true),
-        Capability("network-extensions", "Network Extensions", "Tunnels VPN, filtres de contenu, proxys DNS.",
+                   usage: [("NSSiriUsageDescription", "Siri usage")], paid: true),
+        Capability("network-extensions", "Network Extensions", "VPN tunnels, content filters, DNS proxies.",
                    .entitlement("com.apple.developer.networking.networkextension"), .list(["packet-tunnel-provider"]),
-                   paid: true, listHint: "Types : packet-tunnel-provider, content-filter-provider, dns-proxy…"),
-        Capability("multipath", "Multipath", "Connexions TCP multichemins (Wi-Fi et cellulaire).",
+                   paid: true, listHint: "Types: packet-tunnel-provider, content-filter-provider, dns-proxy…"),
+        Capability("multipath", "Multipath", "Multipath TCP connections (Wi-Fi and cellular).",
                    .entitlement("com.apple.developer.networking.multipath"), .bool(true), paid: true),
-        Capability("wireless-accessory", "Wireless Accessory Configuration", "Configuration Wi-Fi d'accessoires MFi.",
+        Capability("wireless-accessory", "Wireless Accessory Configuration", "Wi-Fi configuration of MFi accessories.",
                    .entitlement("com.apple.external-accessory.wireless-configuration"), .bool(true), paid: false),
-        Capability("data-protection", "Data Protection", "Chiffrement des fichiers de l'app tant que l'appareil est verrouillé.",
+        Capability("data-protection", "Data Protection", "Encrypt the app's files while the device is locked.",
                    .entitlement("com.apple.developer.default-data-protection"), .string("NSFileProtectionComplete"), paid: false),
     ]
 
-    /// Descriptions d'usage courantes (onglet « Info » d'Xcode), utiles avec ou sans capability.
+    /// Common usage descriptions (Xcode's Info tab), useful with or without a capability.
     public static let privacyKeys: [(key: String, label: String)] = [
-        ("NSCameraUsageDescription", "Appareil photo"),
-        ("NSMicrophoneUsageDescription", "Micro"),
-        ("NSPhotoLibraryUsageDescription", "Photothèque (lecture)"),
-        ("NSPhotoLibraryAddUsageDescription", "Photothèque (ajout)"),
-        ("NSLocationWhenInUseUsageDescription", "Position (app ouverte)"),
-        ("NSLocationAlwaysAndWhenInUseUsageDescription", "Position (toujours)"),
+        ("NSCameraUsageDescription", "Camera"),
+        ("NSMicrophoneUsageDescription", "Microphone"),
+        ("NSPhotoLibraryUsageDescription", "Photo Library"),
+        ("NSPhotoLibraryAddUsageDescription", "Photo Library (add only)"),
+        ("NSLocationWhenInUseUsageDescription", "Location (when in use)"),
+        ("NSLocationAlwaysAndWhenInUseUsageDescription", "Location (always)"),
         ("NSContactsUsageDescription", "Contacts"),
-        ("NSCalendarsFullAccessUsageDescription", "Calendriers"),
-        ("NSRemindersFullAccessUsageDescription", "Rappels"),
+        ("NSCalendarsFullAccessUsageDescription", "Calendars"),
+        ("NSRemindersFullAccessUsageDescription", "Reminders"),
         ("NSBluetoothAlwaysUsageDescription", "Bluetooth"),
         ("NSFaceIDUsageDescription", "Face ID"),
-        ("NSLocalNetworkUsageDescription", "Réseau local"),
-        ("NSMotionUsageDescription", "Mouvements et forme"),
-        ("NSSpeechRecognitionUsageDescription", "Reconnaissance vocale"),
-        ("NSUserTrackingUsageDescription", "Suivi publicitaire (ATT)"),
+        ("NSLocalNetworkUsageDescription", "Local Network"),
+        ("NSMotionUsageDescription", "Motion & Fitness"),
+        ("NSSpeechRecognitionUsageDescription", "Speech Recognition"),
+        ("NSUserTrackingUsageDescription", "Tracking (ATT)"),
     ]
 }
 
-// MARK: - Projet
+// MARK: - Project
 
-/// Réglages de signature d'un projet : bundle ID et références dans `xtool.yml`, entitlements, Info.plist.
+/// A project's signing settings: bundle ID and references in `xtool.yml`, entitlements, Info.plist.
 public final class ProjectSigning {
     public let root: URL
-    /// Nom du fichier d'entitlements créé au besoin (`<nom>.entitlements`, comme Xcode).
+    /// Base name of the entitlements file created on demand (`<name>.entitlements`, like Xcode).
     public let name: String
 
     public init(root: URL, name: String) {
@@ -192,12 +191,12 @@ public final class ProjectSigning {
     }
 
     public var bundleID: String? { XtoolConfig.value("bundleID", in: configText) }
-    /// Préfixe d'organisation (si `bundleID` est absent, xtool forme `orgID.produit`).
+    /// Organization prefix (without `bundleID`, xtool uses `orgID.product`).
     public var orgID: String? { XtoolConfig.value("orgID", in: configText) }
 
     public func setBundleID(_ id: String) throws {
         guard XtoolConfig.isValidBundleID(id) else {
-            throw LCodeError("« \(id) » n'est pas un bundle ID valide (ex. : com.exemple.MonApp).")
+            throw LCodeError("\"\(id)\" is not a valid bundle ID (e.g. com.example.MyApp).")
         }
         try setConfig("bundleID", id)
     }
@@ -209,7 +208,7 @@ public final class ProjectSigning {
         path.hasPrefix("/") ? URL(fileURLWithPath: path) : root.appendingPathComponent(path)
     }
 
-    // MARK: Fichiers plist
+    // MARK: Plist files
 
     static func readPlist(_ url: URL) -> [String: Any] {
         guard let data = try? Data(contentsOf: url),
@@ -225,8 +224,8 @@ public final class ProjectSigning {
     public func entitlements() -> [String: Any] { entitlementsPath.map { Self.readPlist(resolve($0)) } ?? [:] }
     public func info() -> [String: Any] { infoPath.map { Self.readPlist(resolve($0)) } ?? [:] }
 
-    /// Écrit les entitlements ; crée le fichier et sa référence au besoin, les retire quand il n'en reste aucun
-    /// (seulement si c'est le fichier créé par LCode).
+    /// Writes the entitlements, creating the file and its reference on demand; removes them when empty
+    /// (only if LCode created the file).
     func writeEntitlements(_ dict: [String: Any]) throws {
         let ownName = "\(name).entitlements"
         if dict.isEmpty {
@@ -283,7 +282,6 @@ public final class ProjectSigning {
         }
     }
 
-    /// Valeurs de la liste d'une capability active (groupes, domaines, modes…).
     public func values(_ capability: Capability) -> [String] {
         let dict: [String: Any]
         switch capability.storage {
@@ -307,10 +305,9 @@ public final class ProjectSigning {
         }
     }
 
-    /// Description d'usage (Info.plist) ; nil si absente.
     public func usage(_ key: String) -> String? { info()[key] as? String }
 
-    /// Définit ou retire (texte vide) une description d'usage.
+    /// Sets or removes (empty text) a usage description.
     public func setUsage(_ key: String, _ text: String) throws {
         var dict = info()
         let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -321,10 +318,10 @@ public final class ProjectSigning {
     }
 }
 
-// MARK: - Compte Apple (xtool auth)
+// MARK: - Apple account (xtool auth)
 
-/// État de connexion d'xtool aux services Apple (`xtool auth status`). LCode ne voit jamais le mot de passe :
-/// la connexion par Apple ID se fait dans un terminal, la clé API est lue par xtool depuis le fichier .p8.
+/// xtool's Apple sign-in state (`xtool auth status`). LCode never sees the password: Apple ID sign-in
+/// happens in a terminal, and xtool reads the API key from the .p8 file itself.
 public struct AppleAccount: Equatable, Sendable {
     public enum Mode: Equatable, Sendable { case apiKey, appleID }
     public var mode: Mode
@@ -334,7 +331,7 @@ public struct AppleAccount: Equatable, Sendable {
     public var teamID: String?
     public var expiry: String?
 
-    /// Analyse la sortie de `xtool auth status` ; nil si déconnecté.
+    /// Parses `xtool auth status`; nil when signed out.
     public static func parse(status: String) -> AppleAccount? {
         guard status.contains("Logged in") else { return nil }
         func field(_ name: String) -> String? {
@@ -346,19 +343,19 @@ public struct AppleAccount: Equatable, Sendable {
                             appleID: field("Apple ID"), teamID: field("Team ID"), expiry: field("Token expiry"))
     }
 
-    /// Une équipe de développement (`xtool ds teams list`).
+    /// A development team (`xtool ds teams list`).
     public struct Team: Equatable, Sendable {
         public var name: String
         public var id: String
         public var status: String
         public var memberships: [String]
-        /// Équipe gratuite (« Personal Team ») : apps valables 7 jours, capabilities limitées.
+        /// Free "Personal Team": apps last 7 days, limited capabilities.
         public var isFree: Bool {
             memberships.isEmpty || memberships.contains { $0.localizedCaseInsensitiveContains("free") }
         }
     }
 
-    /// Analyse `Nom [statut]: ID` suivi de lignes `- adhésion (plateforme)`.
+    /// Parses `Name [status]: ID` followed by `- membership (platform)` lines.
     public static func parse(teams: String) -> [Team] {
         var result: [Team] = []
         for line in teams.split(separator: "\n").map(String.init) {
@@ -372,7 +369,7 @@ public struct AppleAccount: Equatable, Sendable {
         return result
     }
 
-    /// Exécute xtool (sans terminal) ; renvoie le code de retour et la sortie (standard et erreur).
+    /// Runs xtool without a terminal; returns the exit status and combined output.
     @discardableResult
     public static func xtool(_ arguments: [String], input: String? = nil, environment: [String: String] = [:]) -> (status: Int32, output: String) {
         let process = Process()
@@ -386,7 +383,7 @@ public struct AppleAccount: Equatable, Sendable {
         process.standardOutput = out
         process.standardError = out
         process.standardInput = inPipe
-        do { try process.run() } catch { return (-1, "xtool introuvable : \(error)") }
+        do { try process.run() } catch { return (-1, "xtool not found: \(error)") }
         if let input { try? inPipe.fileHandleForWriting.write(contentsOf: Data(input.utf8)) }
         try? inPipe.fileHandleForWriting.close()
         let data = out.fileHandleForReading.readDataToEndOfFile()
@@ -395,16 +392,16 @@ public struct AppleAccount: Equatable, Sendable {
         return (process.terminationStatus, text.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression))
     }
 
-    /// État courant (lecture locale, sans réseau).
+    /// Current state (local, no network).
     public static func current() -> AppleAccount? { parse(status: xtool(["auth", "status"]).output) }
 
-    /// Équipes du compte (connexion par Apple ID seulement ; interroge Apple).
+    /// The account's teams (Apple ID sign-in only; queries Apple).
     public static func teams() -> [Team] {
         let r = xtool(["ds", "teams", "list"])
         return r.status == 0 ? parse(teams: r.output) : []
     }
 
-    /// Connexion par clé API App Store Connect : xtool lit lui-même le fichier .p8 (rien n'est copié ni affiché).
+    /// App Store Connect API key sign-in: xtool reads the .p8 itself (nothing is copied or shown).
     public static func logIn(keyID: String, issuerID: String, keyFile: URL) throws {
         let r = xtool(["auth", "login", "--mode", "key"], input: "\(keyID)\n\(issuerID)\n\(keyFile.path)\n")
         guard r.status == 0, r.output.contains("Logged in") else {
@@ -417,56 +414,62 @@ public struct AppleAccount: Equatable, Sendable {
         guard r.status == 0 else { throw LCodeError(r.output) }
     }
 
-    /// Identifiant de clé déduit du nom donné par App Store Connect (`AuthKey_ABC123.p8`).
+    /// Key ID from App Store Connect's file name (`AuthKey_ABC123.p8`).
     public static func keyID(fromFileName name: String) -> String? {
         guard name.hasPrefix("AuthKey_"), name.hasSuffix(".p8") else { return nil }
         let id = String(name.dropFirst("AuthKey_".count).dropLast(3))
         return id.isEmpty ? nil : id
     }
 
-    /// Commande de connexion par Apple ID, à lancer dans un terminal (mot de passe et code saisis par l'utilisateur).
+    /// Apple ID sign-in command, run in a terminal (the user types the password and code).
     public static let passwordLoginCommand = ["xtool", "auth", "login", "--mode", "password"]
 }
 
-// MARK: - Erreurs de signature
+// MARK: - Signing errors
 
-/// Problème de compte, de signature ou de provisionnement relevé dans la sortie de `xtool dev run`.
+/// Account, signing or provisioning problem found in `xtool dev run` output.
 public struct SigningIssue: Equatable, Sendable {
-    /// Explication en français.
+    /// Explanation in English; the IDE displays it through `tr`.
     public let message: String
-    /// Ligne d'origine d'xtool.
+    /// Original xtool line.
     public let detail: String
+
+    public static let noAccount = "No Apple account signed in: sign in (menu › Apple Account…)."
+    public static let fallback = "xtool failed while preparing or signing the app."
+    /// Every message `extract` can produce.
+    public static var allMessages: [String] { rules.map(\.message) + [fallback] }
+
+    public var needsAccount: Bool { message == Self.noAccount }
 
     private static let rules: [(patterns: [String], message: String)] = [
         (["Input ended before a response", "Select login mode", "Mode selection is required", "AuthToken"],
-         "Aucun compte Apple connecté : connectez-vous (menu › Compte Apple…)."),
-        (["multiple app groups"], "Une équipe gratuite n'accepte qu'un seul App Group : retirez les autres."),
+         noAccount),
+        (["multiple app groups"], "A free team allows only one App Group: remove the others."),
         (["maximum number of", "maxAppIds", "10 App IDs", "too many app ids"],
-         "Limite d'App IDs atteinte (10 par semaine avec un compte gratuit) : réutilisez un bundle ID existant ou attendez."),
+         "App ID limit reached (10 per week with a free account): reuse an existing bundle ID or wait."),
         (["is not available", "already exists", "cannot be registered"],
-         "Ce bundle ID est déjà pris par une autre équipe : choisissez-en un autre."),
+         "This bundle ID is already taken by another team: choose another one."),
         (["expired", "NOT_AUTHORIZED", "401", "Unauthorized", "unauthorized", "authentication"],
-         "Session Apple expirée ou refusée : reconnectez-vous (menu › Compte Apple…)."),
+         "Apple session expired or rejected: sign in again (menu › Apple Account…)."),
         (["certificate", "Certificate"],
-         "Problème de certificat de développement : vérifiez le nombre de certificats de l'équipe (xtool ds certificates)."),
+         "Development certificate problem: check the team's certificate count (xtool ds certificates)."),
         (["entitlement", "Entitlement", "capabilit"],
-         "Une capability n'est pas autorisée pour cette équipe ou ce profil : vérifiez la page Signature et capabilities."),
-        (["provision", "Provision", "profile"], "Profil de provisionnement impossible à obtenir pour cet appareil ou ce bundle ID."),
-        (["device", "Device"], "Appareil non enregistré ou injoignable pour la signature."),
+         "A capability is not allowed for this team or profile: check Signing & Capabilities."),
+        (["provision", "Provision", "profile"], "Could not get a provisioning profile for this device or bundle ID."),
+        (["device", "Device"], "Device not registered or unreachable for signing."),
     ]
 
-    /// Problèmes de signature d'une sortie de `xtool dev run` (les erreurs du compilateur sont ignorées).
+    /// Signing problems in `xtool dev run` output (compiler errors are ignored).
     public static func extract(from output: String) -> [SigningIssue] {
         var issues: [SigningIssue] = []
         for raw in output.split(separator: "\n") {
             let line = raw.trimmingCharacters(in: .whitespaces)
-            // Erreurs de compilation (fichier:ligne:colonne: error:) : ce n'est pas la signature.
             if line.range(of: #"^\S+:\d+:\d+: "#, options: .regularExpression) != nil { continue }
             let isError = line.hasPrefix("Error:") || line.hasPrefix("error:") || line.contains("Console.Error")
                 || line.contains("Input ended before a response")
             guard isError else { continue }
             let message = rules.first { rule in rule.patterns.contains { line.contains($0) } }?.message
-                ?? "xtool a échoué pendant la préparation ou la signature."
+                ?? fallback
             let issue = SigningIssue(message: message, detail: line)
             if !issues.contains(issue) { issues.append(issue) }
         }

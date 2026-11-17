@@ -2,8 +2,8 @@ import CAdw
 import Foundation
 import LCodeKit
 
-/// Navigateur du projet (comme celui d'Xcode) : arborescence avec dossiers repliables, icônes par type,
-/// menu contextuel (nouveau fichier depuis un modèle, nouveau dossier, renommer, supprimer, afficher).
+/// Project navigator: collapsible tree, per-type icons, context menu (new file from template, new folder,
+/// rename, move to trash, show in file manager).
 final class FileNavigator {
     let root: URL
     let widget: UnsafeMutablePointer<GtkWidget>
@@ -13,7 +13,7 @@ final class FileNavigator {
     private var nodes: [(url: URL, isDirectory: Bool, depth: Int)] = []
     var onOpen: (URL) -> Void = { _ in }
 
-    /// Dossiers et fichiers masqués (compilation, outils).
+    /// Hidden build and tool folders.
     static let hidden: Set<String> = [".build", ".lcode", "xtool", ".swiftpm", "Packages", ".git", ".bsp", ".DS_Store"]
 
     init(root: URL, window: ProjectWindow) {
@@ -24,7 +24,7 @@ final class FileNavigator {
         widget = gtk_scrolled_window_new()!
         gtk_scrolled_window_set_child(cast(raw(widget)), list)
         gtk_widget_set_vexpand(widget, 1)
-        // Dossiers de sources dépliés au départ.
+        // Source folders start expanded.
         expanded.insert(root.appendingPathComponent("Sources").path)
         if let subs = try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("Sources").path) {
             for s in subs { expanded.insert(root.appendingPathComponent("Sources/\(s)").path) }
@@ -37,7 +37,7 @@ final class FileNavigator {
         reload()
     }
 
-    // MARK: - Contenu
+    // MARK: - Contents
 
     func reload() {
         while let child = gtk_widget_get_first_child(list) { gtk_list_box_remove(cast(raw(list)), child) }
@@ -51,7 +51,7 @@ final class FileNavigator {
             .filter { !Self.hidden.contains($0.lastPathComponent) && !$0.lastPathComponent.hasPrefix(".") }
             .map { url -> (URL, Bool) in
                 let dir = (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-                // Les catalogues d'assets s'ouvrent dans leur éditeur (pas dépliés comme des dossiers).
+                // Asset catalogs open in their editor instead of expanding like folders.
                 return (url, dir && url.pathExtension != "xcassets")
             }
             .sorted { a, b in a.1 != b.1 ? a.1 && !b.1 : a.0.lastPathComponent.localizedStandardCompare(b.0.lastPathComponent) == .orderedAscending }
@@ -97,7 +97,7 @@ final class FileNavigator {
         }
     }
 
-    /// Sélectionne (et déplie jusqu'à) un fichier.
+    /// Selects a file, expanding its parents.
     func reveal(_ url: URL) {
         var dir = url.deletingLastPathComponent()
         var changed = false
@@ -111,7 +111,7 @@ final class FileNavigator {
         }
     }
 
-    // MARK: - Menu contextuel
+    // MARK: - Context menu
 
     private var contextTarget: (url: URL, isDirectory: Bool)?
 
@@ -142,14 +142,14 @@ final class FileNavigator {
             connect(raw(button), "clicked") { gtk_popover_popdown(cast(raw(popover))); action() }
             gtk_box_append(cast(raw(menu)), button)
         }
-        item("Nouveau fichier…") { [weak self] in self?.newFile() }
-        item("Nouveau dossier…") { [weak self] in self?.newFolder() }
+        item(tr("New File…")) { [weak self] in self?.newFile() }
+        item(tr("New Folder…")) { [weak self] in self?.newFolder() }
         if index >= 0 {
             gtk_box_append(cast(raw(menu)), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL))
-            item("Renommer…") { [weak self] in self?.rename() }
-            item("Afficher dans le gestionnaire de fichiers") { [weak self] in self?.showInFiles() }
+            item(tr("Rename…")) { [weak self] in self?.rename() }
+            item(tr("Show in File Manager")) { [weak self] in self?.showInFiles() }
             gtk_box_append(cast(raw(menu)), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL))
-            item("Mettre à la corbeille") { [weak self] in self?.delete() }
+            item(tr("Move to Trash")) { [weak self] in self?.delete() }
         }
         gtk_popover_set_child(cast(raw(popover)), menu)
         gtk_widget_set_parent(popover, list)
@@ -161,19 +161,19 @@ final class FileNavigator {
         gtk_popover_popup(cast(raw(popover)))
     }
 
-    /// Dossier où créer : celui du clic, ou celui du fichier cliqué.
+    /// Folder for new items: the clicked folder, or the clicked file's folder.
     private var targetFolder: URL {
         guard let t = contextTarget else { return root }
         return t.isDirectory ? t.url : t.url.deletingLastPathComponent()
     }
 
-    // MARK: - Opérations
+    // MARK: - Operations
 
-    /// Nouveau fichier depuis un modèle (Vue SwiftUI avec aperçu, fichier Swift, modèle…).
+    /// New file from a template.
     func newFile(in folder: URL? = nil) {
         guard let parent = window?.window else { return }
         let folder = folder ?? targetFolder
-        let dialog = adw_alert_dialog_new("Nouveau fichier", "Dans \(folder.lastPathComponent)")!
+        let dialog = adw_alert_dialog_new(tr("New File"), tr("In %@", folder.lastPathComponent))!
         let content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10)!
         let kinds = Templates.FileKind.allCases
         let group = gtk_list_box_new()!
@@ -194,12 +194,12 @@ final class FileNavigator {
         }
         gtk_box_append(cast(raw(content)), group)
         let entry = gtk_entry_new()!
-        gtk_entry_set_placeholder_text(cast(raw(entry)), "Nom (ex. : ProfilView)")
+        gtk_entry_set_placeholder_text(cast(raw(entry)), tr("Name (e.g. ProfileView)"))
         gtk_entry_set_activates_default(cast(raw(entry)), 1)
         gtk_box_append(cast(raw(content)), entry)
         adw_alert_dialog_set_extra_child(cast(raw(dialog)), content)
-        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", "Annuler")
-        adw_alert_dialog_add_response(cast(raw(dialog)), "ok", "Créer")
+        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", tr("Cancel"))
+        adw_alert_dialog_add_response(cast(raw(dialog)), "ok", tr("Create"))
         adw_alert_dialog_set_response_appearance(cast(raw(dialog)), "ok", ADW_RESPONSE_SUGGESTED)
         adw_alert_dialog_set_default_response(cast(raw(dialog)), "ok")
         adw_alert_dialog_set_close_response(cast(raw(dialog)), "cancel")
@@ -212,7 +212,7 @@ final class FileNavigator {
             let typeName = name.filter { $0.isLetter || $0.isNumber || $0 == "_" }
             let url = folder.appendingPathComponent(name + (kind == .empty && name.contains(".") ? "" : ".swift"))
             guard !FileManager.default.fileExists(atPath: url.path) else {
-                Dialogs.message(parent, title: "Fichier existant", message: "\(url.lastPathComponent) existe déjà.")
+                Dialogs.message(parent, title: tr("File Already Exists"), message: tr("%@ already exists.", url.lastPathComponent))
                 return
             }
             do {
@@ -222,7 +222,7 @@ final class FileNavigator {
                 self.onOpen(url)
                 self.reveal(url)
             } catch {
-                Dialogs.message(parent, title: "Création impossible", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Create Item"), message: "\(error)")
             }
         }
         adw_dialog_present(cast(raw(dialog)), parent)
@@ -232,7 +232,7 @@ final class FileNavigator {
     func newFolder() {
         guard let parent = window?.window else { return }
         let folder = targetFolder
-        Dialogs.prompt(parent, title: "Nouveau dossier", message: "Dans \(folder.lastPathComponent)", placeholder: "Vues") { [weak self] name in
+        Dialogs.prompt(parent, title: tr("New Folder"), message: tr("In %@", folder.lastPathComponent), placeholder: "Views") { [weak self] name in
             guard let self, let name else { return }
             do {
                 try FileManager.default.createDirectory(at: folder.appendingPathComponent(name), withIntermediateDirectories: false)
@@ -240,14 +240,14 @@ final class FileNavigator {
                 self.expanded.insert(folder.appendingPathComponent(name).path)
                 self.reload()
             } catch {
-                Dialogs.message(parent, title: "Création impossible", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Create Item"), message: "\(error)")
             }
         }
     }
 
     private func rename() {
         guard let parent = window?.window, let target = contextTarget else { return }
-        Dialogs.prompt(parent, title: "Renommer", initial: target.url.lastPathComponent, confirm: "Renommer") { [weak self] name in
+        Dialogs.prompt(parent, title: tr("Rename"), initial: target.url.lastPathComponent, confirm: tr("Rename")) { [weak self] name in
             guard let self, let name, name != target.url.lastPathComponent else { return }
             let destination = target.url.deletingLastPathComponent().appendingPathComponent(name)
             do {
@@ -255,22 +255,22 @@ final class FileNavigator {
                 self.window?.fileMoved(from: target.url, to: destination)
                 self.reload()
             } catch {
-                Dialogs.message(parent, title: "Renommage impossible", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Rename"), message: "\(error)")
             }
         }
     }
 
     private func delete() {
         guard let parent = window?.window, let target = contextTarget else { return }
-        Dialogs.confirm(parent, title: "Mettre « \(target.url.lastPathComponent) » à la corbeille ?",
-                        message: "Vous pourrez le récupérer depuis la corbeille.", action: "Mettre à la corbeille") { [weak self] ok in
+        Dialogs.confirm(parent, title: tr("Move “%@” to the Trash?", target.url.lastPathComponent),
+                        message: tr("You can restore it from the trash."), action: tr("Move to Trash")) { [weak self] ok in
             guard let self, ok else { return }
             let file = g_file_new_for_path(target.url.path)
             var error: UnsafeMutablePointer<GError>?
             if g_file_trash(file, nil, &error) == 0 {
-                let message = error.map { String(cString: $0.pointee.message) } ?? "erreur inconnue"
+                let message = error.map { String(cString: $0.pointee.message) } ?? tr("Unknown error")
                 if let error { g_error_free(error) }
-                Dialogs.message(parent, title: "Suppression impossible", message: message)
+                Dialogs.message(parent, title: tr("Couldn’t Move to Trash"), message: message)
             }
             g_object_unref(UnsafeMutableRawPointer(file))
             self.window?.fileDeleted(target.url)

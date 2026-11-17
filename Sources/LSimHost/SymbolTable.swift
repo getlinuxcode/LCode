@@ -1,10 +1,9 @@
 import Foundation
 
-/// Table nom de symbole → caractère de la police SF Pro (zone privée U+100000…).
+/// SF Symbol name → SF Pro private-use character (U+100000…).
 ///
-/// Construite localement par le banc de calibration (`tools/calibration/symbols.py`) en appariant
-/// les symboles dessinés par l'iPhone de l'utilisateur aux glyphes de ses polices SF Pro.
-/// Elle n'est jamais distribuée avec LCode : `~/.local/share/lcode/symbols/iOS-27.2.json`.
+/// Built locally by `tools/calibration/symbols.py` from the user's own iPhone and SF Pro fonts;
+/// never shipped with LCode (`~/.local/share/lcode/symbols/iOS-27.2.json`).
 final class SymbolTable: @unchecked Sendable {
     static let shared = SymbolTable()
 
@@ -17,7 +16,7 @@ final class SymbolTable: @unchecked Sendable {
             ?? (NSHomeDirectory() as NSString).appendingPathComponent(".local/share/lcode/symbols/iOS-27.2.json")
         guard let data = FileManager.default.contents(atPath: path),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            print("[LSim] Table des SF Symbols absente (\(path)) : les symboles seront remplacés par un cadre.")
+            print("[LSim] SF Symbols table missing (\(path)): symbols will be drawn as placeholder frames.")
             return
         }
         for (name, value) in json["symbols"] as? [String: Any] ?? [:] {

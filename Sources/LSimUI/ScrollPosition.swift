@@ -1,13 +1,13 @@
 import Foundation
 
-// Position de défilement pilotée par le code (iOS 18) : `ScrollPosition` et `.scrollPosition($position)`.
+// Programmatic scrolling (iOS 18): `ScrollPosition` and `.scrollPosition($position)`.
 
 public struct ScrollPosition: Hashable, Sendable {
-    /// Point demandé (décalage du contenu, 0 = position de repos en haut).
+    /// Requested content offset (0 = resting position at the top).
     public private(set) var point: CGPoint?
     public private(set) var edge: Edge?
     public var isPositionedByUser: Bool { false }
-    /// Incrémenté à chaque demande : la zone de défilement n'applique qu'une fois chaque demande.
+    /// Bumped on each request so a scroll view applies each request only once.
     var generation = 0
 
     public init(edge: Edge? = nil) {
@@ -42,11 +42,11 @@ public struct ScrollPosition: Hashable, Sendable {
     }
 
     public mutating func scrollTo<ID: Hashable>(id: ID, anchor: UnitPoint? = nil) {
-        // Défilement vers un identifiant : pas encore suivi par LSim (il faudrait la position des vues).
+        // Scrolling to an id is not supported yet (would need view positions).
         generation += 1
     }
 
-    /// Décalage vertical demandé (nil : aucune demande en points), `.infinity` pour le bas.
+    /// Requested vertical offset (nil: no point-based request), `.infinity` for the bottom.
     var requestedY: CGFloat? {
         if let point { return point.y }
         switch edge {
@@ -83,7 +83,7 @@ extension View {
     }
 }
 
-/// Dernière demande appliquée par une zone de défilement (persistante dans le graphe).
+/// Last request applied by a scroll view (persisted in the graph).
 final class AppliedScrollRequest {
     var generation = 0
 }

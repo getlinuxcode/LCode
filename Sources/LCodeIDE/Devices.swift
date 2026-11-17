@@ -1,28 +1,34 @@
 import Foundation
 import LCodeKit
 
-/// Destination d'exécution (comme le menu des appareils d'Xcode) : un simulateur ou un iPhone branché.
+/// Run destination (like Xcode's device menu): a simulator or a connected iPhone.
 struct Destination: Equatable {
     enum Kind: Equatable { case simulator(String), device(udid: String, network: Bool) }
     let kind: Kind
+    /// Device name, without the connection suffix.
+    let name: String
     let title: String
 
     static let simulators: [Destination] = [
-        Destination(kind: .simulator("iphone17promax"), title: "iPhone 17 Pro Max (simulateur)"),
-        Destination(kind: .simulator("iphone16pro"), title: "iPhone 16 Pro (simulateur)"),
-        Destination(kind: .simulator("iphonese"), title: "iPhone SE (simulateur)"),
+        simulator("iphone17promax", "iPhone 17 Pro Max"),
+        simulator("iphone16pro", "iPhone 16 Pro"),
+        simulator("iphonese", "iPhone SE"),
     ]
+
+    private static func simulator(_ id: String, _ name: String) -> Destination {
+        Destination(kind: .simulator(id), name: name, title: tr("%@ (Simulator)", name))
+    }
 
     var simulatorID: String? { if case let .simulator(id) = kind { return id } else { return nil } }
 }
 
-/// Repère les iPhone en USB (usbmuxd) et sur le réseau (netmuxd), toutes les 4 secondes.
+/// Polls for iPhones over USB (usbmuxd) and the network (netmuxd) every 4 seconds.
 final class DeviceMonitor {
     private(set) var devices: [Destination] = []
     var onChange: ([Destination]) -> Void = { _ in }
     private var names: [String: String] = [:]
     private var timer: Timer?
-    private let queue = DispatchQueue(label: "lcode.appareils")
+    private let queue = DispatchQueue(label: "lcode.devices")
 
     func start() {
         poll()
@@ -42,7 +48,7 @@ final class DeviceMonitor {
                 let isUSB = usb.contains(udid)
                 let name = self.names[udid] ?? Self.name(udid, isUSB ? [:] : network) ?? "iPhone"
                 self.names[udid] = name
-                found.append(Destination(kind: .device(udid: udid, network: !isUSB), title: "\(name) (\(isUSB ? "USB" : "Wi-Fi"))"))
+                found.append(Destination(kind: .device(udid: udid, network: !isUSB), name: name, title: "\(name) (\(isUSB ? "USB" : "Wi-Fi"))"))
             }
             onMain {
                 guard found != self.devices else { return }

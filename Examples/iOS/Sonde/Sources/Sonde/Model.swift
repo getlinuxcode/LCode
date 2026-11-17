@@ -11,6 +11,6 @@ struct TaskItem: Identifiable, Hashable {
 
 @Observable
 final class TaskStore {
-    var tasks: [TaskItem] = [TaskItem(title: "Acheter du pain"), TaskItem(title: "Appeler Marie", priority: .high)]
+    var tasks: [TaskItem] = [TaskItem(title: "Buy bread"), TaskItem(title: "Call Mary", priority: .high)]
     func add(_ title: String) { tasks.append(TaskItem(title: title)) }
 }

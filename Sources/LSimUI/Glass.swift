@@ -1,59 +1,57 @@
 import Foundation
 
-// Liquid Glass (iOS 26+) : matériau qui réfracte ce qui passe derrière lui.
-//
-// Modèle (rendu par LSimHost, réglages dans le profil, ajustés sur iPhone par le banc) :
-//  - l'arrière-plan est échantillonné avec un décalage de réfraction : nul au centre, maximal près
-//    des bords (bande de largeur `bezel`), le long de la normale au bord — effet de lentille ;
-//  - flou, saturation et luminosité de l'arrière-plan, puis voile coloré (`tint`) ;
-//  - liseré spéculaire : plus clair sur les bords orientés vers la lumière ;
-//  - ombre portée douce.
+// Liquid Glass (iOS 26+): a material that refracts what is behind it. Rendered by LSimHost, tuned in the
+// profile against an iPhone by the calibration bench:
+//  - background sampled with a refraction offset: zero at the center, max near the edges (`bezel` band),
+//    along the edge normal (lens effect);
+//  - background blur, saturation and brightness, then a tinted veil (`tint`);
+//  - specular rim, brighter on edges facing the light; soft drop shadow.
 
-/// Réglages d'une variante de verre (regular, clear), pour un thème.
+/// Settings for one glass variant (regular, clear) in one theme.
 public struct GlassParams: Codable, Sendable, Hashable {
-    /// Écart-type du flou de l'arrière-plan, en points.
+    /// Background blur standard deviation, in points.
     public var blur: Double
-    /// Décalage maximal de réfraction près du bord, en points (négatif : la lentille rétrécit).
+    /// Max refraction offset near the edge, in points (negative: the lens shrinks).
     public var refraction: Double
-    /// Largeur de la bande de réfraction le long du bord, en points.
+    /// Width of the refraction band along the edge, in points.
     public var bezel: Double
-    /// Courbure du profil de réfraction (1 : linéaire, 2 : quadratique…).
+    /// Refraction profile curvature (1: linear, 2: quadratic…).
     public var exponent: Double
     public var saturation: Double
     public var brightness: Double
-    /// Voile (r, g, b, a) en clair / en sombre.
+    /// Veil (r, g, b, a) in light / dark.
     public var tintLight: [Double]
     public var tintDark: [Double]
-    /// Liseré spéculaire : opacité, largeur (pt), et assombrissement du côté opposé.
+    /// Specular rim: opacity, width (pt), and darkening on the opposite side.
     public var rimLight: Double
     public var rimDark: Double
     public var rimWidth: Double
     public var shadowSide: Double
-    /// Ombre portée (opacité en clair / sombre, décalage vertical en points).
+    /// Drop shadow (opacity in light / dark, vertical offset in points).
     public var shadowLight: Double
     public var shadowDark: Double
     public var shadowOffset: Double
-    /// Opacité d'une teinte appliquée avec `.tint(couleur)` (optionnel pour les anciens profils).
+    /// Opacity of a tint applied with `.tint(color)` (optional for older profiles).
     public var tintStrength: Double?
-    /// Courbure du bord (0 : profil linéaire ; vers 1 : bord en arc de cercle, pente très forte au bord,
-    /// ce qui courbe les déformations et produit l'effet miroir du contour). Absent : ancien profil.
+    /// Edge curvature (0: linear profile; toward 1: circular-arc edge, very steep at the rim, which bends
+    /// distortions and produces the mirrored-outline effect). Missing: older profile.
     public var curvature: Double?
-    /// Décalage maximal, en multiples de `bezel` (au-delà du centre : le contenu est renvoyé, effet miroir).
+    /// Max offset, in multiples of `bezel` (past the center the content is flipped: mirror effect).
     public var maxShift: Double?
-    /// Filet lumineux au bord extérieur (opacité en clair / sombre).
+    /// Bright line on the outer edge (opacity in light / dark).
     public var edgeLineLight: Double?
     public var edgeLineDark: Double?
-    /// Tables mesurées sur iPhone (fonds codés) ; prioritaires sur le modèle paramétrique.
+    /// Tables measured on iPhone (coded backgrounds); take priority over the parametric model.
     public var tableLight: GlassTable?
     public var tableDark: GlassTable?
-    /// Teinte `.tint(…)` mesurée sur iPhone, par thème : [saturation, luminosité, opacité].
+    /// `.tint(…)` measured on iPhone, per theme: [saturation, brightness, opacity].
     public var tintTransformLight: [Double]?
     public var tintTransformDark: [Double]?
 }
 
-/// Comportement mesuré du verre en fonction de la distance au bord `d` (points, ou fraction de la
-/// demi-plus-petite dimension si `relative`) : décalage de réfraction le long de la normale,
-/// transmission du fond, et lumière ajoutée (r, g, b de 0 à 1) côté éclairé / côté opposé.
+/// Measured glass response vs distance to the edge `d` (points, or fraction of half the smaller
+/// dimension if `relative`): refraction offset along the normal, background transmission, and added
+/// light (r, g, b, 0…1) on the lit / opposite side.
 public struct GlassTable: Codable, Sendable, Hashable {
     public var relative: Bool
     public var d: [Double]
@@ -61,14 +59,14 @@ public struct GlassTable: Codable, Sendable, Hashable {
     public var alpha: [Double]
     public var betaTop: [[Double]]
     public var betaBottom: [[Double]]
-    /// Saturation appliquée au fond avant transmission (non mesurable avec des fonds gris).
+    /// Saturation applied to the background before transmission (not measurable with grey backgrounds).
     public var saturation: Double?
-    /// Flou du fond (écart-type en points) en fonction de `d` ; absent : réglage `blur` de la variante.
+    /// Background blur (std dev, points) vs `d`; missing: the variant's `blur` setting.
     public var blur: [Double]?
-    /// Contour mesuré à distance absolue du bord (liseré sombre, reflet), et sa version teintée.
+    /// Outline measured at absolute distance from the edge (dark rim, highlight), and its tinted version.
     public var edge: GlassEdge?
     public var tintedEdge: GlassEdge?
-    /// Flou du fond sous une teinte (points), mesuré à l'intérieur du verre teinté.
+    /// Background blur under a tint (points), measured inside tinted glass.
     public var tintedBlur: Double?
 
     public init(relative: Bool, d: [Double], shift: [Double], alpha: [Double], betaTop: [[Double]], betaBottom: [[Double]]) {
@@ -80,7 +78,7 @@ public struct GlassTable: Codable, Sendable, Hashable {
         self.betaBottom = betaBottom
     }
 
-    /// Interpolation linéaire d'une colonne.
+    /// Linear interpolation of one column.
     public func value(_ column: [Double], at x: Double) -> Double {
         guard let first = d.first, let last = d.last, !column.isEmpty else { return 0 }
         if x <= first { return column[0] }
@@ -96,8 +94,8 @@ public struct GlassTable: Codable, Sendable, Hashable {
     }
 }
 
-/// Contour du verre : sur fond gris, sortie = α·fond + β à la distance `d` (points, négative à
-/// l'extérieur) ; appliqué en écart par rapport au rendu intérieur.
+/// Glass outline: on a grey background, output = α·background + β at distance `d` (points, negative
+/// outside); applied as a delta over the interior rendering.
 public struct GlassEdge: Codable, Sendable, Hashable {
     public var d: [Double]
     public var alpha: [Double]
@@ -129,7 +127,7 @@ public struct GlassProfile: Codable, Sendable {
     )
 }
 
-/// Verre résolu pour un thème, prêt à être dessiné.
+/// Glass resolved for a theme, ready to draw.
 public struct GlassRender: Hashable, Sendable {
     public var blur: Double, refraction: Double, bezel: Double, exponent: Double
     public var saturation: Double, brightness: Double
@@ -138,7 +136,7 @@ public struct GlassRender: Hashable, Sendable {
     public var shadowAlpha: Double, shadowOffset: Double
     public var curvature: Double?, maxShift: Double, edgeLine: Double
     public var table: GlassTable?
-    /// Teinte imposée par `.tint(couleur)` (mélangée après la table, avec cette opacité).
+    /// Tint forced by `.tint(color)` (blended after the table, with this opacity).
     public var tintOverride: RGBA?
     public var tintStrength: Double
 
@@ -160,7 +158,7 @@ public struct GlassRender: Hashable, Sendable {
     }
 }
 
-// MARK: - API SwiftUI : Glass, .glassEffect, GlassEffectContainer
+// MARK: - SwiftUI API: Glass, .glassEffect, GlassEffectContainer
 
 public struct Glass: Sendable, Hashable {
     enum Variant: Hashable, Sendable { case regular, clear, identity }
@@ -178,13 +176,13 @@ public struct Glass: Sendable, Hashable {
     func render(_ scheme: ColorScheme) -> GlassRender {
         let profile = DesignProfile.current.glass
         let params = variant == .clear ? profile.clear : profile.regular
-        // Verre teinté : la teinte remplace le voile, assez opaque pour être lisible.
+        // Tinted glass: the tint replaces the veil, opaque enough to be readable.
         let transform = (scheme == .light ? params.tintTransformLight : params.tintTransformDark) ?? [1, 1]
         let strength = transform.count > 2 ? transform[2] : params.tintStrength ?? 0.75
         let tint = tintColor.map { c -> RGBA in
             let r = c.resolve(in: scheme)
             let lum = 0.2126 * r.r + 0.7152 * r.g + 0.0722 * r.b
-            // Sans bornage : sur iPhone, la teinte effective sort de la gamme (assombrit le fond transmis).
+            // Not clamped: on iPhone the effective tint goes out of gamut (darkens the transmitted background).
             func t(_ v: Double) -> Double { (lum + (v - lum) * transform[0]) * transform[1] }
             return RGBA(t(r.r), t(r.g), t(r.b), min(1, r.a * strength))
         }
@@ -192,7 +190,7 @@ public struct Glass: Sendable, Hashable {
     }
 }
 
-/// Fond en verre de la forme donnée, à la taille de la vue qu'il habille.
+/// Glass background of the given shape, sized to the view it wraps.
 final class GlassNode: LayoutNode {
     let shape: ShapeKind
     let glass: Glass
@@ -213,7 +211,6 @@ final class GlassNode: LayoutNode {
 }
 
 extension View {
-    /// `.glassEffect(.regular.tint(.blue), in: .capsule)` (iOS 26).
     public func glassEffect<S: Shape>(_ glass: Glass = .regular, in shape: S, isEnabled: Bool = true) -> some View {
         modifier(_LayerModifier(layer: _GlassLayer(glass: isEnabled ? glass : .identity, shape: shape._kind),
                                 alignment: .center, isBackground: true))
@@ -234,7 +231,7 @@ struct _GlassLayer: View, _PrimitiveView {
     func _makeNodes(_ context: BuildContext) -> [LayoutNode] { [GlassNode(shape: shape, glass: glass)] }
 }
 
-/// Regroupe des éléments de verre (fusion et morphose sur iOS) ; pour l'instant, conteneur simple.
+/// Groups glass elements (merging and morphing on iOS); a plain container for now.
 public struct GlassEffectContainer<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let content: Content
@@ -242,7 +239,7 @@ public struct GlassEffectContainer<Content: View>: View, _PrimitiveView {
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] { LSimUI._makeNodes(content, context) }
 }
 
-/// `@Namespace` (animations appariées) : identifiant unique par vue.
+/// `@Namespace` (matched geometry): unique id per view.
 @propertyWrapper
 public struct Namespace: Sendable {
     public struct ID: Hashable, Sendable { let value: Int }

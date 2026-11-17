@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import LSimUI
 
-/// Mesureur prévisible : chaque caractère fait 10 pt de large, une ligne fait 20 pt de haut.
+/// Predictable measurer: each character is 10 pt wide, a line is 20 pt tall.
 struct FakeMeasurer: TextMeasurer {
     func measure(_ text: String, font: Font, maxWidth: CGFloat?) -> CGSize {
         let full = CGFloat(text.count) * 10
@@ -25,7 +25,7 @@ func texts(_ list: DisplayList) -> [(String, CGRect)] {
 @Test func vstackCentersAndSpaces() {
     let list = render(VStack { Text("abc"); Text("abcdef") })
     let t = texts(list)
-    // Hauteur totale 20 + 8 + 20 = 48, centrée verticalement dans 800.
+    // Total height 20 + 8 + 20 = 48, centered vertically in 800.
     #expect(t[0].1 == CGRect(x: 185, y: 376, width: 30, height: 20))
     #expect(t[1].1 == CGRect(x: 170, y: 404, width: 60, height: 20))
 }
@@ -38,7 +38,7 @@ func texts(_ list: DisplayList) -> [(String, CGRect)] {
 }
 
 @Test func textTakesPriorityOverSpacer() {
-    // Un texte de 300 pt à côté d'un Spacer ne doit pas passer à la ligne.
+    // A 300 pt text next to a Spacer must not wrap.
     let long = String(repeating: "x", count: 30)
     let list = render(HStack { Text(long); Spacer() })
     #expect(texts(list)[0].1.size == CGSize(width: 300, height: 20))
@@ -89,7 +89,7 @@ struct Counter: View {
     graph.performAction(list.hitTest(CGPoint(x: 200, y: 400))!)
     list = render(Root(show: false), graph: graph)
     list = render(Root(show: true), graph: graph)
-    // Comme dans SwiftUI, une vue retirée puis réinsérée repart de son état initial.
+    // As in SwiftUI, a view removed then reinserted starts over from its initial state.
     #expect(texts(list)[0].0 == "count 0")
 }
 
@@ -108,7 +108,7 @@ struct Counter: View {
 }
 
 @Test func embeddedProfileLoads() {
-    // Le profil JSON embarqué doit se décoder (sinon LSim retomberait silencieusement sur le repli).
+    // The bundled JSON profile must decode (otherwise LSim would silently fall back).
     let url = Bundle.module.url(forResource: "iOS-27.2", withExtension: "json")
     #expect(url != nil)
     let profile = try? JSONDecoder().decode(DesignProfile.self, from: Data(contentsOf: url!))

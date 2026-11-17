@@ -16,7 +16,7 @@ public struct EnvironmentValues {
     public var isEnabled = true
     public var textCase: Text.Case?
     public var imageScale: Image.Scale = .medium
-    /// Fixé par `aspectRatio`, `scaledToFit` ou `scaledToFill` (nil : une image redimensionnable s'étire).
+    /// Set by `aspectRatio`, `scaledToFit` or `scaledToFill` (nil: a resizable image stretches).
     public var imageContentMode: ContentMode?
     var buttonStyle: _ButtonStyleKind = .automatic
     public var controlSize: ControlSize = .regular
@@ -28,7 +28,7 @@ public struct EnvironmentValues {
     var onSubmit: (() -> Void)?
 
     private var custom: [ObjectIdentifier: Any] = [:]
-    /// Objets placés par `.environment(objet)`, indexés par leur type.
+    /// Objects set with `.environment(object)`, keyed by type.
     var objects: [ObjectIdentifier: AnyObject] = [:]
 
     public init() {}
@@ -39,7 +39,6 @@ public struct EnvironmentValues {
     }
 }
 
-/// Lecture d'une valeur d'environnement dans une vue : `@Environment(\.colorScheme) var scheme`.
 @propertyWrapper
 public struct Environment<Value>: _DynamicProperty {
     final class Box { var values: EnvironmentValues? }
@@ -51,7 +50,6 @@ public struct Environment<Value>: _DynamicProperty {
         read = { $0[keyPath: keyPath] }
     }
 
-    /// `@Environment(MonModele.self)` : objet placé par `.environment(objet)`.
     public init(_ objectType: Value.Type) where Value: AnyObject {
         read = { $0.object(objectType) }
     }

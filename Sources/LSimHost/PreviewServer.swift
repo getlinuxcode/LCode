@@ -2,13 +2,12 @@ import CGtk
 import Foundation
 import LSimUI
 
-/// Mode aperçu, piloté par l'IDE (sans fenêtre) : l'écran est rendu dans un fichier d'image brute à
-/// chaque changement (animations comprises), annoncé sur la sortie standard par
-/// « frame <largeur> <hauteur> <pas> » ; les gestes arrivent sur l'entrée standard :
+/// Headless mode driven by the IDE: the screen is rendered to a raw image file on every change
+/// (animations included) and announced on stdout as `frame <width> <height> <stride>`. Gestures arrive on stdin:
 ///   press x y | move dx dy | release x y | tap x y | scroll x y dy | scheme light|dark | quit
-/// (coordonnées en points de l'écran simulé).
+/// (coordinates in simulated screen points).
 extension SimulatorHost {
-    /// Pixels par point des images envoyées à l'IDE.
+    /// Pixels per point of the frames sent to the IDE.
     static let previewScale: CGFloat = 2
 
     func serve(framePath: String) {
@@ -17,7 +16,7 @@ extension SimulatorHost {
         graph.onInvalidate = { state.dirty = true }
         setvbuf(stdout, nil, _IOLBF, 0)
 
-        // Commandes de l'IDE, lues sur un fil à part puis traitées sur la boucle principale.
+        // IDE commands are read on a separate thread and handled on the main loop.
         Thread.detachNewThread { [unowned self] in
             while let line = readLine() {
                 let parts = line.split(separator: " ").map(String.init)
@@ -26,7 +25,7 @@ extension SimulatorHost {
             DispatchQueue.main.async { exit(0) }
         }
 
-        // Boucle : ~60 images/s au plus, seulement si quelque chose a changé ou s'anime.
+        // At most ~60 fps, and only when something changed or is animating.
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [unowned self] _ in
             guard state.dirty || graph.animator.isAnimating else { return }
             state.dirty = false
@@ -64,7 +63,7 @@ extension SimulatorHost {
         markDirty()
     }
 
-    /// Écran seul (coins arrondis, barre d'état, indicateur d'accueil), en ARGB32 prémultiplié.
+    /// Screen only (rounded corners, status bar, home indicator), premultiplied ARGB32.
     func writeFrame(to path: String) {
         let scale = Self.previewScale
         let width = Int32(device.screenSize.width * scale), height = Int32(device.screenSize.height * scale)
@@ -88,7 +87,7 @@ extension SimulatorHost {
             let tmp = path + ".tmp"
             if FileManager.default.createFile(atPath: tmp, contents: bytes) {
                 rename(tmp, path)
-                // Octet 0x01 en tête : distingue l'annonce des print() de l'app sur la même sortie.
+                // Leading 0x01 byte tells this announcement apart from the app's own print() on the same stdout.
                 print("\u{1}frame \(width) \(height) \(stride)")
             }
         }
@@ -96,7 +95,7 @@ extension SimulatorHost {
         cairo_surface_destroy(surface)
     }
 
-    /// Point d'entrée d'un aperçu (`#Preview`) : servi à l'IDE, ou dans une fenêtre à défaut.
+    /// `#Preview` entry point: served to the IDE, or shown in a window otherwise.
     public static func runPreview<V: View>(_ content: @escaping () -> V) {
         let env = ProcessInfo.processInfo.environment
         let device = env["LSIM_DEVICE"].flatMap { DeviceProfile.all[$0.lowercased()] } ?? .iPhone16Pro

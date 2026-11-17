@@ -4,10 +4,10 @@ import SwiftUI
 import QuartzCore
 #endif
 
-// Transitions système mesurées image par image : un carré vert (écran de départ) et un carré rouge
-// (écran d'arrivée ou feuille), relevés à chaque image sur iPhone. Le déclenchement est automatique sur
-// iPhone (après 0,4 s, ou 1,2 s pour les fermetures, le temps que l'ouverture se termine) ; dans LSim,
-// un toucher sur le carré visible le déclenche.
+// System transitions measured frame by frame: a green square (source screen) and a red square
+// (destination screen or sheet), sampled every frame on the iPhone. Triggered automatically on iPhone
+// (after 0.4 s, or 1.2 s for dismissals so the presentation can finish); in LSim, tapping the visible
+// square triggers it.
 
 enum TransitionCatalog {
     static var pages: [CatalogPage] {
@@ -50,14 +50,14 @@ struct NavTransitionPage: View {
                 Color.clear
                 Square(red: false).offset(x: 40, y: 200).onTapGesture { trigger() }
             }
-            .navigationTitle("Départ")
+            .navigationTitle("Start")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Int.self) { _ in
                 ZStack(alignment: .topLeading) {
                     Color.clear
                     Square(red: true).offset(x: 40, y: 200).onTapGesture { trigger() }
                 }
-                .navigationTitle("Arrivée")
+                .navigationTitle("Destination")
                 .navigationBarTitleDisplayMode(.inline)
             }
         }

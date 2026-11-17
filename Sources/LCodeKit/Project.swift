@@ -1,20 +1,18 @@
 import Foundation
 
-/// Erreurs de LCodeKit, avec un message destiné à l'utilisateur.
+/// LCodeKit error with a user-facing message.
 public struct LCodeError: Error, CustomStringConvertible {
     public let description: String
     public init(_ description: String) { self.description = description }
 }
 
-/// Un projet xtool : un paquet SwiftPM dont l'unique produit bibliothèque est l'app.
+/// An xtool project: a SwiftPM package whose single library product is the app.
 public struct XtoolProject {
     public struct Target {
         public let name: String
-        /// Dossier des sources (absolu).
+        /// Absolute source folder.
         public let path: URL
-        /// Cibles locales dont elle dépend.
         public let localDependencies: [String]
-        /// Produits de paquets externes dont elle dépend (nom du produit, identité du paquet).
         public let externalProducts: [ProductReference]
         public let hasResources: Bool
     }
@@ -22,15 +20,14 @@ public struct XtoolProject {
     public let root: URL
     public let name: String
     public let bundleID: String?
-    /// Cible de l'app (celle du produit bibliothèque).
+    /// Target of the library product.
     public let appTarget: String
-    /// Cibles locales nécessaires à l'app (l'app comprise), dans l'ordre de dépendance.
+    /// Local targets the app needs (app included), dependencies first.
     public let targets: [Target]
     public let manifest: String
-    /// Paquets dont dépend le projet (déclarations reprises par le simulateur et les aperçus).
+    /// Package dependencies, re-declared by the simulator and preview builds.
     public let dependencies: [PackageDependency]
 
-    /// Catalogues d'assets (`*.xcassets`) des cibles de l'app.
     public var assetCatalogs: [URL] {
         targets.flatMap { t -> [URL] in
             guard let walker = FileManager.default.enumerator(at: t.path, includingPropertiesForKeys: nil) else { return [] }
@@ -43,29 +40,29 @@ public struct XtoolProject {
         }
     }
 
-    /// Variables d'environnement qui donnent au simulateur les ressources du projet.
+    /// Environment that gives the simulator the project's resources.
     public var simulatorEnvironment: [String: String] {
         let catalogs = assetCatalogs
         return catalogs.isEmpty ? [:] : ["LSIM_ASSETS": catalogs.map(\.path).joined(separator: ":")]
     }
 
-    /// Le binaire iOS déclarera-t-il le bon SDK (sinon iOS affiche l'app en mode compatibilité) ?
+    /// Whether the iOS binary declares the right SDK (otherwise iOS runs the app in compatibility mode).
     public var hasSDKVersionFix: Bool { manifest.contains("platform_version") }
 
     public static func load(at root: URL) throws -> XtoolProject {
         let manifestURL = root.appendingPathComponent("Package.swift")
         guard let manifest = try? String(contentsOf: manifestURL, encoding: .utf8) else {
-            throw LCodeError("Aucun Package.swift dans \(root.path) : ce n'est pas un projet xtool.")
+            throw LCodeError("No Package.swift in \(root.path): not an xtool project.")
         }
         let dump = try Shell.capture(["swift", "package", "dump-package", "--package-path", root.path])
         guard let json = try JSONSerialization.jsonObject(with: Data(dump.utf8)) as? [String: Any] else {
-            throw LCodeError("Description du paquet illisible.")
+            throw LCodeError("Unreadable package description.")
         }
         let name = json["name"] as? String ?? root.lastPathComponent
         let products = json["products"] as? [[String: Any]] ?? []
         let libraries = products.filter { ($0["type"] as? [String: Any])?["library"] != nil }
         guard let app = libraries.first, let appTarget = (app["targets"] as? [String])?.first else {
-            throw LCodeError("Le projet doit déclarer un produit bibliothèque (convention xtool).")
+            throw LCodeError("The project must declare a library product (xtool convention).")
         }
 
         var all: [String: Target] = [:]
@@ -86,7 +83,6 @@ public struct XtoolProject {
                                 localDependencies: local, externalProducts: external, hasResources: resources)
         }
 
-        // Cibles nécessaires à l'app, dépendances d'abord.
         var ordered: [Target] = []
         var seen = Set<String>()
         func visit(_ n: String) {

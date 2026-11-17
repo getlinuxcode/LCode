@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Thème « Xcode » (sombre) : couleurs du thème sombre par défaut d'Xcode. -->
+<!-- Xcode default dark theme colors. -->
 <style-scheme id="lcode-xcode-dark" name="Xcode sombre" version="1.0">
   <author>LCode</author>
-  <description>Couleurs d'Xcode (sombre)</description>
+  <description>Xcode colors (dark)</description>
   <style name="text" foreground="#FFFFFF" background="#1F1F24"/>
   <style name="selection" background="#515B70"/>
   <style name="current-line" background="#23252B"/>

@@ -1,7 +1,6 @@
 import Foundation
 
-// CoreVideo pour le simulateur LSim : l'image d'une vidéo (CVPixelBuffer), en BGRA 8 bits prémultiplié,
-// que le rendu de LSim sait dessiner.
+// CoreVideo for LSim: video frames as premultiplied 8-bit BGRA, which the LSim renderer draws directly.
 
 public typealias OSType = UInt32
 public typealias CVReturn = Int32
@@ -9,13 +8,13 @@ public let kCVReturnSuccess: CVReturn = 0
 public let kCVPixelFormatType_32BGRA: OSType = 0x4247_5241 // 'BGRA'
 public let kCVPixelFormatType_32ARGB: OSType = 0x0000_0020
 
-/// Image en mémoire (BGRA). Classe : passée sans copie de l'API vidéo au rendu.
+/// A class so frames go from the video API to the renderer without copying.
 public final class CVPixelBuffer: @unchecked Sendable {
     public let width: Int
     public let height: Int
     public let bytesPerRow: Int
     public private(set) var data: Data
-    /// Numéro croissant : le rendu sait qu'une nouvelle image est arrivée.
+    /// Increasing counter that lets the renderer detect a new frame.
     public let generation: Int
 
     private static var counter = 0

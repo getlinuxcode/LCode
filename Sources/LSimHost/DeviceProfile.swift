@@ -1,7 +1,7 @@
 import Foundation
 import LSimUI
 
-/// Caractéristiques physiques d'un appareil simulé (en points).
+/// Physical characteristics of a simulated device, in points.
 public struct DeviceProfile: Sendable {
     public var name: String
     public var screenSize: CGSize

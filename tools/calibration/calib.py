@@ -1,4 +1,4 @@
-"""Fonctions communes du banc de calibration : rendu LSim sans fenêtre et comparaison avec l'iPhone."""
+"""Shared helpers for the calibration bench: headless LSim rendering and comparison with the iPhone."""
 import glob
 import json
 import os
@@ -11,7 +11,7 @@ DEVICES = {"iPhone18,2": "iphone17promax"}
 
 
 def load_ios(run):
-    """Mesures iPhone d'une série : {(page, thème): {"meta": …, "png": chemin}}."""
+    """iPhone measurements of a run: {(page, scheme): {"meta": …, "png": path}}."""
     out = {}
     for path in sorted(glob.glob(os.path.join(run, "ios", "*.json"))):
         with open(path) as f:
@@ -21,7 +21,7 @@ def load_ios(run):
 
 
 def render_lsim(binary, page, scheme, device, out_dir, profile=None):
-    """Rend une page du catalogue dans LSim (écran seul, @3x) ; renvoie (mesures, chemin PNG)."""
+    """Renders a catalog page in LSim (screen only, @3x); returns (measurements, PNG path)."""
     base = os.path.join(out_dir, f"{page}.{scheme}")
     env = dict(os.environ, CATALOG_PAGE_ID=page, LSIM_SCREEN_ONLY="1", LSIM_DEVICE=device,
                LSIM_DUMP=base + ".json", LSIM_SCREENSHOT=base + ".png")
@@ -35,7 +35,7 @@ def render_lsim(binary, page, scheme, device, out_dir, profile=None):
 
 
 def render_many(binary, keys, device, out_dir, profile=None, workers=None):
-    """Rend plusieurs (page, thème) en parallèle."""
+    """Renders several (page, scheme) pairs in parallel."""
     os.makedirs(out_dir, exist_ok=True)
     with ThreadPoolExecutor(max_workers=workers or os.cpu_count()) as pool:
         futures = {k: pool.submit(render_lsim, binary, k[0], k[1], device, out_dir, profile) for k in keys}
@@ -61,9 +61,9 @@ def image(path, cache=False):
 
 
 def compare_page(ios_meta, ios_png, lsim_meta, lsim_png):
-    """Écarts par repère : géométrie (LSim − iPhone, en points) et pixels (écart moyen 0–255).
+    """Per-marker deltas: geometry (LSim − iPhone, points) and pixels (mean difference 0–255).
 
-    Sans capture iPhone (`ios_png` vide ou absent), seule la géométrie est comparée (pix = 0).
+    Without an iPhone screenshot (`ios_png` empty or missing), only geometry is compared (pix = 0).
     """
     scale = ios_meta["screen"]["scale"]
     has_pixels = bool(ios_png) and os.path.exists(ios_png)
@@ -84,8 +84,7 @@ def compare_page(ios_meta, ios_png, lsim_meta, lsim_png):
             ca, cb = crop(a_img, rect, scale), crop(b_img, rect, scale)
             diff = ImageChops.difference(ca, cb)
             pix = sum(ImageStat.Stat(diff).mean) / 3
-            # Structure : écart entre les cartes de contours (un rendu qui efface le motif est pénalisé,
-            # même si sa couleur moyenne est proche).
+            # Edge-map difference: penalises a render that wipes out the pattern even if its mean colour is close.
             ea = ca.convert("L").filter(ImageFilter.FIND_EDGES)
             eb = cb.convert("L").filter(ImageFilter.FIND_EDGES)
             edge = ImageStat.Stat(ImageChops.difference(ea, eb)).mean[0]
@@ -96,7 +95,7 @@ def compare_page(ios_meta, ios_png, lsim_meta, lsim_png):
 
 
 def best_layer(marker, layers, need=("backgroundColor", "cornerRadius")):
-    """Couche iOS dont le cadre colle au repère et qui porte un fond ou un rayon."""
+    """iOS layer whose frame matches the marker and that has a background or a corner radius."""
     best = None
     for layer in layers:
         x, y, w, h = layer["frame"]

@@ -10,7 +10,7 @@ private func tempProject(_ yml: String) throws -> URL {
 }
 
 @Test func xtoolConfigEditsKeysInPlace() {
-    let text = "version: 1\nbundleID: com.example.A # commentaire\nproduct: A\n"
+    let text = "version: 1\nbundleID: com.example.A # comment\nproduct: A\n"
     #expect(XtoolConfig.value("bundleID", in: text) == "com.example.A")
     let changed = XtoolConfig.setting("bundleID", to: "fr.joris.B", in: text)
     #expect(changed == "version: 1\nbundleID: fr.joris.B\nproduct: A\n")
@@ -41,7 +41,7 @@ private func tempProject(_ yml: String) throws -> URL {
     try signing.setEnabled(health, true)
     #expect(signing.entitlements()["com.apple.developer.healthkit"] as? Bool == true)
 
-    // Le fichier est un plist XML qu'xtool sait lire.
+    // An XML plist xtool can read.
     let xml = try String(contentsOf: root.appendingPathComponent("Sonde.entitlements"), encoding: .utf8)
     #expect(xml.contains("<key>com.apple.security.application-groups</key>"))
     #expect(xml.contains("<true/>"))
@@ -49,7 +49,7 @@ private func tempProject(_ yml: String) throws -> URL {
     try signing.setValues(groups, ["group.a", " ", "group.b "])
     #expect(signing.values(groups) == ["group.a", "group.b"])
 
-    // Plus aucun entitlement : le fichier et sa référence disparaissent.
+    // No entitlements left: the file and its reference go away.
     try signing.setEnabled(groups, false)
     try signing.setEnabled(health, false)
     #expect(signing.entitlementsPath == nil)
@@ -64,8 +64,8 @@ private func tempProject(_ yml: String) throws -> URL {
     try signing.setEnabled(background, true)
     #expect(signing.infoPath == "Info.plist")
     #expect(signing.values(background) == ["audio"])
-    try signing.setUsage("NSCameraUsageDescription", "Pour scanner les codes.")
-    #expect(signing.usage("NSCameraUsageDescription") == "Pour scanner les codes.")
+    try signing.setUsage("NSCameraUsageDescription", "To scan codes.")
+    #expect(signing.usage("NSCameraUsageDescription") == "To scan codes.")
     try signing.setUsage("NSCameraUsageDescription", "")
     #expect(signing.usage("NSCameraUsageDescription") == nil)
     #expect(signing.entitlementsPath == nil)
@@ -98,6 +98,7 @@ private func tempProject(_ yml: String) throws -> URL {
     """
     let issues = SigningIssue.extract(from: output)
     #expect(issues.count == 2)
-    #expect(issues[0].message.contains("seul App Group"))
-    #expect(issues[1].message.contains("Aucun compte Apple"))
+    #expect(issues[0].message.contains("only one App Group"))
+    #expect(issues[1].needsAccount)
+    #expect(issues.allSatisfy { Localization.french[$0.message] != nil })
 }

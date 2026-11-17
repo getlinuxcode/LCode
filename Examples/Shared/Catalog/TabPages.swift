@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
 
-// Pages de calibration de la barre d'onglets Liquid Glass (iOS 26+) : vraie TabView, contenu en damier
-// sous la barre (verre visible). Géométrie relevée par les couches iOS et les pixels.
-//  - tab.bar.3 / tab.bar.4 : trois ou quatre onglets, le premier sélectionné ;
-//  - tab.bar.search : trois onglets et l'onglet de recherche (rôle .search), à part sur iOS 26.
+// Liquid Glass tab bar calibration pages (iOS 26+): a real TabView with checkerboard content under the bar
+// (glass visible). Geometry comes from the iOS layers and pixels.
+//  - tab.bar.3 / tab.bar.4: three or four tabs, the first selected;
+//  - tab.bar.search: three tabs plus the search tab (role .search), separate on iOS 26.
 
 enum TabCatalog {
     @available(iOS 26, *)
@@ -22,7 +22,7 @@ struct TabBarPage: View {
     let count: Int
     let search: Bool
     static let tabs: [(String, String)] = [
-        ("Accueil", "house.fill"), ("Favoris", "star.fill"), ("Messages", "message.fill"), ("Réglages", "gearshape.fill"),
+        ("Home", "house.fill"), ("Favorites", "star.fill"), ("Messages", "message.fill"), ("Settings", "gearshape.fill"),
     ]
 
     var body: some View {
@@ -36,8 +36,8 @@ struct TabBarPage: View {
                 }
             }
             if search {
-                Tab("Recherche", systemImage: "magnifyingglass", role: .search) {
-                    Text("Recherche")
+                Tab("Search", systemImage: "magnifyingglass", role: .search) {
+                    Text("Search")
                 }
             }
         }

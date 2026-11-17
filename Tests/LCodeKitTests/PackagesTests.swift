@@ -12,7 +12,7 @@ import Testing
     let sources = root.appendingPathComponent("Sources/A")
     try FileManager.default.createDirectory(at: sources, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: root) }
-    try "import Foundation\n// import SwiftUI dans un commentaire\n".write(to: sources.appendingPathComponent("A.swift"), atomically: true, encoding: .utf8)
+    try "import Foundation\n// import SwiftUI in a comment\n".write(to: sources.appendingPathComponent("A.swift"), atomically: true, encoding: .utf8)
     #expect(!PackageOverlay.importsLSimModule(root))
     try "@preconcurrency import SwiftUI\n".write(to: sources.appendingPathComponent("B.swift"), atomically: true, encoding: .utf8)
     #expect(PackageOverlay.importsLSimModule(root))

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Mesure de la barre de navigation Liquid Glass à partir des pages `nav.edge.*` et `nav.bar.*`.
+"""Measures the Liquid Glass navigation bar from the `nav.edge.*` and `nav.bar.*` pages.
 
-Usage : ~/.local/share/lcode/venv/bin/python -I tools/calibration/navfield.py <série> [--source ios|lsim] [--write]
+Usage: ~/.local/share/lcode/venv/bin/python -I tools/calibration/navfield.py <run> [--source ios|lsim] [--write]
 
-Effet de bord de défilement (pages nav.edge.low/high/xsin/xcos, contenu défilé sous la barre) :
-pour chaque ligne de l'écran, sortie = α·fond + β (fonds gris bas/haut) et flou d'après le contraste des
-ondes verticales de 16 pt. Médianes par ligne, hors boutons et titre (colonnes du milieu exclues si
-le titre y est). Écrit `navigationEdgeLight` / `navigationEdgeDark` dans le profil (`--write`).
+Scroll edge effect (pages nav.edge.low/high/xsin/xcos, content scrolled under the bar): for each screen
+row, output = α·background + β (low/high grey backgrounds), and blur from the contrast of the 16 pt
+vertical waves. Per-row medians, excluding buttons and title. Writes `navigation.edgeLight` /
+`navigation.edgeDark` to the profile (`--write`).
 """
 import argparse
 import json
@@ -46,15 +46,14 @@ def edge_profile(pages):
     mod = np.hypot(2 * s - 1, 2 * c - 1)
 
     h, wpx = k.shape
-    # Colonnes utiles : bandes entre les boutons et le titre (marges de 80 pt de chaque côté du centre exclues
-    # là où passe le titre, et 70 pt aux bords pour les boutons).
+    # Usable columns: bands between the bar buttons (76 pt from each edge) and the title (70 pt each side of centre).
     xs = (np.arange(wpx) + 0.5) / scale
     width = wpx / scale
     cols = ((xs > 76) & (xs < width / 2 - 70)) | ((xs > width / 2 + 70) & (xs < width - 76))
-    # Contraste de référence : bas de l'écran (contenu nu).
+    # Reference contrast: bottom of the screen (bare content).
     ref = np.median(mod[int(h * 0.7):, cols])
     rows = {"y": [], "alpha": [], "beta": [], "blur": []}
-    step = 1  # points
+    step = 1  # pt
     content = meta["markers"][0] if meta["markers"] else None
     bottom = int(min(h / scale, 200))
     for y in range(0, bottom, step):
@@ -67,8 +66,7 @@ def edge_profile(pages):
         rows["alpha"].append(round(a, 4))
         rows["beta"].append([round(float(v), 4) for v in b])
         rows["blur"].append(round(sigma, 3))
-    # Base de la barre sur l'appareil de mesure (iPhone 17 Pro Max : zone sûre 62 pt + barre 54 pt), pour
-    # recaler la table sur d'autres appareils.
+    # Bar bottom on the measuring device (iPhone 17 Pro Max: 62 pt safe area + 54 pt bar), to re-anchor on other devices.
     rows["referenceBarBottom"] = 116.0
     return rows
 
@@ -84,13 +82,13 @@ def main():
     for scheme in ("light", "dark"):
         pages = load(args.run, args.source, scheme, names)
         if pages is None:
-            print(f"{scheme} : pages nav.edge absentes")
+            print(f"{scheme}: nav.edge pages missing")
             continue
         prof = edge_profile(pages)
         result[scheme] = prof
-        print(f"{scheme} : effet de bord, ligne par ligne (y en pt depuis le haut de l'écran)")
+        print(f"{scheme}: edge effect, row by row (y in pt from the top of the screen)")
         for i in range(0, len(prof["y"]), 8):
-            print(f"  y={prof['y'][i]:5.1f}  α {prof['alpha'][i]:.2f}  β {prof['beta'][i]}  flou {prof['blur'][i]:.2f}")
+            print(f"  y={prof['y'][i]:5.1f}  α {prof['alpha'][i]:.2f}  β {prof['beta'][i]}  blur {prof['blur'][i]:.2f}")
     if args.write and result:
         with open(PROFILE) as f:
             profile = json.load(f)
@@ -100,7 +98,7 @@ def main():
         with open(PROFILE, "w") as f:
             json.dump(profile, f, indent=2, sort_keys=True, ensure_ascii=False)
             f.write("\n")
-        print(f"Effet de bord écrit dans {PROFILE}")
+        print(f"Edge effect written to {PROFILE}")
 
 
 if __name__ == "__main__":

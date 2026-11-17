@@ -2,7 +2,7 @@ import CAdw
 import Foundation
 import LCodeKit
 
-/// Fenêtres de l'application : accueil et projets ouverts.
+/// Application windows: welcome and open projects.
 final class App {
     static let shared = App()
     private var welcome: WelcomeWindow?
@@ -31,9 +31,9 @@ final class App {
         } catch {
             let parent = welcome?.window ?? projects.first?.window
             if let parent {
-                Dialogs.message(parent, title: "Impossible d'ouvrir le projet", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Open Project"), message: "\(error)")
             } else {
-                FileHandle.standardError.write(Data("lcode-ide : \(error)\n".utf8))
+                FileHandle.standardError.write(Data("lcode-ide: \(error)\n".utf8))
                 showWelcome()
             }
         }
@@ -44,21 +44,21 @@ final class App {
         if projects.isEmpty, welcome == nil { showWelcome() }
     }
 
-    /// Création d'un projet (nom, identifiant, dossier) puis ouverture.
+    /// Asks for a name, bundle ID and folder, creates the project and opens it.
     func newProject(from parent: UnsafeMutablePointer<GtkWidget>) {
-        Dialogs.prompt(parent, title: "Nouveau projet", message: "Nom de l'app (lettres et chiffres, sans espace).",
-                       placeholder: "MonApp", confirm: "Suivant") { name in
+        Dialogs.prompt(parent, title: tr("New Project"), message: tr("App name (letters and digits, no spaces)."),
+                       placeholder: "MyApp", confirm: tr("Next")) { name in
             guard let name else { return }
-            Dialogs.prompt(parent, title: "Identifiant de l'app", message: "Bundle ID, utilisé pour signer et installer sur iPhone.",
-                           initial: "com.example.\(name)", confirm: "Choisir le dossier…") { bundle in
+            Dialogs.prompt(parent, title: tr("Bundle Identifier"), message: tr("Used to sign and install the app on iPhone."),
+                           initial: "com.example.\(name)", confirm: tr("Choose Folder…")) { bundle in
                 guard let bundle else { return }
-                Dialogs.chooseFolder(parent, title: "Dossier où créer « \(name) »") { folder in
+                Dialogs.chooseFolder(parent, title: tr("Folder for “%@”", name)) { folder in
                     guard let folder else { return }
                     do {
                         let root = try Templates.createProject(name: name, bundleID: bundle, in: folder)
                         self.openProject(root)
                     } catch {
-                        Dialogs.message(parent, title: "Création impossible", message: "\(error)")
+                        Dialogs.message(parent, title: tr("Couldn’t Create Project"), message: "\(error)")
                     }
                 }
             }
@@ -66,34 +66,35 @@ final class App {
     }
 
     func openProjectDialog(from parent: UnsafeMutablePointer<GtkWidget>) {
-        Dialogs.chooseFolder(parent, title: "Ouvrir un projet (dossier contenant Package.swift)") { folder in
+        Dialogs.chooseFolder(parent, title: tr("Open Project (folder containing Package.swift)")) { folder in
             if let folder { self.openProject(folder) }
         }
     }
 }
 
-/// Fenêtre d'accueil : créer, ouvrir, projets récents (comme « Welcome to Xcode »).
+/// Welcome window: create, open, recent projects (like "Welcome to Xcode").
 final class WelcomeWindow {
     let window: UnsafeMutablePointer<GtkWidget>
 
     init() {
         window = adw_application_window_new(cast(raw(application)))
-        gtk_window_set_title(cast(raw(window)), "Bienvenue dans LCode")
+        gtk_window_set_title(cast(raw(window)), tr("Welcome to LCode"))
         gtk_window_set_default_size(cast(raw(window)), 860, 520)
 
-        // Colonne de gauche : identité et actions.
         let left = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12)!
         gtk_widget_set_size_request(left, 360, -1)
         gtk_widget_set_valign(left, GTK_ALIGN_CENTER)
         gtk_widget_set_margin_start(left, 40)
         gtk_widget_set_margin_end(left, 40)
-        let icon = gtk_image_new_from_icon_name("applications-development-symbolic")!
+        let iconPath = lcodeRoot.appendingPathComponent("Resources/lcode.svg").path
+        let icon = FileManager.default.fileExists(atPath: iconPath)
+            ? gtk_image_new_from_file(iconPath)! : gtk_image_new_from_icon_name("applications-development-symbolic")!
         gtk_image_set_pixel_size(cast(raw(icon)), 96)
         gtk_box_append(cast(raw(left)), icon)
         let title = gtk_label_new("LCode")!
         gtk_widget_add_css_class(title, "title-1")
         gtk_box_append(cast(raw(left)), title)
-        let version = gtk_label_new("Apps iOS en SwiftUI, sous Linux")!
+        let version = gtk_label_new(tr("SwiftUI iOS apps, on Linux"))!
         gtk_widget_add_css_class(version, "dim-label")
         gtk_box_append(cast(raw(left)), version)
         let actions = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8)!
@@ -110,11 +111,10 @@ final class WelcomeWindow {
             gtk_box_append(cast(raw(actions)), button)
         }
         let win = window
-        action("Créer un projet…", "document-new-symbolic") { App.shared.newProject(from: win) }
-        action("Ouvrir un projet…", "folder-open-symbolic") { App.shared.openProjectDialog(from: win) }
+        action(tr("Create New Project…"), "document-new-symbolic") { App.shared.newProject(from: win) }
+        action(tr("Open Existing Project…"), "folder-open-symbolic") { App.shared.openProjectDialog(from: win) }
         gtk_box_append(cast(raw(left)), actions)
 
-        // Colonne de droite : projets récents.
         let list = gtk_list_box_new()!
         gtk_widget_add_css_class(list, "boxed-list")
         gtk_list_box_set_selection_mode(cast(raw(list)), GTK_SELECTION_NONE)
@@ -135,7 +135,7 @@ final class WelcomeWindow {
         gtk_widget_set_margin_bottom(right, 24)
         gtk_widget_set_margin_end(right, 24)
         gtk_widget_set_hexpand(right, 1)
-        let heading = gtk_label_new(recents.isEmpty ? "Aucun projet récent" : "Projets récents")!
+        let heading = gtk_label_new(recents.isEmpty ? tr("No Recent Projects") : tr("Recent Projects"))!
         gtk_widget_set_halign(heading, GTK_ALIGN_START)
         gtk_widget_add_css_class(heading, "heading")
         gtk_box_append(cast(raw(right)), heading)

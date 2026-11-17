@@ -1,28 +1,26 @@
 import Foundation
 
-// Aperçus `#Preview` : la macro d'Apple n'existe pas sous Linux. Chaque bloc est réécrit en une fonction
-// ordinaire, SUR LES MÊMES LIGNES (les erreurs du compilateur pointent donc sur les bonnes lignes du
-// vrai fichier), et un point d'entrée choisit l'aperçu à lancer.
+// `#Preview` support: Apple's macro does not exist on Linux. Each block is rewritten as a plain function
+// ON THE SAME LINES (so compiler errors point at the real file's lines), and an entry point picks the preview.
 
 public struct PreviewInfo: Equatable, Sendable {
-    /// Ligne (1 = première) du `#Preview` dans le fichier.
+    /// 1-based line of the `#Preview`.
     public let line: Int
     public let name: String?
-    /// Type généré qui porte le corps de l'aperçu (`__LSimPreview_N.body()`).
+    /// Generated type holding the preview body (`__LSimPreview_N.body()`).
     public let symbol: String
 }
 
 public enum PreviewTransform {
-    /// Réécrit `#Preview { … }` en `enum __LSimPreview_N { … static func body() -> some View { … } }`, et
-    /// neutralise `@main` si demandé (l'aperçu a son propre point d'entrée). Les numéros de ligne et de
-    /// colonne des autres lignes sont conservés.
+    /// Rewrites `#Preview { … }` as `enum __LSimPreview_N { … static func body() -> some View { … } }` and blanks
+    /// `@main` if asked (previews have their own entry point). Line and column numbers are preserved.
     public static func transform(_ text: String, removeMain: Bool, firstIndex: Int) -> (text: String, previews: [PreviewInfo]) {
         let c = Array(text.unicodeScalars)
         var out = String.UnicodeScalarView()
         var previews: [PreviewInfo] = []
         var i = 0
         var line = 1
-        // Fermetures de corps d'aperçu à compléter (profondeur d'accolades où le corps se termine).
+        // Brace depths at which a preview body ends.
         var depth = 0
         var closeAt: [Int] = []
 
@@ -40,7 +38,7 @@ public enum PreviewTransform {
 
         while i < c.count {
             let ch = c[i]
-            // Commentaires et chaînes : recopiés tels quels.
+            // Comments and strings are copied verbatim.
             if ch == "/", i + 1 < c.count, c[i + 1] == "/" {
                 while i < c.count, c[i] != "\n" { emit(c[i]); i += 1 }
                 continue
@@ -74,13 +72,13 @@ public enum PreviewTransform {
                 continue
             }
             if ch == "@", starts(with: "Previewable", at: i + 1) {
-                // `@Previewable` n'existe pas hors macro : retiré (remplacé par des espaces).
+                // `@Previewable` only exists inside the macro: blanked out.
                 for _ in 0..<12 { emit(" ") }
                 i += 12
                 continue
             }
             if ch == "#", starts(with: "Preview", at: i + 1) {
-                // En-tête : #Preview, arguments facultatifs, puis l'accolade ouvrante du corps.
+                // Header: #Preview, optional arguments, then the body's opening brace.
                 let headerLine = line
                 var j = i + 8
                 var name: String?
@@ -129,13 +127,13 @@ public enum PreviewTransform {
     }
 }
 
-/// Reproduction d'un dossier de sources : fichiers Swift réécrits (aperçus, `@main`), autres fichiers
-/// liés. Seuls les fichiers modifiés sont réécrits (compilation incrémentale).
+/// Mirrors a source folder: Swift files are rewritten (previews, `@main`), others symlinked.
+/// Only changed files are rewritten, to keep builds incremental.
 enum SourceMirror {
     static func mirror(from source: URL, to destination: URL, removeMain: Bool, firstIndex: Int,
                        overrides: [String: String] = [:]) throws -> [(file: URL, previews: [PreviewInfo])] {
         let fm = FileManager.default
-        // Ancien lien symbolique (versions précédentes) : remplacé par un vrai dossier.
+        // Older versions used a symlink here: replace it with a real folder.
         if (try? fm.destinationOfSymbolicLink(atPath: destination.path)) != nil { try fm.removeItem(at: destination) }
         try fm.createDirectory(at: destination, withIntermediateDirectories: true)
         var found: [(URL, [PreviewInfo])] = []
@@ -163,11 +161,11 @@ enum SourceMirror {
                 try fm.createSymbolicLink(at: target, withDestinationURL: file)
             }
         }
-        // Fichiers supprimés du projet : retirés de la copie.
+        // Drop files deleted from the project.
         let existing = (fm.enumerator(at: destination, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
         for file in existing where (try? file.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) != true {
             let relative = String(file.path.dropFirst(destination.path.count + 1))
-            if !kept.contains(relative), relative != "LSimApercu.swift", relative != "main.swift" || !removeMain {
+            if !kept.contains(relative), relative != "LSimPreview.swift", relative != "main.swift" || !removeMain {
                 try? fm.removeItem(at: file)
             }
         }
@@ -175,28 +173,27 @@ enum SourceMirror {
     }
 }
 
-/// Paquet d'aperçu, à côté du projet (<projet>/.lcode/apercu) : l'app sans son `@main`, plus un point
-/// d'entrée qui lance l'aperçu demandé par `LSIM_PREVIEW_ID`.
+/// Preview package (<project>/.lcode/preview): the app without its `@main`, plus an entry point that runs the
+/// preview named by `LSIM_PREVIEW_ID`.
 public struct PreviewBuild {
     public let project: XtoolProject
     public let lcodeRoot: URL
-    public var directory: URL { project.root.appendingPathComponent(".lcode/apercu") }
+    public var directory: URL { project.root.appendingPathComponent(".lcode/preview") }
 
     public init(project: XtoolProject, lcodeRoot: URL) {
         self.project = project
         self.lcodeRoot = lcodeRoot
     }
 
-    /// Aperçus trouvés, par fichier source d'origine.
     public struct Entry {
         public let file: URL
         public let preview: PreviewInfo
     }
 
-    /// Prépare le paquet (avec le texte non enregistré des fichiers ouverts) ; renvoie les aperçus.
+    /// Prepares the package (with the unsaved text of open files); returns the previews.
     public func prepare(overrides: [URL: String] = [:]) throws -> [Entry] {
         let fm = FileManager.default
-        let targetsDir = directory.appendingPathComponent("Cibles")
+        let targetsDir = directory.appendingPathComponent("Targets")
         try fm.createDirectory(at: targetsDir, withIntermediateDirectories: true)
         let texts = Dictionary(uniqueKeysWithValues: overrides.map { ($0.key.standardizedFileURL.path, $0.value) })
         var entries: [Entry] = []
@@ -207,15 +204,14 @@ public struct PreviewBuild {
                                                 removeMain: isApp, firstIndex: index, overrides: texts)
             for (file, previews) in found {
                 index += previews.count
-                // Les aperçus des bibliothèques ne sont pas lançables depuis l'app (types internes).
+                // Library previews cannot be launched from the app (internal types).
                 if isApp { entries += previews.map { Entry(file: file, preview: $0) } }
             }
         }
-        // Point d'entrée : lance l'aperçu choisi.
         var cases = entries.map { "case \"\($0.preview.symbol)\": _LSimPreview.run { \($0.preview.symbol).body() }" }
-        cases.append("default: _LSimPreview.run { Text(\"Aucun aperçu\") }")
+        cases.append("default: _LSimPreview.run { Text(\"\(tr("No Preview"))\") }")
         let main = """
-        // Généré par LCode : lance l'aperçu demandé (LSIM_PREVIEW_ID).
+        // Generated by LCode: runs the requested preview (LSIM_PREVIEW_ID).
         import SwiftUI
 
         switch ProcessInfo.processInfo.environment["LSIM_PREVIEW_ID"] ?? "" {
@@ -241,18 +237,18 @@ public struct PreviewBuild {
                     .\(kind)(
                         name: "\(t.name)",
                         dependencies: [\(deps.joined(separator: ", "))],
-                        path: "Cibles/\(t.name)",
+                        path: "Targets/\(t.name)",
                         swiftSettings: [.swiftLanguageMode(.v5)]
                     ),
             """)
         }
         let manifest = """
         // swift-tools-version: 6.0
-        // Généré par LCode pour les aperçus — ne pas modifier.
+        // Generated by LCode for previews — do not edit.
         import PackageDescription
 
         let package = Package(
-            name: "\(project.name)Apercu",
+            name: "\(project.name)Preview",
             dependencies: [
                 .package(path: "\(lcodeRoot.path)"),
         \(packages.map { "        " + $0 + "," }.joined(separator: "\n"))
@@ -267,26 +263,26 @@ public struct PreviewBuild {
         if (try? String(contentsOf: url, encoding: .utf8)) != manifest { try manifest.write(to: url, atomically: true, encoding: .utf8) }
     }
 
-    /// Fichier d'origine → sa copie dans le paquet d'aperçu (pour le serveur de langage).
+    /// Original file → its copy in the preview package (for the language server).
     public func copyURL(for original: URL) -> URL? {
         let path = original.standardizedFileURL.path
         for t in project.targets where path.hasPrefix(t.path.standardizedFileURL.path + "/") {
             let relative = path.dropFirst(t.path.standardizedFileURL.path.count + 1)
-            return directory.appendingPathComponent("Cibles/\(t.name)/\(relative)")
+            return directory.appendingPathComponent("Targets/\(t.name)/\(relative)")
         }
         return nil
     }
 
-    /// Le fichier appartient-il à la cible de l'app (dont la copie perd son `@main`) ?
+    /// Whether the file belongs to the app target (whose copy loses its `@main`).
     public func isAppFile(_ url: URL) -> Bool {
         guard let app = project.targets.first(where: { $0.name == project.appTarget }) else { return false }
         return url.standardizedFileURL.path.hasPrefix(app.path.standardizedFileURL.path + "/")
     }
 
-    /// Chemin d'un fichier de la copie → fichier d'origine (pour les erreurs du compilateur).
+    /// Maps a mirrored file path back to the original (for compiler errors).
     public func originalPath(for copyPath: String) -> String {
         for t in project.targets {
-            let prefix = directory.appendingPathComponent("Cibles/\(t.name)").path + "/"
+            let prefix = directory.appendingPathComponent("Targets/\(t.name)").path + "/"
             if copyPath.hasPrefix(prefix) { return t.path.path + "/" + copyPath.dropFirst(prefix.count) }
         }
         return copyPath

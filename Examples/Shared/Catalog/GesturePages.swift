@@ -4,10 +4,10 @@ import SwiftUI
 import UIKit
 #endif
 
-// Entraîneur de gestes (iPhone) : l'utilisateur fait des retours par balayage, puis tire une feuille vers
-// le bas, en variant longueur et vitesse. Au lâcher de chaque geste, on relève le déplacement et la
-// vitesse (reconnaisseur de glisser posé sur la fenêtre, simultané aux gestes du système), puis l'issue
-// (écran retiré ou non, feuille fermée ou non). Le lot est envoyé au PC, qui en tire la règle de décision.
+// Gesture trainer (iPhone): the user does back swipes, then drags a sheet down, varying length and speed.
+// At each release we record translation and velocity (a pan recognizer on the window, simultaneous with
+// the system gestures), then the outcome (screen popped or not, sheet dismissed or not). The batch goes
+// to the PC, which derives the decision rule from it.
 
 enum GestureCatalog {
     static var pages: [CatalogPage] {
@@ -27,30 +27,30 @@ struct GestureTrainerPage: View {
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 12) {
-                Text(phase == .done ? "Terminé ✓" : "Revenu en arrière")
+                Text(phase == .done ? "Done ✓" : "Went back")
                 Text(message).font(.footnote).foregroundStyle(.secondary)
             }
-            .navigationTitle("Accueil")
+            .navigationTitle("Home")
             .navigationDestination(for: Int.self) { _ in
                 VStack(spacing: 16) {
-                    Text("Retour par balayage \(min(count + 1, Self.trialsPerGesture)) / \(Self.trialsPerGesture)")
+                    Text("Back swipe \(min(count + 1, Self.trialsPerGesture)) / \(Self.trialsPerGesture)")
                         .font(.headline)
                     Text(count % 2 == 0
-                         ? "Ce geste-ci : balayez lentement et lâchez AVANT la moitié de l'écran. L'écran doit revenir."
-                         : "Ce geste-ci : allez au bout, lentement ou d'un coup sec (variez).")
+                         ? "This one: swipe slowly and release BEFORE the middle of the screen. The screen should come back."
+                         : "This one: go all the way, slowly or with a quick flick (vary it).")
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 30)
                     Text(message).font(.footnote).foregroundStyle(.secondary)
                 }
-                .navigationTitle("Balayage")
+                .navigationTitle("Swipe")
             }
         }
         .sheet(isPresented: $sheetShown) {
             VStack(spacing: 16) {
-                Text("Feuille \(min(count + 1, Self.trialsPerGesture)) / \(Self.trialsPerGesture)").font(.headline)
+                Text("Sheet \(min(count + 1, Self.trialsPerGesture)) / \(Self.trialsPerGesture)").font(.headline)
                 Text(count % 2 == 0
-                     ? "Ce geste-ci : tirez lentement, peu (un quart de l'écran), et lâchez. La feuille doit revenir."
-                     : "Ce geste-ci : tirez franchement, loin ou d'un coup sec (variez).")
+                     ? "This one: pull slowly, a little (a quarter of the screen), and release. The sheet should come back."
+                     : "This one: pull firmly, far or with a quick flick (vary it).")
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 30)
                 Text(message).font(.footnote).foregroundStyle(.secondary)
@@ -63,7 +63,7 @@ struct GestureTrainerPage: View {
     @MainActor
     func runTrials() async {
         #if canImport(UIKit)
-        // Fenêtre : celle de la scène active (sinon la première disponible).
+        // Active scene's window, else the first available one.
         var window: UIWindow?
         for _ in 0..<50 {
             window = CalibrationRunner.keyWindow()
@@ -71,14 +71,14 @@ struct GestureTrainerPage: View {
             if window != nil { break }
             try? await Task.sleep(for: .milliseconds(100))
         }
-        guard let window else { message = "Fenêtre introuvable"; return }
+        guard let window else { message = "Window not found"; return }
         let recorder = GestureRecorder(window: window)
         var back: [[String: Double]] = []
         var sheet: [[String: Double]] = []
         let size = window.bounds.size
         var handled = 0
         func trial(_ done: Bool) -> [String: Double] {
-            // Dernier glisser relevé (s'il y en a un de nouveau), sinon valeurs nulles.
+            // Last recorded drag (if a new one exists), else zeros.
             let sample = recorder.samples.count > handled ? recorder.samples.last : nil
             handled = recorder.samples.count
             return ["dx": Double(sample?.translation.x ?? 0), "dy": Double(sample?.translation.y ?? 0),
@@ -88,10 +88,10 @@ struct GestureTrainerPage: View {
         }
         while phase != .done {
             try? await Task.sleep(for: .milliseconds(100))
-            message = "gestes relevés : \(recorder.samples.count)"
+            message = "gestures recorded: \(recorder.samples.count)"
             if phase == .back {
                 if path.isEmpty {
-                    // Retour effectué : on laisse l'animation finir, puis on remet l'écran.
+                    // Popped: let the animation finish, then push the screen again.
                     try? await Task.sleep(for: .milliseconds(400))
                     back.append(trial(true))
                     count += 1
@@ -105,7 +105,7 @@ struct GestureTrainerPage: View {
                         path = [1]
                     }
                 } else if recorder.samples.count > handled {
-                    // Geste fini sans retour (l'écran est revenu) ?
+                    // Gesture ended without popping (screen came back)?
                     try? await Task.sleep(for: .milliseconds(700))
                     if !path.isEmpty, recorder.samples.last.map({ $0.translation.x > 4 }) == true {
                         back.append(trial(false))
@@ -143,7 +143,7 @@ struct GestureTrainerPage: View {
         let payload: [String: Any] = ["run": ISO8601DateFormatter().string(from: Date()), "device": model,
                                       "system": UIDevice.current.systemVersion, "back": back, "sheet": sheet]
         guard let server = CalibrationRunner.server, let url = URL(string: server + "/gestures") else {
-            message = "Pas de serveur de calibration"
+            message = "No calibration server"
             return
         }
         var request = URLRequest(url: url)
@@ -152,16 +152,16 @@ struct GestureTrainerPage: View {
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         do {
             _ = try await URLSession.shared.data(for: request)
-            message = "Envoyé au PC : \(back.count) balayages, \(sheet.count) feuilles."
+            message = "Sent to the PC: \(back.count) swipes, \(sheet.count) sheets."
         } catch {
-            message = "Échec de l'envoi : \(error.localizedDescription)"
+            message = "Upload failed: \(error.localizedDescription)"
         }
         #endif
     }
 }
 
 #if canImport(UIKit)
-/// Relève déplacement et vitesse au lâcher de chaque glisser, sans gêner les gestes du système.
+/// Records translation and velocity at the end of each drag, without interfering with system gestures.
 @MainActor
 final class GestureRecorder: NSObject, UIGestureRecognizerDelegate {
     struct Sample { let translation: CGPoint; let velocity: CGPoint }

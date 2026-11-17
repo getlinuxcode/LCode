@@ -1,15 +1,12 @@
 import Foundation
 
-/// Catalogue d'assets de l'app (Assets.xcassets, format Xcode) : images et couleurs nommées.
-///
-/// Le simulateur reçoit le chemin des catalogues du projet par la variable `LSIM_ASSETS` (chemins séparés
-/// par « : »). Les variantes sombres (`appearances` luminosity/dark) et les échelles 1x/2x/3x sont prises
-/// en charge comme sur iOS.
+/// The app's asset catalog (Assets.xcassets): named images and colors. Catalog paths come from
+/// `LSIM_ASSETS` (colon-separated). Dark appearances and 1x/2x/3x scales are handled as on iOS.
 public final class AssetCatalog: @unchecked Sendable {
     public static let shared = AssetCatalog(paths: (ProcessInfo.processInfo.environment["LSIM_ASSETS"] ?? "")
         .split(separator: ":").map { URL(fileURLWithPath: String($0)) })
 
-    /// Fichier d'une image : chemin et échelle (pixels par point).
+    /// Image file: path and scale (pixels per point).
     public struct ImageFile: Equatable, Sendable {
         public let path: String
         public let scale: Double
@@ -30,9 +27,9 @@ public final class AssetCatalog: @unchecked Sendable {
         catalogs = paths
     }
 
-    // MARK: - Couleurs
+    // MARK: - Colors
 
-    /// Couleur `name.colorset` (nil si absente).
+    /// `name.colorset` color (nil if missing).
     public func color(_ name: String) -> Color? {
         lock.lock(); defer { lock.unlock() }
         if let cached = colors[name] { return cached }
@@ -52,10 +49,10 @@ public final class AssetCatalog: @unchecked Sendable {
         return Color(light: l, dark: dark ?? l)
     }
 
-    /// Composantes Xcode : nombres 0…1, 0…255, ou hexadécimal « 0xFF » ; espaces srgb / display-p3 / gray.
+    /// Xcode components: 0…1, 0…255, or hex "0xFF"; srgb / display-p3 / gray color spaces.
     static func rgba(_ color: [String: Any]?) -> RGBA? {
         guard let comps = color?["components"] as? [String: Any] else {
-            // Couleur système nommée (« systemBlueColor ») : non résolue, laissée à l'appelant.
+            // Named system color ("systemBlueColor"): not resolved here, left to the caller.
             return nil
         }
         func value(_ key: String) -> Double? {
@@ -63,7 +60,7 @@ public final class AssetCatalog: @unchecked Sendable {
             let s = "\(v)".trimmingCharacters(in: .whitespaces)
             if s.lowercased().hasPrefix("0x") { return Double(Int(s.dropFirst(2), radix: 16) ?? 0) / 255 }
             guard let d = Double(s) else { return nil }
-            // « 255 » ou « 128 » : échelle 0…255 ; « 1.000 » : 0…1.
+            // "255" or "128": 0…255 scale; "1.000": 0…1.
             return (s.contains(".") || d <= 1) ? d : d / 255
         }
         let alpha = value("alpha") ?? 1
@@ -80,14 +77,14 @@ public final class AssetCatalog: @unchecked Sendable {
         appearance(entry).contains { ($0["appearance"] as? String) == "luminosity" && ($0["value"] as? String) == "dark" }
     }
 
-    /// Variante autre que « clair par défaut » (sombre, contraste élevé…).
+    /// Any variant other than the default light one (dark, high contrast…).
     static func isAppearanceVariant(_ entry: [String: Any]) -> Bool {
         !appearance(entry).isEmpty
     }
 
     // MARK: - Images
 
-    /// Fichier à utiliser pour `name.imageset` dans un mode d'apparence (nil si absent).
+    /// File to use for `name.imageset` in an appearance (nil if missing).
     public func image(_ name: String, scheme: ColorScheme, displayScale: Double = 3) -> ImageFile? {
         lock.lock(); defer { lock.unlock() }
         if images[name] == nil { images[name] = .some(loadImage(name, displayScale: displayScale)) }
@@ -100,7 +97,7 @@ public final class AssetCatalog: @unchecked Sendable {
             guard let folder = find("\(name).imageset", in: catalog),
                   let json = Self.json(folder.appendingPathComponent("Contents.json")),
                   let entries = json["images"] as? [[String: Any]] else { continue }
-            // Fichier le plus proche de l'échelle de l'écran (3x sur iPhone), par apparence.
+            // File closest to the screen scale (3x on iPhone), per appearance.
             func best(_ dark: Bool) -> ImageFile? {
                 let candidates: [ImageFile] = entries.compactMap { entry in
                     guard Self.isDark(entry) == dark, dark || !Self.isAppearanceVariant(entry),
@@ -121,7 +118,7 @@ public final class AssetCatalog: @unchecked Sendable {
         return nil
     }
 
-    // MARK: - Fichiers
+    // MARK: - Files
 
     private func contents(of setName: String) -> [String: Any]? {
         for catalog in catalogs {
@@ -132,7 +129,7 @@ public final class AssetCatalog: @unchecked Sendable {
         return nil
     }
 
-    /// Cherche un ensemble dans le catalogue, y compris dans ses sous-dossiers (groupes Xcode).
+    /// Finds a set in the catalog, including subfolders (Xcode groups).
     private func find(_ setName: String, in catalog: URL) -> URL? {
         let direct = catalog.appendingPathComponent(setName)
         if FileManager.default.fileExists(atPath: direct.path) { return direct }
@@ -146,7 +143,7 @@ public final class AssetCatalog: @unchecked Sendable {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// Signale une fois un asset introuvable (comme la console d'Xcode).
+    /// Reports a missing asset once (like Xcode's console).
     func warnMissing(_ kind: String, _ name: String) {
         lock.lock(); defer { lock.unlock() }
         guard warned.insert(kind + name).inserted else { return }

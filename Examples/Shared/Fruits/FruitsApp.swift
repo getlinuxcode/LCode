@@ -7,20 +7,20 @@ struct Fruit: Identifiable, Hashable {
     let calories: Int
 
     static let all: [Fruit] = [
-        Fruit(id: 1, name: "Abricot", color: .orange, calories: 48),
-        Fruit(id: 2, name: "Banane", color: .yellow, calories: 89),
-        Fruit(id: 3, name: "Cerise", color: .red, calories: 63),
-        Fruit(id: 4, name: "Citron vert", color: .green, calories: 30),
-        Fruit(id: 5, name: "Figue", color: .purple, calories: 74),
-        Fruit(id: 6, name: "Fraise", color: .pink, calories: 32),
-        Fruit(id: 7, name: "Framboise", color: .red, calories: 52),
-        Fruit(id: 8, name: "Kiwi", color: .brown, calories: 61),
-        Fruit(id: 9, name: "Mangue", color: .orange, calories: 60),
-        Fruit(id: 10, name: "Myrtille", color: .indigo, calories: 57),
-        Fruit(id: 11, name: "Pêche", color: .orange, calories: 39),
-        Fruit(id: 12, name: "Poire", color: .green, calories: 57),
-        Fruit(id: 13, name: "Pomme", color: .red, calories: 52),
-        Fruit(id: 14, name: "Prune", color: .purple, calories: 46),
+        Fruit(id: 1, name: "Apple", color: .red, calories: 52),
+        Fruit(id: 2, name: "Apricot", color: .orange, calories: 48),
+        Fruit(id: 3, name: "Banana", color: .yellow, calories: 89),
+        Fruit(id: 4, name: "Blueberry", color: .indigo, calories: 57),
+        Fruit(id: 5, name: "Cherry", color: .red, calories: 63),
+        Fruit(id: 6, name: "Fig", color: .purple, calories: 74),
+        Fruit(id: 7, name: "Kiwi", color: .brown, calories: 61),
+        Fruit(id: 8, name: "Lime", color: .green, calories: 30),
+        Fruit(id: 9, name: "Mango", color: .orange, calories: 60),
+        Fruit(id: 10, name: "Peach", color: .orange, calories: 39),
+        Fruit(id: 11, name: "Pear", color: .green, calories: 57),
+        Fruit(id: 12, name: "Plum", color: .purple, calories: 46),
+        Fruit(id: 13, name: "Raspberry", color: .red, calories: 52),
+        Fruit(id: 14, name: "Strawberry", color: .pink, calories: 32),
     ]
 }
 
@@ -39,7 +39,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Fruits de saison") {
+                Section("Seasonal fruits") {
                     ForEach(Fruit.all) { fruit in
                         NavigationLink(value: fruit) {
                             HStack(spacing: 12) {
@@ -49,7 +49,7 @@ struct ContentView: View {
                                 Text(fruit.name)
                                 Spacer()
                                 if favorites.contains(fruit.id) {
-                                    Text("Favori")
+                                    Text("Favorite")
                                         .font(.subheadline)
                                         .foregroundStyle(.secondary)
                                 }
@@ -59,15 +59,15 @@ struct ContentView: View {
                 }
 
                 Section {
-                    NavigationLink("À propos") {
+                    NavigationLink("About") {
                         AboutView()
                     }
-                    Button("Effacer les favoris", role: .destructive) {
+                    Button("Clear favorites", role: .destructive) {
                         favorites.removeAll()
                     }
                     .disabled(favorites.isEmpty)
                 } footer: {
-                    Text("\(favorites.count) fruit(s) en favori.")
+                    Text("\(favorites.count) favorite fruit(s).")
                 }
             }
             .navigationTitle("Fruits")
@@ -93,9 +93,9 @@ struct FruitDetail: View {
             Text(fruit.name)
                 .font(.largeTitle)
                 .bold()
-            Text("\(fruit.calories) kcal pour 100 g")
+            Text("\(fruit.calories) kcal per 100 g")
                 .foregroundStyle(.secondary)
-            Button(isFavorite ? "Retirer des favoris" : "Ajouter aux favoris") {
+            Button(isFavorite ? "Remove from favorites" : "Add to favorites") {
                 isFavorite.toggle()
             }
             .buttonStyle(.borderedProminent)
@@ -112,11 +112,11 @@ struct AboutView: View {
             Text("Fruits")
                 .font(.title2)
                 .bold()
-            Text("Application de démonstration de LCode : le même code source tourne dans le simulateur LSim sous Linux et sur un vrai iPhone.")
+            Text("LCode demo app: the same source code runs in the LSim simulator on Linux and on a real iPhone.")
                 .foregroundStyle(.secondary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .navigationTitle("À propos")
+        .navigationTitle("About")
     }
 }

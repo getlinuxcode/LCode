@@ -1,7 +1,8 @@
 import CAdw
 import Foundation
+import LCodeKit
 
-/// Éditeur de catalogue d'assets (Assets.xcassets, format Xcode) : images, couleurs, icône de l'app.
+/// Asset catalog editor (Xcode's Assets.xcassets format): images, colors, app icon.
 final class AssetEditor {
     let catalog: URL
     let widget: UnsafeMutablePointer<GtkWidget>
@@ -31,9 +32,9 @@ final class AssetEditor {
         gtk_widget_set_hexpand(title, 1)
         gtk_label_set_xalign(cast(raw(title)), 0)
         gtk_box_append(cast(raw(bar)), title)
-        button("Image…", "image-x-generic-symbolic") { [weak self] in self?.addImage() }
-        button("Couleur…", "applications-graphics-symbolic") { [weak self] in self?.addColor() }
-        button("Icône de l'app…", "starred-symbolic") { [weak self] in self?.setAppIcon() }
+        button(tr("Image…"), "image-x-generic-symbolic") { [weak self] in self?.addImage() }
+        button(tr("Color…"), "applications-graphics-symbolic") { [weak self] in self?.addColor() }
+        button(tr("App Icon…"), "starred-symbolic") { [weak self] in self?.setAppIcon() }
 
         let content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 16)!
         gtk_widget_set_margin_start(content, 24); gtk_widget_set_margin_end(content, 24)
@@ -48,7 +49,7 @@ final class AssetEditor {
         reload()
     }
 
-    // MARK: - Contenu
+    // MARK: - Contents
 
     func reload() {
         while let child = gtk_widget_get_first_child(list) { gtk_list_box_remove(cast(raw(list)), child) }
@@ -66,8 +67,8 @@ final class AssetEditor {
                 let images = (json?["images"] as? [[String: Any]]) ?? []
                 let file = images.compactMap { $0["filename"] as? String }.first
                 adw_action_row_set_subtitle(cast(raw(row)), set.pathExtension == "appiconset"
-                    ? (file == nil ? "Icône de l'app — aucune image (1024 × 1024 attendue)" : "Icône de l'app — \(file!)")
-                    : "Image — \(file ?? "aucun fichier")")
+                    ? (file == nil ? tr("App Icon — no image (1024 × 1024 expected)") : tr("App Icon — %@", file!))
+                    : (file.map { tr("Image — %@", $0) } ?? tr("Image — no file")))
                 if let file {
                     let image = gtk_picture_new_for_filename(set.appendingPathComponent(file).path)!
                     gtk_picture_set_content_fit(cast(raw(image)), GTK_CONTENT_FIT_CONTAIN)
@@ -80,8 +81,8 @@ final class AssetEditor {
                 let swatch = gtk_drawing_area_new()!
                 gtk_widget_set_size_request(swatch, 48, 32)
                 let (r, g, b, a) = Self.color(json)
-                adw_action_row_set_subtitle(cast(raw(row)), r == nil ? "Couleur — système (non définie)"
-                    : String(format: "Couleur — #%02X%02X%02X, opacité %.0f %%", Int(r! * 255), Int(g * 255), Int(b * 255), a * 100))
+                adw_action_row_set_subtitle(cast(raw(row)), r == nil ? tr("Color — system (undefined)")
+                    : tr("Color — #%02X%02X%02X, opacity %.0f%%", Int(r! * 255), Int(g * 255), Int(b * 255), a * 100))
                 let css = r == nil ? "background: linear-gradient(135deg, #888, #ccc);"
                     : String(format: "background: rgba(%d,%d,%d,%.2f);", Int(r! * 255), Int(g * 255), Int(b * 255), a)
                 let provider = gtk_css_provider_new()!
@@ -92,7 +93,7 @@ final class AssetEditor {
             let remove = gtk_button_new_from_icon_name("user-trash-symbolic")!
             gtk_widget_add_css_class(remove, "flat")
             gtk_widget_set_valign(remove, GTK_ALIGN_CENTER)
-            gtk_widget_set_tooltip_text(remove, "Mettre à la corbeille")
+            gtk_widget_set_tooltip_text(remove, tr("Move to Trash"))
             connect(raw(remove), "clicked") { [weak self] in self?.remove(set) }
             adw_action_row_add_suffix(cast(raw(row)), remove)
             gtk_list_box_append(cast(raw(list)), row)
@@ -111,15 +112,15 @@ final class AssetEditor {
         return (v("red"), v("green"), v("blue"), Double(comps["alpha"] ?? "1") ?? 1)
     }
 
-    // MARK: - Ajouts
+    // MARK: - Adding assets
 
     private func addImage() {
         guard let parent = window?.window else { return }
-        Dialogs.chooseFile(parent, title: "Image à ajouter (PNG, JPEG, SVG, PDF)") { [weak self] file in
+        Dialogs.chooseFile(parent, title: tr("Add Image (PNG, JPEG, SVG, PDF)")) { [weak self] file in
             guard let self, let file else { return }
             let defaultName = file.deletingPathExtension().lastPathComponent
-            Dialogs.prompt(parent, title: "Nom de l'image", message: "Utilisé dans le code : Image(\"nom\")",
-                           initial: defaultName, confirm: "Ajouter") { name in
+            Dialogs.prompt(parent, title: tr("Image Name"), message: tr("Used in code: Image(\"name\")"),
+                           initial: defaultName, confirm: tr("Add")) { name in
                 guard let name else { return }
                 let set = self.catalog.appendingPathComponent("\(name).imageset")
                 do {
@@ -133,7 +134,7 @@ final class AssetEditor {
                         .write(to: set.appendingPathComponent("Contents.json"))
                     self.reload()
                 } catch {
-                    Dialogs.message(parent, title: "Ajout impossible", message: "\(error)")
+                    Dialogs.message(parent, title: tr("Couldn’t Add Asset"), message: "\(error)")
                 }
             }
         }
@@ -141,16 +142,16 @@ final class AssetEditor {
 
     private func addColor() {
         guard let parent = window?.window else { return }
-        let dialog = adw_alert_dialog_new("Nouvelle couleur", "Utilisée dans le code : Color(\"nom\")")!
+        let dialog = adw_alert_dialog_new(tr("New Color"), tr("Used in code: Color(\"name\")"))!
         let box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10)!
         let entry = gtk_entry_new()!
-        gtk_entry_set_placeholder_text(cast(raw(entry)), "Nom (ex. : Marque)")
+        gtk_entry_set_placeholder_text(cast(raw(entry)), tr("Name (e.g. Brand)"))
         let colorButton = gtk_color_dialog_button_new(gtk_color_dialog_new())!
         gtk_box_append(cast(raw(box)), entry)
         gtk_box_append(cast(raw(box)), colorButton)
         adw_alert_dialog_set_extra_child(cast(raw(dialog)), box)
-        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", "Annuler")
-        adw_alert_dialog_add_response(cast(raw(dialog)), "ok", "Ajouter")
+        adw_alert_dialog_add_response(cast(raw(dialog)), "cancel", tr("Cancel"))
+        adw_alert_dialog_add_response(cast(raw(dialog)), "ok", tr("Add"))
         adw_alert_dialog_set_response_appearance(cast(raw(dialog)), "ok", ADW_RESPONSE_SUGGESTED)
         adw_alert_dialog_set_close_response(cast(raw(dialog)), "cancel")
         connectArg(raw(dialog), "response") { [weak self] response in
@@ -170,7 +171,7 @@ final class AssetEditor {
                     .write(to: set.appendingPathComponent("Contents.json"))
                 self.reload()
             } catch {
-                Dialogs.message(parent, title: "Ajout impossible", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Add Asset"), message: "\(error)")
             }
         }
         adw_dialog_present(cast(raw(dialog)), parent)
@@ -178,7 +179,7 @@ final class AssetEditor {
 
     private func setAppIcon() {
         guard let parent = window?.window else { return }
-        Dialogs.chooseFile(parent, title: "Icône de l'app (PNG 1024 × 1024)") { [weak self] file in
+        Dialogs.chooseFile(parent, title: tr("App Icon (PNG 1024 × 1024)")) { [weak self] file in
             guard let self, let file else { return }
             let set = self.catalog.appendingPathComponent("AppIcon.appiconset")
             do {
@@ -194,15 +195,15 @@ final class AssetEditor {
                     .write(to: set.appendingPathComponent("Contents.json"))
                 self.reload()
             } catch {
-                Dialogs.message(parent, title: "Icône impossible à définir", message: "\(error)")
+                Dialogs.message(parent, title: tr("Couldn’t Set App Icon"), message: "\(error)")
             }
         }
     }
 
     private func remove(_ set: URL) {
         guard let parent = window?.window else { return }
-        Dialogs.confirm(parent, title: "Mettre « \(set.deletingPathExtension().lastPathComponent) » à la corbeille ?",
-                        message: "L'asset et ses fichiers iront à la corbeille.", action: "Mettre à la corbeille") { [weak self] ok in
+        Dialogs.confirm(parent, title: tr("Move “%@” to the Trash?", set.deletingPathExtension().lastPathComponent),
+                        message: tr("The asset and its files will be moved to the trash."), action: tr("Move to Trash")) { [weak self] ok in
             guard ok else { return }
             let file = g_file_new_for_path(set.path)
             g_file_trash(file, nil, nil)

@@ -15,7 +15,7 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("Compteur")
+            Text("Counter")
                 .font(.largeTitle)
                 .bold()
 
@@ -26,21 +26,21 @@ struct ContentView: View {
             HStack(spacing: 12) {
                 Button("−") { count -= 1 }
                     .buttonStyle(.bordered)
-                Button("Réinitialiser") { count = 0 }
+                Button("Reset") { count = 0 }
                     .disabled(count == 0)
                 Button("+") { count += 1 }
                     .buttonStyle(.borderedProminent)
             }
 
-            Button(showDetails ? "Masquer les détails" : "Afficher les détails") {
+            Button(showDetails ? "Hide details" : "Show details") {
                 showDetails.toggle()
             }
 
             if showDetails {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Détails")
+                    Text("Details")
                         .font(.headline)
-                    Text("Ce texte est rendu par LSimUI, une réimplémentation de SwiftUI qui tourne nativement sous Linux.")
+                    Text("This text is rendered by LSimUI, a SwiftUI reimplementation that runs natively on Linux.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }

@@ -2,8 +2,7 @@ import CAdw
 import CSource
 import Foundation
 
-/// Un fichier ouvert : vue GtkSourceView (numéros de ligne, ligne courante, accolades, indentation
-/// intelligente façon Xcode), état modifié, erreurs signalées.
+/// An open file: GtkSourceView with Xcode-like smart indentation, dirty state and error marks.
 final class EditorDocument {
     let url: URL
     let view: UnsafeMutablePointer<GtkWidget>
@@ -49,8 +48,7 @@ final class EditorDocument {
         gtk_widget_add_css_class(view, "lcode-editor")
         _ = lcode_error_tag(cast(raw(buffer)))
         _ = lcode_search_tag(cast(raw(buffer)))
-        // Types et noms déclarés (en plus de la grammaire Swift) : couleurs Xcode.
-        // Deux jeux d'étiquettes (clair, sombre) : le changement d'apparence est immédiat.
+        // Xcode colors for types and declared names, with light and dark tag sets so appearance switches instantly.
         for kind in [SwiftHighlighter.Kind.type, .declaration, .keyword] {
             for dark in [false, true] {
                 let style = SwiftHighlighter.color(kind, dark: dark)
@@ -69,7 +67,6 @@ final class EditorDocument {
         gtk_text_buffer_place_cursor(cast(raw(buffer)), &start)
         loading = false
 
-
         connect(raw(buffer), "changed") { [weak self] in
             guard let self, !self.loading else { return }
             if !self.dirty { self.dirty = true; self.onDirty() }
@@ -80,7 +77,7 @@ final class EditorDocument {
         overlayTypes()
     }
 
-    /// Relit le fichier (modifié hors de l'éditeur, par SwiftPM par exemple), si son contenu a changé.
+    /// Reloads the file if it changed on disk (e.g. edited by SwiftPM).
     func reloadFromDisk() {
         guard let disk = try? String(contentsOf: url, encoding: .utf8), disk != text else { return }
         loading = true
@@ -91,7 +88,6 @@ final class EditorDocument {
         overlayTypes()
     }
 
-    /// Thème Xcode clair ou sombre selon l'apparence.
     func applyScheme() {
         let manager = gtk_source_style_scheme_manager_get_default()
         let scheme = gtk_source_style_scheme_manager_get_scheme(manager, Settings.isDark ? "lcode-xcode-dark" : "lcode-xcode")
@@ -112,7 +108,7 @@ final class EditorDocument {
         onDirty()
     }
 
-    /// Recolore types et noms déclarés (la grammaire Swift de GtkSourceView ne les connaît pas).
+    /// Recolors types and declared names, which GtkSourceView's Swift grammar does not know.
     func overlayTypes() {
         var start = GtkTextIter(), end = GtkTextIter()
         let b: UnsafeMutablePointer<GtkTextBuffer> = cast(raw(buffer))
@@ -122,7 +118,7 @@ final class EditorDocument {
         }
         guard url.pathExtension == "swift" else { return }
         let suffix = Settings.isDark ? "-d" : "-l"
-        // Mots-clés aussi : la grammaire de GtkSourceView en oublie (some, any, await…) et colore `import` à part.
+        // Keywords too: the grammar misses some (some, any, await…) and colors `import` differently.
         for token in SwiftHighlighter.tokens(text) where token.kind == .type || token.kind == .declaration || token.kind == .keyword {
             var a = GtkTextIter(), z = GtkTextIter()
             gtk_text_buffer_get_iter_at_offset(b, &a, Int32(token.start))
@@ -131,7 +127,7 @@ final class EditorDocument {
         }
     }
 
-    // MARK: - Erreurs
+    // MARK: - Errors
 
     func clearErrors() {
         var start = GtkTextIter(), end = GtkTextIter()
@@ -139,7 +135,7 @@ final class EditorDocument {
         gtk_text_buffer_remove_tag_by_name(cast(raw(buffer)), "lcode-error", &start, &end)
     }
 
-    /// Souligne une ligne signalée par le compilateur (1 = première ligne).
+    /// Underlines a 1-based line reported by the compiler.
     func markError(line: Int) {
         var start = GtkTextIter(), end = GtkTextIter()
         let b: UnsafeMutablePointer<GtkTextBuffer> = cast(raw(buffer))
@@ -149,7 +145,6 @@ final class EditorDocument {
         gtk_text_buffer_apply_tag_by_name(b, "lcode-error", &start, &end)
     }
 
-    /// Place le curseur sur une ligne et la rend visible.
     func goTo(line: Int, column: Int = 1) {
         var iter = GtkTextIter()
         let b: UnsafeMutablePointer<GtkTextBuffer> = cast(raw(buffer))
@@ -160,7 +155,7 @@ final class EditorDocument {
         gtk_widget_grab_focus(view)
     }
 
-    // MARK: - Indentation intelligente (comme Xcode)
+    // MARK: - Smart indentation (like Xcode)
 
     private func installSmartIndent() {
         let controller = gtk_event_controller_key_new()!
@@ -177,7 +172,7 @@ final class EditorDocument {
 
     private var b: UnsafeMutablePointer<GtkTextBuffer> { cast(raw(buffer)) }
 
-    /// Texte de la ligne du curseur, avant le curseur.
+    /// Text of the cursor line before the cursor.
     private func lineBeforeCursor() -> (text: String, cursor: GtkTextIter) {
         var cursor = GtkTextIter()
         gtk_text_buffer_get_iter_at_mark(b, &cursor, gtk_text_buffer_get_insert(b))
@@ -204,7 +199,7 @@ final class EditorDocument {
             shiftSelection(by: -1)
             return true
         case GDK_KEY_Tab:
-            // Avec une sélection sur plusieurs lignes : indente le bloc.
+            // With a multi-line selection, indent the block.
             var a = GtkTextIter(), z = GtkTextIter()
             if gtk_text_buffer_get_selection_bounds(b, &a, &z) != 0, gtk_text_iter_get_line(&a) != gtk_text_iter_get_line(&z) {
                 shiftSelection(by: shift ? -1 : 1)
@@ -216,8 +211,8 @@ final class EditorDocument {
         }
     }
 
-    /// Entrée : reprend l'indentation ; un cran de plus après { ( [ ; entre { et } (ou ( et ), [ et ]), ouvre une
-    /// ligne indentée et renvoie la fermante sur la ligne suivante, à l'indentation de la ligne d'origine.
+    /// Return keeps the indentation, adds a level after { ( [, and between a pair opens an indented line with
+    /// the closing bracket moved below at the original indentation.
     private func newLine() -> Bool {
         let (before, cursor) = lineBeforeCursor()
         let base = leadingWhitespace(before)
@@ -232,7 +227,6 @@ final class EditorDocument {
         if opens && closesNext {
             let inner = "\n" + base + Self.indent
             gtk_text_buffer_insert_at_cursor(b, inner + "\n" + base, -1)
-            // Curseur à la fin de la ligne intérieure.
             var iter = GtkTextIter()
             gtk_text_buffer_get_iter_at_mark(b, &iter, gtk_text_buffer_get_insert(b))
             _ = gtk_text_iter_backward_chars(&iter, Int32(1 + base.count))
@@ -245,12 +239,11 @@ final class EditorDocument {
         return true
     }
 
-    /// `}` tapé en début de ligne (seulement des espaces avant) : la ligne reprend l'indentation du `{`
-    /// correspondant.
+    /// A `}` typed after only whitespace takes the indentation of its matching `{`.
     private func closeBrace() -> Bool {
         let (before, cursor) = lineBeforeCursor()
         guard !before.isEmpty, before.allSatisfy({ $0 == " " || $0 == "\t" }) else { return false }
-        // Cherche en arrière l'accolade ouvrante correspondante (chaînes et commentaires ignorés grossièrement).
+        // Scan back for the matching brace (strings and comments are not skipped).
         var start = GtkTextIter()
         gtk_text_buffer_get_start_iter(b, &start)
         var cur = cursor
@@ -282,7 +275,7 @@ final class EditorDocument {
         return true
     }
 
-    /// Indente (+1) ou désindente (−1) les lignes sélectionnées (ou la ligne du curseur).
+    /// Indents (+1) or outdents (−1) the selected lines, or the cursor line.
     private func shiftSelection(by step: Int) {
         var a = GtkTextIter(), z = GtkTextIter()
         if gtk_text_buffer_get_selection_bounds(b, &a, &z) == 0 {
@@ -306,9 +299,9 @@ final class EditorDocument {
         gtk_text_buffer_end_user_action(b)
     }
 
-    // MARK: - Recherche (Ctrl+F)
+    // MARK: - Find (Ctrl+F)
 
-    /// Met en évidence toutes les occurrences et sélectionne la suivante après le curseur.
+    /// Highlights all matches and selects the next one after the cursor.
     @discardableResult
     func search(_ needle: String, forward: Bool = true) -> Int {
         var start = GtkTextIter(), end = GtkTextIter()

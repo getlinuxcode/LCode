@@ -1,10 +1,10 @@
 import CoreVideo
 import Foundation
 
-/// Lecture réelle d'un média dans le simulateur, par la commande `ffmpeg` du système :
-/// - l'image : `ffmpeg` décode en BGRA à cadence fixe sur un tube, les images sont rythmées par l'horloge ;
-/// - le son : `ffmpeg` décode en PCM 16 bits, joué par `paplay` (PulseAudio / PipeWire).
-/// Pause, avance et recul relancent les deux processus à la nouvelle position (simple et robuste).
+/// Real media playback in the simulator through the system `ffmpeg`:
+/// - video: decoded to BGRA at a fixed rate over a pipe, frames paced by the clock;
+/// - audio: decoded to 16-bit PCM and played by `paplay` (PulseAudio / PipeWire).
+/// Pause and seeking restart both processes at the new position (simple and robust).
 final class MediaEngine: @unchecked Sendable {
     struct Info {
         var duration: Double?
@@ -19,17 +19,17 @@ final class MediaEngine: @unchecked Sendable {
         case unreadable(String)
         var description: String {
             switch self {
-            case let .missingTool(t): return "\(t) introuvable : installez-le (sudo apt install ffmpeg) pour lire les médias dans le simulateur."
-            case let .unreadable(m): return "Média illisible : \(m)"
+            case let .missingTool(t): return "\(t) not found: install it (sudo apt install ffmpeg) to play media in the simulator."
+            case let .unreadable(m): return "Unreadable media: \(m)"
             }
         }
     }
 
     let url: URL
     private(set) var info: Info?
-    /// Nouvelle image (sur un fil d'arrière-plan).
+    /// New frame (called on a background thread).
     var onFrame: (CVPixelBuffer) -> Void = { _ in }
-    /// Fin du média atteinte (sur un fil d'arrière-plan).
+    /// End of media reached (called on a background thread).
     var onEnd: () -> Void = {}
 
     private let lock = NSLock()
@@ -39,7 +39,7 @@ final class MediaEngine: @unchecked Sendable {
     private var anchorDate: Date?
     private var volume: Float = 1
 
-    /// Largeur maximale des images décodées (au-delà, réduites : l'écran simulé est petit).
+    /// Decoded frames are downscaled beyond this width: the simulated screen is small.
     static let maxWidth = 960
     static let maxFrameRate = 30.0
 
@@ -47,7 +47,7 @@ final class MediaEngine: @unchecked Sendable {
 
     var input: String { url.isFileURL ? url.path : url.absoluteString }
 
-    // MARK: - Description du média
+    // MARK: - Probing
 
     static func tool(_ name: String) -> String? {
         for dir in (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin").split(separator: ":") {
@@ -57,7 +57,7 @@ final class MediaEngine: @unchecked Sendable {
         return nil
     }
 
-    /// Durée, taille, cadence, pistes (ffprobe). Bloquant : à appeler hors du fil principal.
+    /// Duration, size, frame rate, tracks (ffprobe). Blocking: call off the main thread.
     func probe() throws -> Info {
         if let info { return info }
         guard let ffprobe = Self.tool("ffprobe") else { throw Failure.missingTool("ffprobe") }
@@ -97,7 +97,7 @@ final class MediaEngine: @unchecked Sendable {
         return info
     }
 
-    /// Taille des images produites (paire, largeur limitée).
+    /// Output frame size (even dimensions, capped width).
     var outputSize: (Int, Int) {
         guard let info, info.width > 0, info.height > 0 else { return (0, 0) }
         let w = min(Self.maxWidth, info.width) / 2 * 2
@@ -115,9 +115,8 @@ final class MediaEngine: @unchecked Sendable {
 
     var isRunning: Bool { lock.lock(); defer { lock.unlock() }; return anchorDate != nil }
 
-    // MARK: - Lecture
+    // MARK: - Playback
 
-    /// Lance la lecture à `position` (secondes).
     func start(at position: Double, volume: Float) throws {
         let info = try probe()
         guard let ffmpeg = Self.tool("ffmpeg") else { throw Failure.missingTool("ffmpeg") }
@@ -168,7 +167,7 @@ final class MediaEngine: @unchecked Sendable {
             add(decoder)
             add(player)
             if !info.hasVideo {
-                // Son seul : la fin arrive quand le décodeur a tout produit (et que le lecteur a tout joué).
+                // Audio only: the end comes when the player has played everything.
                 Thread.detachNewThread { [weak self] in
                     player.waitUntilExit()
                     guard let self, self.isCurrent(gen) else { return }
@@ -178,7 +177,7 @@ final class MediaEngine: @unchecked Sendable {
         }
     }
 
-    /// Une image du média à `position`, sans lancer la lecture (après une avance ou un recul en pause).
+    /// A single frame at `position` without playing (seeking while paused).
     func still(at position: Double) {
         guard let info = try? probe(), info.hasVideo, let ffmpeg = Self.tool("ffmpeg") else { return }
         let (w, h) = outputSize
@@ -200,7 +199,7 @@ final class MediaEngine: @unchecked Sendable {
         }
     }
 
-    /// Arrête la lecture ; la position reste celle atteinte.
+    /// Stops playback, keeping the reached position.
     func pause() {
         let current = position
         lock.lock()
@@ -219,7 +218,7 @@ final class MediaEngine: @unchecked Sendable {
         lock.lock(); anchorPosition = max(0, position); if anchorDate != nil { anchorDate = Date() }; lock.unlock()
     }
 
-    // MARK: - Interne
+    // MARK: - Internals
 
     private func add(_ p: Process) { lock.lock(); processes.append(p); lock.unlock() }
 
@@ -245,7 +244,7 @@ final class MediaEngine: @unchecked Sendable {
         onEnd()
     }
 
-    /// Lit les images du tube et les publie à leur heure (le tube plein ralentit ffmpeg).
+    /// Reads frames from the pipe and publishes them on time (a full pipe throttles ffmpeg).
     private func pumpVideo(_ handle: FileHandle, width: Int, height: Int, fps: Double, start: Double, generation gen: Int) {
         let frameBytes = width * height * 4
         var buffer = Data()
@@ -261,12 +260,12 @@ final class MediaEngine: @unchecked Sendable {
                 index += 1
                 let wait = due - position
                 if wait > 0 { Thread.sleep(forTimeInterval: min(wait, 1)) }
-                // Trop en retard (plus d'une image) : on saute pour rattraper l'horloge.
+                // More than a frame late: skip to catch up with the clock.
                 if position - due > 1.5 / fps { continue }
                 onFrame(CVPixelBuffer(width: width, height: height, bytesPerRow: width * 4, data: Data(frame)))
             }
         }
-        // Fin du flux vidéo : on attend la fin de la durée (le son peut durer un peu plus).
+        // Video stream ended: wait out the duration (audio may run slightly longer).
         guard isCurrent(gen) else { return }
         if let d = info?.duration, d - position > 0.05 { Thread.sleep(forTimeInterval: min(d - position, 2)) }
         finish(gen)

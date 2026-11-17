@@ -1,17 +1,16 @@
 import Combine
 import Foundation
 
-// Objets observables à la manière de Combine (ObservableObject, @Published) : @StateObject, @ObservedObject,
-// @EnvironmentObject, .environmentObject(…) et .onReceive(…). Un changement annoncé par `objectWillChange`
-// redessine la vue (sur le fil principal, une fois le changement fait).
+// Combine-style observable objects: @StateObject, @ObservedObject, @EnvironmentObject, .environmentObject
+// and .onReceive. A change announced by `objectWillChange` re-renders the view on the main thread.
 
 extension ViewGraph {
-    /// Abonne le graphe aux changements d'un objet (une seule fois par objet).
+    /// Subscribes the graph to an object's changes (once per object).
     func observe<T: ObservableObject>(_ object: T) {
         let id = ObjectIdentifier(object)
         if let entry = observed[id], entry.object === object { return }
         let token = object.objectWillChange.sink { [weak self] _ in
-            // `objectWillChange` part avant la modification : le rendu se fait après, sur le fil principal.
+            // `objectWillChange` fires before the mutation, so render afterwards on the main thread.
             DispatchQueue.main.async { self?.invalidate() }
         }
         observed[id] = ObservedEntry(object: object, token: token)
@@ -25,7 +24,7 @@ struct ObservedEntry {
 
 // MARK: - @StateObject
 
-/// Objet créé une fois pour la vue et gardé tant qu'elle existe.
+/// Object created once for the view and kept while it exists.
 @propertyWrapper
 public struct StateObject<ObjectType: ObservableObject>: _DynamicProperty {
     final class Box {
@@ -63,7 +62,7 @@ public struct StateObject<ObjectType: ObservableObject>: _DynamicProperty {
 
 @propertyWrapper
 public struct ObservedObject<ObjectType: ObservableObject>: _DynamicProperty {
-    /// `$objet.propriété` : liaison vers une propriété de l'objet.
+    /// `$object.property`: binding to a property of the object.
     @dynamicMemberLookup
     public struct Wrapper {
         let object: ObjectType
@@ -96,7 +95,7 @@ public struct EnvironmentObject<ObjectType: ObservableObject>: _DynamicProperty 
 
     public var wrappedValue: ObjectType {
         guard let object = box.object else {
-            fatalError("Aucun objet \(ObjectType.self) dans l'environnement : ajoutez .environmentObject(…) à une vue parente.")
+            fatalError("No ObservableObject of type \(ObjectType.self) found in the environment: add .environmentObject(…) to an ancestor view.")
         }
         return object
     }
@@ -113,7 +112,7 @@ public struct EnvironmentObject<ObjectType: ObservableObject>: _DynamicProperty 
 }
 
 extension View {
-    /// Place un objet observable (Combine) dans l'environnement, lu par `@EnvironmentObject`.
+    /// Puts a Combine observable object in the environment, read by `@EnvironmentObject`.
     public func environmentObject<T: ObservableObject>(_ object: T) -> some View {
         modifier(_EnvironmentModifier { env in env.objects[ObjectIdentifier(T.self)] = object })
     }
@@ -124,20 +123,20 @@ extension View {
 struct _ReceiveModifier: _PrimitiveModifier {
     let subscribe: (ViewGraph, String) -> Void
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
-        // Contenu un cran plus bas : plusieurs .onReceive enchaînés ont chacun leur abonnement.
+        // Content one level down so chained .onReceive each get their own subscription.
         subscribe(context.graph, context.path + "/onReceive")
         return content(context.child("onReceive"))
     }
 }
 
-/// Abonnement d'une vue, gardé tant qu'elle existe ; l'action la plus récente est appelée.
+/// A view's subscription, kept while it exists; the latest action is called.
 final class ReceiveSubscription {
     var token: AnyCancellable?
     var action: ((Any) -> Void)?
 }
 
 extension View {
-    /// Appelle `action` à chaque valeur de l'éditeur (sur le fil principal), tant que la vue existe.
+    /// Calls `action` for each publisher value (on the main thread) while the view exists.
     public func onReceive<P: Publisher>(_ publisher: P, perform action: @escaping (P.Output) -> Void) -> some View
         where P.Failure == Never {
         modifier(_ReceiveModifier { graph, key in

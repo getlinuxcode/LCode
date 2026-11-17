@@ -21,8 +21,8 @@ let package = Package(
             name: "Catalog",
             swiftSettings: [.swiftLanguageMode(.v5)],
             linkerSettings: [
-                // Déclare le SDK réellement utilisé (iOS 27.3) : sans cela, lld inscrit « sdk 17.0 »
-                // et iOS affiche l'app en mode compatibilité, sans le design Liquid Glass.
+                // Declare the SDK actually used (iOS 27.3): otherwise lld writes "sdk 17.0" and iOS
+                // runs the app in compatibility mode, without the Liquid Glass design.
                 .unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "17.0", "-Xlinker", "27.3"]),
             ]
         ),

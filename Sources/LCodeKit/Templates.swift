@@ -1,18 +1,17 @@
 import Foundation
 
-/// Modèles de projets et de fichiers (comme les assistants d'Xcode).
+/// Project and file templates (like Xcode's templates).
 public enum Templates {
-    // MARK: - Projet
+    // MARK: - Project
 
-    /// Crée un projet d'app iOS xtool prêt à compiler (simulateur LSim et iPhone) :
-    /// Package.swift (avec la version de SDK pour Liquid Glass), xtool.yml, l'app, une vue avec son aperçu,
-    /// un catalogue d'assets (icône, couleur d'accent).
+    /// Creates an xtool iOS app project that builds for the LSim simulator and iPhone: Package.swift (with the SDK
+    /// version needed for Liquid Glass), xtool.yml, the app, a view with its preview, and an asset catalog.
     public static func createProject(name: String, bundleID: String, in parent: URL) throws -> URL {
         let fm = FileManager.default
         let safe = name.filter { $0.isLetter || $0.isNumber || $0 == "_" }
-        guard !safe.isEmpty else { throw LCodeError("Nom de projet invalide.") }
+        guard !safe.isEmpty else { throw LCodeError("Invalid project name.") }
         let root = parent.appendingPathComponent(safe)
-        guard !fm.fileExists(atPath: root.path) else { throw LCodeError("Le dossier \(root.path) existe déjà.") }
+        guard !fm.fileExists(atPath: root.path) else { throw LCodeError("The folder \(root.path) already exists.") }
         let sources = root.appendingPathComponent("Sources/\(safe)")
         try fm.createDirectory(at: sources, withIntermediateDirectories: true)
 
@@ -28,7 +27,7 @@ public enum Templates {
                 .macOS(.v14),
             ],
             products: [
-                // Un projet xtool contient exactement une bibliothèque : l'app.
+                // An xtool project has exactly one library: the app.
                 .library(
                     name: "\(safe)",
                     targets: ["\(safe)"]
@@ -39,8 +38,8 @@ public enum Templates {
                     name: "\(safe)",
                     resources: [.process("Resources")],
                     linkerSettings: [
-                        // Déclare le SDK réellement utilisé : sans cela, iOS affiche l'app en mode compatibilité
-                        // (sans Liquid Glass).
+                        // Declares the SDK actually used; without it, iOS runs the app in compatibility mode
+                        // (no Liquid Glass).
                         .unsafeFlags(["-Xlinker", "-platform_version", "-Xlinker", "ios", "-Xlinker", "17.0", "-Xlinker", "27.3"]),
                     ]
                 ),
@@ -85,28 +84,28 @@ public enum Templates {
         return root
     }
 
-    // MARK: - Fichiers
+    // MARK: - Files
 
     public enum FileKind: String, CaseIterable, Sendable {
         case swiftUIView, swiftFile, observableModel, list, empty
 
         public var title: String {
             switch self {
-            case .swiftUIView: return "Vue SwiftUI"
-            case .swiftFile: return "Fichier Swift"
-            case .observableModel: return "Modèle @Observable"
-            case .list: return "Liste avec navigation"
-            case .empty: return "Fichier vide"
+            case .swiftUIView: return tr("SwiftUI View")
+            case .swiftFile: return tr("Swift File")
+            case .observableModel: return tr("@Observable Model")
+            case .list: return tr("List with Navigation")
+            case .empty: return tr("Empty File")
             }
         }
 
         public var subtitle: String {
             switch self {
-            case .swiftUIView: return "Une vue avec son aperçu #Preview"
-            case .swiftFile: return "Un fichier Swift vide (import Foundation)"
-            case .observableModel: return "Une classe de données observée par les vues"
-            case .list: return "Une liste qui ouvre un détail, avec aperçu"
-            case .empty: return "Aucun contenu"
+            case .swiftUIView: return tr("A view with its #Preview")
+            case .swiftFile: return tr("An empty Swift file (import Foundation)")
+            case .observableModel: return tr("A data class observed by views")
+            case .list: return tr("A list that opens a detail view, with a preview")
+            case .empty: return tr("No content")
             }
         }
 
@@ -121,7 +120,7 @@ public enum Templates {
         }
     }
 
-    /// Contenu d'un nouveau fichier ; `name` est le nom du type (sans « .swift »).
+    /// Contents of a new file; `name` is the type name (without `.swift`).
     public static func file(_ kind: FileKind, named name: String) -> String {
         switch kind {
         case .swiftUIView: return swiftUIView(named: name)
@@ -150,7 +149,7 @@ public enum Templates {
             import SwiftUI
 
             struct \(name): View {
-                let items = ["Un", "Deux", "Trois"]
+                let items = ["One", "Two", "Three"]
 
                 var body: some View {
                     NavigationStack {
@@ -186,7 +185,7 @@ public enum Templates {
                     Image(systemName: "globe")
                         .imageScale(.large)
                         .foregroundStyle(.tint)
-                    Text("Bonjour !")
+                    Text("Hello, world!")
                 }
                 .padding()
             }
@@ -201,7 +200,7 @@ public enum Templates {
 
     // MARK: - Assets
 
-    /// Catalogue d'assets minimal : icône d'app et couleur d'accent (format Xcode).
+    /// Minimal asset catalog: app icon and accent color (Xcode format).
     public static func createAssetCatalog(in folder: URL) throws {
         let fm = FileManager.default
         let catalog = folder.appendingPathComponent("Assets.xcassets")

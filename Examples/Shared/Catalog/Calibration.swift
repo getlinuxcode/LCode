@@ -3,8 +3,8 @@ import SwiftUI
 #if canImport(UIKit)
 import UIKit
 
-// Côté iPhone : mesure les cadres exacts calculés par SwiftUI, inspecte les couches
-// Core Animation, capture l'écran en sRVB et envoie le tout au PC.
+// iPhone side: records the exact frames computed by SwiftUI, inspects the Core Animation layers,
+// captures the screen in sRGB and sends everything to the PC.
 
 @MainActor
 final class CalibrationRecorder {
@@ -22,23 +22,22 @@ extension View {
 
 @MainActor
 enum CalibrationRunner {
-    /// Adresse du récepteur : argument de lancement `-calibrationServer http://…`, sinon la valeur
-    /// générée pour cette machine (CalibrationServer.swift, propre au projet iOS).
+    /// Receiver address: launch argument `-calibrationServer http://…`, otherwise the per-machine
+    /// value in CalibrationServer.swift (iOS project only, not in git; written by tools/calibration/calibrate.py).
     static var server: String? {
         UserDefaults.standard.string(forKey: "calibrationServer") ?? defaultCalibrationServer
     }
 
     static func run(pageCount: Int, pageIDs: [String], show: @escaping (Int) -> Void, status: @escaping (String) -> Void) async {
         guard let server, let url = URL(string: server + "/upload") else {
-            status("Aucun serveur de calibration (argument -calibrationServer).")
+            status("No calibration server (argument -calibrationServer).")
             return
         }
         guard let window = keyWindow() else { return }
         let runID = ISO8601DateFormatter().string(from: Date())
-        // D'abord les SF Symbols, si le PC les demande : noms fournis par iOS + rendu de chacun
-        // (appariés aux glyphes de la police sur le PC).
+        // SF Symbols first, if the PC asks: names from iOS + a render of each (matched to font glyphs on the PC).
         let config = await fetchConfig(server)
-        // Entraîneur de gestes : l'app affiche sa page et envoie elle-même le lot au PC.
+        // Gesture trainer: the app shows its page, which sends the batch to the PC itself.
         if config["mode"] as? String == "gestures", let index = pageIDs.firstIndex(of: "gesture.trainer") {
             show(index)
             return
@@ -46,17 +45,17 @@ enum CalibrationRunner {
         if config["symbols"] as? Bool ?? true {
             await exportSymbols(server: server, runID: runID, status: status)
         }
-        // Passe partielle : seules les pages dont l'identifiant commence par l'un des préfixes demandés.
+        // Partial pass: only pages whose ID starts with one of the requested prefixes.
         let prefixes = config["only"] as? [String] ?? []
         let selected = (0..<pageCount).filter { i in
-            // L'entraîneur de gestes n'est jamais capturé comme une page.
+            // The gesture trainer is never captured as a page.
             !pageIDs[i].hasPrefix("gesture.") && (prefixes.isEmpty || prefixes.contains { pageIDs[i].hasPrefix($0) })
         }
         for scheme in [UIUserInterfaceStyle.light, .dark] {
             window.overrideUserInterfaceStyle = scheme
             for index in selected {
-                // Écran vide d'abord : la page est recréée et ses cadres relevés à neuf (sinon une page
-                // déjà affichée pendant l'export des symboles ne renverrait aucun cadre).
+                // Blank screen first so the page is recreated and its frames re-recorded (a page already
+                // shown during the symbol export would otherwise report no frames).
                 show(-1)
                 try? await Task.sleep(for: .milliseconds(150))
                 CalibrationRecorder.shared.frames = [:]
@@ -70,17 +69,16 @@ enum CalibrationRunner {
                 sampler?.stop()
                 var payload = measure(window: window, pageID: pageIDs[index], scheme: scheme, runID: runID)
                 if let sampler, let trigger = AnimationProbe.triggerTime {
-                    // Position du carré rouge à chaque image, en secondes depuis le déclenchement.
-                    // Carré rouge puis carré vert (−9999 : absent de cette image).
+                    // Red then green square per frame, time in seconds since the trigger (−9999: absent).
                     payload["samples"] = sampler.samples.map { s -> [Double] in
                         let r = s.frame ?? CGRect(x: -9999, y: -9999, width: 0, height: 0)
                         let g = s.green ?? CGRect(x: -9999, y: -9999, width: 0, height: 0)
                         return [s.time - trigger, r.minX, r.minY, r.width, r.height, g.minX, g.minY, g.width, g.height]
                     }
                 }
-                // Permet au récepteur de savoir quand la série est complète (pages × 2 thèmes).
+                // Lets the receiver know when the run is complete (pages × 2 schemes).
                 payload["pageCount"] = selected.count
-                status("Envoi \(pageIDs[index]) (\(scheme == .light ? "clair" : "sombre"))…")
+                status("Sending \(pageIDs[index]) (\(scheme == .light ? "light" : "dark"))…")
                 try? await Task.sleep(for: .milliseconds(50))
                 do {
                     var request = URLRequest(url: url)
@@ -89,13 +87,13 @@ enum CalibrationRunner {
                     request.httpBody = try JSONSerialization.data(withJSONObject: Self.finite(payload))
                     _ = try await URLSession.shared.data(for: request)
                 } catch {
-                    status("Échec de l'envoi : \(error.localizedDescription)")
+                    status("Upload failed: \(error.localizedDescription)")
                     return
                 }
             }
         }
         window.overrideUserInterfaceStyle = .unspecified
-        status("Calibration terminée ✓")
+        status("Calibration done ✓")
     }
 
     // MARK: - SF Symbols
@@ -108,7 +106,7 @@ enum CalibrationRunner {
         _ = try await URLSession.shared.data(for: request)
     }
 
-    /// Liste des symboles fournie par iOS (bundle système CoreGlyphs), avec un diagnostic de ce qui a été trouvé.
+    /// Symbol list from iOS (CoreGlyphs system bundle), with a diagnostic of what was found.
     static func symbolNames() -> (names: [String], aliases: [String: String], info: [String: Any]) {
         let fm = FileManager.default
         var info: [String: Any] = [:]
@@ -116,7 +114,7 @@ enum CalibrationRunner {
         var aliases: [String: String] = [:]
         for base in ["/System/Library/CoreServices/CoreGlyphs.bundle",
                      "/System/Library/CoreServices/CoreGlyphs.bundle/Contents/Resources"] {
-            info[base] = (try? fm.contentsOfDirectory(atPath: base))?.sorted().prefix(80).map { $0 } ?? "illisible"
+            info[base] = (try? fm.contentsOfDirectory(atPath: base))?.sorted().prefix(80).map { $0 } ?? "unreadable"
             if names.isEmpty, let order = NSArray(contentsOfFile: base + "/symbol_order.plist") as? [String] {
                 names = order
                 info["source"] = base + "/symbol_order.plist"
@@ -133,7 +131,7 @@ enum CalibrationRunner {
         return (names, aliases, info)
     }
 
-    /// Rendu d'un symbole en niveaux de gris (64 × 64, noir sur blanc, ajusté sans déformation) et ses mesures.
+    /// Greyscale render of a symbol (64 × 64, black on white, aspect-fit) and its metrics.
     static func renderSymbol(_ name: String) -> (pixels: Data, metrics: [Double])? {
         let config = UIImage.SymbolConfiguration(pointSize: 48, weight: .regular, scale: .medium)
         guard let image = UIImage(systemName: name, withConfiguration: config)?.withTintColor(.black, renderingMode: .alwaysOriginal) else { return nil }
@@ -160,7 +158,7 @@ enum CalibrationRunner {
         return (Data(pixels), metrics)
     }
 
-    /// Configuration demandée par le PC : export des symboles, pages à capturer.
+    /// Configuration requested by the PC: symbol export, pages to capture.
     static func fetchConfig(_ server: String) async -> [String: Any] {
         guard let url = URL(string: server + "/config"),
               let (data, _) = try? await URLSession.shared.data(from: url),
@@ -173,13 +171,13 @@ enum CalibrationRunner {
         try? await post(server, "/symbols", ["run": runID, "kind": "info", "count": names.count,
                                              "aliases": aliases, "info": info])
         guard !names.isEmpty else {
-            status("Liste des symboles introuvable (voir le diagnostic sur le PC).")
+            status("Symbol list not found (see the diagnostic on the PC).")
             try? await Task.sleep(for: .seconds(2))
             return
         }
         let batchSize = 300
         for start in stride(from: 0, to: names.count, by: batchSize) {
-            status("Symboles \(start)/\(names.count)…")
+            status("Symbols \(start)/\(names.count)…")
             var entries: [[String: Any]] = []
             for name in names[start..<min(start + batchSize, names.count)] {
                 guard let r = renderSymbol(name) else { continue }
@@ -196,7 +194,7 @@ enum CalibrationRunner {
 
     static func measure(window: UIWindow, pageID: String, scheme: UIUserInterfaceStyle, runID: String) -> [String: Any] {
         let frames = CalibrationRecorder.shared.frames
-        // Capture sRVB (sans la barre d'état, qui est une autre fenêtre).
+        // sRGB capture (without the status bar, which is another window).
         let format = UIGraphicsImageRendererFormat(for: window.traitCollection)
         format.preferredRange = .standard
         format.scale = window.screen.scale
@@ -239,7 +237,7 @@ enum CalibrationRunner {
         return c.map { Double($0) }
     }
 
-    /// Remplace les nombres non finis (infini, NaN) : JSONSerialization lèverait une exception (plantage).
+    /// Replaces non-finite numbers (inf, NaN): JSONSerialization would throw an exception (crash).
     static func finite(_ value: Any) -> Any {
         switch value {
         case let d as Double: return d.isFinite ? d : 0
@@ -275,7 +273,7 @@ enum CalibrationRunner {
         if let compositing = layer.compositingFilter { d["compositingFilter"] = "\(compositing)" }
         if let shape = layer as? CAShapeLayer {
             if let fill = srgb(shape.fillColor) { d["fillColor"] = fill }
-            // Tracé vide : encombrement infini (CGRect.null), illisible en JSON.
+            // Empty path: bounding box is CGRect.null (infinite), not representable in JSON.
             if let path = shape.path, !path.isEmpty, !path.boundingBox.isNull, !path.boundingBox.isInfinite {
                 d["pathBounds"] = [path.boundingBox.minX, path.boundingBox.minY, path.boundingBox.width, path.boundingBox.height]
             }
@@ -286,7 +284,7 @@ enum CalibrationRunner {
 
 #else
 
-// Côté LSim : l'identifiant d'accessibilité sert de repère de mesure.
+// LSim side: the accessibility identifier is the measurement marker.
 extension View {
     func calibrate(_ id: String) -> some View {
         accessibilityIdentifier(id)
@@ -296,7 +294,7 @@ extension View {
 #endif
 
 #if canImport(UIKit)
-/// Relève, à chaque image de l'écran, le cadre présenté de la couche rouge (carré des pages anim.*).
+/// Samples, every display frame, the presented frame of the red layer (square of the anim.* pages).
 @MainActor
 final class AnimationSampler: NSObject {
     let window: UIWindow
@@ -323,7 +321,7 @@ final class AnimationSampler: NSObject {
         samples.append((CACurrentMediaTime(), red, green))
     }
 
-    /// Couche pure rouge (ou verte) de 50 à 70 pt de large, en coordonnées de la fenêtre présentée.
+    /// Pure red (or green) layer 50–70 pt wide, in presented window coordinates.
     static func find(in layer: CALayer, root: CALayer, red: Bool) -> CGRect? {
         let presented = layer.presentation() ?? layer
         if let c = presented.backgroundColor?.components, c.count >= 3,

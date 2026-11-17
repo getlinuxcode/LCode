@@ -1,8 +1,8 @@
 import Foundation
 
-/// Lancement de commandes externes (swift, xtool, l'app simulée).
+/// Runs external commands (swift, xtool, the simulated app).
 public enum Shell {
-    /// Exécute une commande et renvoie sa sortie standard ; échoue si le code de retour n'est pas 0.
+    /// Runs a command and returns its standard output; throws on a non-zero exit status.
     @discardableResult
     public static func capture(_ arguments: [String], cwd: URL? = nil) throws -> String {
         let process = Process()
@@ -18,12 +18,12 @@ public enum Shell {
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
             let message = String(decoding: errData, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            throw LCodeError("« \(arguments.joined(separator: " ")) » a échoué :\n\(message)")
+            throw LCodeError("`\(arguments.joined(separator: " "))` failed:\n\(message)")
         }
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// Exécute une commande en laissant sa sortie s'afficher ; renvoie le code de retour.
+    /// Runs a command with its output inherited; returns the exit status.
     @discardableResult
     public static func run(_ arguments: [String], cwd: URL? = nil, environment: [String: String] = [:]) throws -> Int32 {
         let process = Process()

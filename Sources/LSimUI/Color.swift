@@ -1,6 +1,6 @@
 import Foundation
 
-/// Couleur résolue (composantes 0…1).
+/// Resolved color (components 0…1).
 public struct RGBA: Hashable, Sendable {
     public var r: Double, g: Double, b: Double, a: Double
 
@@ -24,7 +24,7 @@ public enum ColorScheme: Hashable, Sendable, CaseIterable {
 
 public protocol ShapeStyle {}
 
-/// Couleur SwiftUI : une variante claire et une variante sombre (comme les couleurs système iOS).
+/// SwiftUI color: a light and a dark variant (like iOS system colors).
 public struct Color: Hashable, Sendable, ShapeStyle {
     var light: RGBA
     var dark: RGBA
@@ -47,7 +47,7 @@ public struct Color: Hashable, Sendable, ShapeStyle {
         scheme == .light ? light : dark
     }
 
-    /// `.blue.gradient` : dégradé automatique d'iOS (un peu plus clair en haut).
+    /// `.blue.gradient`: iOS's automatic gradient (slightly lighter at the top).
     public var gradient: LinearGradient {
         func lighter(_ c: RGBA) -> RGBA { RGBA(c.r + (1 - c.r) * 0.18, c.g + (1 - c.g) * 0.18, c.b + (1 - c.b) * 0.18, c.a) }
         return LinearGradient(colors: [Color(light: lighter(light), dark: lighter(dark)), self], startPoint: .top, endPoint: .bottom)
@@ -64,7 +64,7 @@ public struct Color: Hashable, Sendable, ShapeStyle {
         Color(light: .rgb255(l.0, l.1, l.2), dark: .rgb255(d.0, d.1, d.2))
     }
 
-    // Couleurs système iOS 26+ (palette mise à jour avec Liquid Glass), clair / sombre.
+    // iOS 26+ system colors (palette updated with Liquid Glass), light / dark.
     public static let red = system((255, 56, 60), (255, 66, 69))
     public static let orange = system((255, 141, 40), (255, 146, 48))
     public static let yellow = system((255, 204, 0), (255, 214, 0))
@@ -84,10 +84,10 @@ public struct Color: Hashable, Sendable, ShapeStyle {
 
     public static let primary = Color(light: RGBA(0, 0, 0), dark: RGBA(1, 1, 1))
     public static let secondary = Color(light: .rgb255(60, 60, 67, 0.6), dark: .rgb255(235, 235, 245, 0.6))
-    /// Couleur d'accent : « AccentColor » du catalogue d'assets s'il la définit, sinon le bleu système.
+    /// Accent color: the asset catalog's "AccentColor" if defined, otherwise system blue.
     public static var accentColor: Color { AssetCatalog.shared.color("AccentColor") ?? blue }
 
-    /// Couleur du catalogue d'assets (`Name.colorset`) ; absente : transparente, signalée dans la sortie (comme iOS).
+    /// Asset catalog color (`Name.colorset`); if missing: clear, and reported in the output (like iOS).
     public init(_ name: String, bundle: Bundle? = nil) {
         if let c = AssetCatalog.shared.color(name) {
             self = c
@@ -96,14 +96,14 @@ public struct Color: Hashable, Sendable, ShapeStyle {
             self = .clear
         }
     }
-    /// `.tint` : la teinte de l'environnement (ou la couleur d'accent). Valeur repère résolue à la construction.
+    /// `.tint`: the environment's tint (or accent color). Placeholder resolved at build time.
     public static let tint = Color(light: RGBA(-1, -1, -1, 1), dark: RGBA(-1, -1, -1, 1))
 
     func resolvingTint(_ env: EnvironmentValues) -> Color {
         self == .tint ? (env.tint ?? .accentColor) : self
     }
 
-    // Couleurs sémantiques utilisées en interne.
+    // Semantic colors used internally.
     static let systemBackground = Color(light: RGBA(1, 1, 1), dark: RGBA(0, 0, 0))
     static let separator = Color(light: .rgb255(60, 60, 67, 0.29), dark: .rgb255(84, 84, 88, 0.6))
     static let secondarySystemFill = Color(light: .rgb255(120, 120, 128, 0.16), dark: .rgb255(120, 120, 128, 0.32))

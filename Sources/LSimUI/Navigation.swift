@@ -6,42 +6,42 @@ public enum NavigationBarItem {
     }
 }
 
-/// Mesures de la barre de navigation, relevées sur iPhone 17 Pro Max sous iOS 27.2.
+/// Navigation bar metrics, measured on iPhone 17 Pro Max (iOS 27.2).
 public enum NavigationMetrics {
     public static var barHeight: CGFloat = 44
-    /// Centre vertical du contenu de la barre (titre centré, bouton retour), depuis le haut de la barre.
+    /// Vertical center of the bar content (inline title, back button), from the top of the bar.
     public static var barContentCenterY: CGFloat = 17.5
     public static var largeTitleHeight: CGFloat = 52
     public static var largeTitleLeading: CGFloat = 20
     public static var largeTitleFont = Font.system(size: 34, weight: .bold)
     public static var inlineTitleFont = Font.system(size: 17, weight: .semibold)
-    /// Bouton retour « ‹ Titre précédent ».
+    /// Back button "‹ Previous title".
     public static var backChevronRect = CGRect(x: 14.2, y: -8.85, width: 9.7, height: 17.7)
     public static var backChevronLineWidth: CGFloat = 3
     public static var backTitleX: CGFloat = 36
     public static var backTitleFont = Font.system(size: 17)
-    /// Défilement à partir duquel le grand titre laisse place au titre centré.
+    /// Scroll offset at which the large title gives way to the inline title.
     public static var collapseThreshold: CGFloat = 44
 
-    // Liquid Glass (iOS 26+), mesuré sur iOS 27.2.
+    // Liquid Glass (iOS 26+), measured on iOS 27.2.
     public static var glassBarContentCenterY: CGFloat = 22
     public static var glassButtonSize: CGFloat = 44
     public static var glassButtonLeading: CGFloat = 20
-    /// Mesuré sur iPhone : encre de 11 × 18,7 pt (même surface d’encre).
+    /// Measured on iPhone: 11 × 18.7 pt ink (same ink area).
     public static var glassChevronSize = CGSize(width: 11.0, height: 18.7)
     public static var glassChevronLineWidth: CGFloat = 2.6
-    /// Le chevron n'est pas centré optiquement dans la pastille : décalé vers la gauche.
+    /// The chevron is not optically centered in the pill: shifted left.
     public static var glassChevronOffsetX: CGFloat = -1.5
     public static var glassBarHeight: CGFloat = 54
-    /// Rayon du flou de la matière de barre (écart-type, en points).
+    /// Bar material blur radius (std dev, points).
     public static var glassMaterialBlur: CGFloat = 5
-    /// Le grand titre Liquid Glass est un peu plus bas sous la barre.
+    /// The Liquid Glass large title sits slightly lower under the bar.
     public static var glassLargeTitleTopOffset: CGFloat = 2.7
 
-    /// Transitions de pile mesurées sur iPhone (iOS 27.2).
+    /// Stack transitions measured on iPhone (iOS 27.2).
     public static var pushAnimation = Animation.spring(response: 0.25, dampingFraction: 1.06)
     public static var popAnimation = Animation.spring(response: 0.21, dampingFraction: 1.24)
-    /// Recul de l'écran du dessous (fraction de la largeur).
+    /// How far the screen underneath recedes (fraction of the width).
     public static var parallax: CGFloat = 0.3
 
     static var currentBarHeight: CGFloat {
@@ -53,7 +53,7 @@ public enum NavigationMetrics {
     }
 }
 
-/// Pile de navigation persistante (une par NavigationStack).
+/// Persistent navigation stack (one per NavigationStack).
 public final class NavigationModel {
     enum Entry {
         case view(AnyView)
@@ -62,7 +62,7 @@ public final class NavigationModel {
 
     var path: [(id: Int, entry: Entry)] = []
     var destinations: [ObjectIdentifier: (Any) -> AnyView] = [:]
-    /// Titre de chaque écran (0 = racine, sinon identifiant d'entrée), pour le libellé du bouton retour.
+    /// Title of each screen (0 = root, else entry id), for the back button label.
     var titles: [Int: String] = [:]
     private var nextID = 0
     weak var graph: ViewGraph?
@@ -83,12 +83,12 @@ public final class NavigationModel {
         graph?.invalidate()
     }
 
-    /// Écran d'une transition : la racine ou une entrée de la pile.
+    /// A screen in a transition: the root or a stack entry.
     typealias Screen = (id: Int, entry: Entry)?
 
-    /// Transition en cours entre l'écran du dessus et celui du dessous (tous deux construits jusqu'à la
-    /// fin). La présence de l'écran du dessus va de `from` à `to` (1 : en place, 0 : sorti à droite) avec
-    /// un ressort qui part de la vitesse `velocity` (présence par seconde).
+    /// Transition between the top screen and the one below (both built until it ends). The top screen's
+    /// presence goes from `from` to `to` (1: in place, 0: gone to the right) on a spring starting at
+    /// `velocity` (presence per second).
     struct Transition {
         var top: Screen
         var bottom: Screen
@@ -104,9 +104,9 @@ public final class NavigationModel {
         }
     }
     var transition: Transition?
-    /// Largeur de l'écran (relevée au dessin), pour convertir le geste en présence.
+    /// Screen width (recorded at draw time), to convert the gesture to presence.
     var width: CGFloat = 440
-    /// Retour par balayage en cours : présence de l'écran du dessus (suit le doigt).
+    /// Swipe back in progress: presence of the top screen (follows the finger).
     var dragPresence: Double?
 
     func beginTransition(push: Bool, outgoing: (id: Int, entry: Entry)?) {
@@ -120,8 +120,8 @@ public final class NavigationModel {
         }
     }
 
-    /// Fin du balayage : retour (écran retiré) ou annulation (écran remis en place), en partant de la
-    /// position et de la vitesse du doigt. La décision suit la position projetée (position + 0,2 s de vitesse).
+    /// End of swipe: pop (screen removed) or cancel (screen restored), starting from the finger's position
+    /// and velocity. Decided by projected position (position + 0.2 s of velocity).
     func endBackSwipe(translation: CGFloat, velocity: CGFloat, width: CGFloat) {
         guard let presence = dragPresence, !path.isEmpty else { dragPresence = nil; return }
         dragPresence = nil
@@ -142,7 +142,7 @@ public final class NavigationModel {
         graph?.invalidate()
     }
 
-    /// Ajout sans nouveau rendu (pile initiale d'une NavigationStack liée).
+    /// Append without re-rendering (initial path of a bound NavigationStack).
     func pushSilently(_ entry: Entry) {
         nextID += 1
         path.append((nextID, entry))
@@ -152,11 +152,11 @@ public final class NavigationModel {
     var onPop: (() -> Void)?
 }
 
-/// Informations remontées par l'écran affiché vers sa NavigationStack (titre, mode).
+/// Info passed up from the visible screen to its NavigationStack (title, mode).
 final class NavigationTitleSink {
     var title: String?
     var displayMode: NavigationBarItem.TitleDisplayMode = .automatic
-    /// Éléments de barre d'outils déclarés par l'écran affiché.
+    /// Toolbar items declared by the visible screen.
     var toolbar: [(placement: ToolbarItemPlacement, node: LayoutNode)] = []
 }
 
@@ -181,7 +181,7 @@ private struct InListKey: EnvironmentKey { static let defaultValue = false }
 
 // MARK: - NavigationPath
 
-/// Pile de valeurs hétérogènes pour `NavigationStack(path:)`.
+/// Heterogeneous value stack for `NavigationStack(path:)`.
 public struct NavigationPath {
     var elements: [(Any, ObjectIdentifier)] = []
     public init() {}
@@ -199,7 +199,7 @@ public struct NavigationPath {
 public struct NavigationStack<Root: View>: View, _PrimitiveView {
     public typealias Body = Never
     let root: Root
-    /// Pile pilotée par le code (`NavigationStack(path: $path)`) : valeurs initiales et retour.
+    /// Programmatic stack (`NavigationStack(path: $path)`): initial values and pop.
     let boundPath: (values: () -> [(Any, ObjectIdentifier)], pop: () -> Void)?
 
     public init(@ViewBuilder root: () -> Root) {
@@ -227,8 +227,8 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
         var pageCtx = ctx
         pageCtx.environment.navigation = model
 
-        // Pile liée : écrans initiaux (la racine est construite une fois pour déclarer ses destinations),
-        // puis suivi des changements de la liaison (ajouts : push ; retraits : pop), avec transition.
+        // Bound stack: initial screens (the root is built once to declare its destinations), then follow
+        // binding changes (append: push; removal: pop), with a transition.
         if let boundPath {
             model.onPop = boundPath.pop
             let values = boundPath.values()
@@ -256,8 +256,7 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
             }
         }
 
-        // L'écran du dessus est construit (et l'écran sortant pendant une transition) ; l'état des
-        // écrans masqués est conservé.
+        // Build the top screen (and the outgoing one during a transition); hidden screens keep their state.
         let rootPath = ctx.path + "/root"
         if !model.path.isEmpty {
             context.graph.retain(prefix: rootPath)
@@ -286,15 +285,14 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
             }
             let isRoot = item == nil
             model.titles[item?.id ?? 0] = sink.title
-            // Écran précédent : celui sous l'écran construit dans la pile (ou l'écran révélé, pour un écran
-            // qui vient d'être retiré).
+            // Previous screen: the one under the built screen (or the revealed one, for a screen just popped).
             let previousID: Int
             if let item, let index = model.path.firstIndex(where: { $0.id == item.id }) {
                 previousID = index >= 1 ? model.path[index - 1].id : 0
             } else {
                 previousID = model.path.last?.id ?? 0
             }
-            let backTitle = model.titles[previousID] ?? "Retour"
+            let backTitle = model.titles[previousID] ?? "Back"
             let large = sink.displayMode == .large || (sink.displayMode == .automatic && isRoot)
             var titleNode: LayoutNode?
             if let title = sink.title, large {
@@ -316,7 +314,7 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
             )
         }
 
-        // Retour par balayage (iOS 26 : depuis n'importe où dans le contenu) : l'écran du dessus suit le doigt.
+        // Swipe back (iOS 26: from anywhere in the content): the top screen follows the finger.
         let panID = ctx.path + "#backSwipe"
         if !model.path.isEmpty {
             context.graph.registerPan(panID, changed: { translation in
@@ -339,7 +337,7 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
                 model.transition = nil
             } else {
                 let top = screen(transition.top)
-                // Écran du dessus qui reste (push, annulation) : le balayage reste possible.
+                // Top screen that stays (push, cancel): swipe back remains possible.
                 if transition.to == 1, !model.path.isEmpty {
                     top.backPanID = panID
                     top.model = model
@@ -355,15 +353,15 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
     }
 }
 
-/// Transition de pile : l'écran du dessus est décalé vers la droite selon sa présence (1 : en place,
-/// 0 : sorti) ; l'écran du dessous recule de 30 % de la largeur (parallaxe), les barres se croisent en fondu.
-/// Mesuré sur iPhone : ressorts sans rebond, push réponse 0,25 / amortissement 1,06, pop 0,21 / 1,24.
+/// Stack transition: the top screen is offset right by its presence (1: in place, 0: gone); the screen
+/// below recedes by 30% of the width (parallax), bars cross-fade. Measured on iPhone: springs without
+/// bounce, push response 0.25 / damping 1.06, pop 0.21 / 1.24.
 final class NavigationTransitionNode: LayoutNode {
     let top: NavigationNode
     let bottom: NavigationNode
     let presence: Double
     let animating: Bool
-    /// Présence visée (1 : l'écran du dessus reste, 0 : il part) ; sans animateur, seul l'écran final est dessiné.
+    /// Target presence (1: top screen stays, 0: it leaves); without an animator only the final screen is drawn.
     let target: Double
 
     init(top: NavigationNode, bottom: NavigationNode, presence: Double, animating: Bool, target: Double = 1) {
@@ -397,7 +395,7 @@ final class NavigationTransitionNode: LayoutNode {
     }
 }
 
-/// Mise en page d'un écran de navigation : barre + contenu (+ grand titre).
+/// Navigation screen layout: bar + content (+ large title).
 final class NavigationNode: LayoutNode {
     let page: LayoutNode
     let title: String?
@@ -411,11 +409,11 @@ final class NavigationNode: LayoutNode {
 
     let leading: [LayoutNode]
     let trailing: [LayoutNode]
-    /// Pendant une transition : décalage horizontal de l'écran, opacité de la barre, fond opaque.
+    /// During a transition: horizontal offset of the screen, bar opacity, opaque background.
     var pageOffset: CGFloat = 0
     var barAlpha: Double = 1
     var opaqueBackground = false
-    /// Zone du retour par balayage (écran du dessus d'une pile non vide, hors transition).
+    /// Swipe-back area (top screen of a non-empty stack, outside transitions).
     var backPanID: String?
     weak var model: NavigationModel?
 
@@ -432,7 +430,7 @@ final class NavigationNode: LayoutNode {
         self.tint = tint
     }
 
-    /// Le contenu défilant de l'écran, s'il y en a un (List, ScrollView).
+    /// The screen's scrolling content, if any (List, ScrollView).
     private var scroll: ScrollNode? {
         var node: LayoutNode? = page
         while let n = node {
@@ -450,12 +448,12 @@ final class NavigationNode: LayoutNode {
         let bar = CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: M.currentBarHeight)
         var contentRect = CGRect(x: rect.minX, y: bar.maxY, width: rect.width, height: rect.height - bar.height)
         var showInlineTitle = largeTitle == nil
-        // Grand titre (iOS 27, vérifié au doigt sur iPhone) : il défile net avec le contenu et passe sous
-        // les boutons de barre, sans matière ; la matière et le titre centré n'apparaissent qu'une fois le
-        // grand titre entièrement passé sous la barre.
+        // Large title (iOS 27, checked by finger on iPhone): scrolls crisply with the content and passes under
+        // the bar buttons without material; the material and inline title only appear once the large title
+        // is fully under the bar.
         let collapseOffset = DesignStyle.current == .liquidGlass ? M.largeTitleHeight : M.collapseThreshold
 
-        // Transition : l'écran (contenu et grand titre) est décalé, sur un fond opaque.
+        // Transition: the screen (content and large title) is offset, over an opaque background.
         let moving = pageOffset != 0 || opaqueBackground
         if moving {
             list.append(.pushTransform(dx: pageOffset, dy: 0, scale: 1, anchor: .zero))
@@ -467,7 +465,7 @@ final class NavigationNode: LayoutNode {
 
         if let largeTitle {
             if let scroll {
-                // Le grand titre défile avec le contenu, puis laisse place au titre centré.
+                // The large title scrolls with the content, then gives way to the inline title.
                 scroll.header = largeTitle
                 showInlineTitle = scroll.offset >= collapseOffset
             } else {
@@ -478,11 +476,11 @@ final class NavigationNode: LayoutNode {
         }
 
         if let scroll {
-            // Le contenu défilant occupe tout l'écran et passe sous la barre.
+            // Scrolling content fills the screen and passes under the bar.
             scroll.topInset = bar.height
             page.render(in: rect, lc, &list)
         } else if page.ignoresSafeArea {
-            // Fond plein écran : passe sous la barre et dans les zones sûres.
+            // Full-screen background: extends under the bar and into the safe areas.
             let screen = lc.screen == .zero ? rect : lc.screen
             let s = page.sizeThatFits(ProposedViewSize(screen.size), lc)
             page.render(in: Alignment.center.place(s, in: screen), lc, &list)
@@ -491,22 +489,22 @@ final class NavigationNode: LayoutNode {
             page.render(in: Alignment.center.place(s, in: contentRect), lc, &list)
         }
         if moving { list.append(.popTransform) }
-        // La barre (matière, titres, boutons) reste en place et se croise en fondu.
+        // The bar (material, titles, buttons) stays in place and cross-fades.
         let fading = barAlpha < 0.999
         if fading { list.append(.pushOpacity(max(0, barAlpha))) }
 
-        // Effet de bord quand le contenu passe sous la barre.
+        // Edge effect when content passes under the bar.
         if let scroll, scroll.offset > 0, largeTitle == nil || scroll.offset >= collapseOffset || DesignStyle.current != .liquidGlass {
             let top = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: bar.maxY - lc.screen.minY)
             let dark = lc.colorScheme == .dark
             let measured = dark ? DesignProfile.current.navigation?.edgeDark : DesignProfile.current.navigation?.edgeLight
             if DesignStyle.current == .liquidGlass, let measured, let last = measured.y.last {
-                // Mesuré sur iPhone, ligne par ligne (flou progressif, voile) ; recalé sur la base de la barre.
+                // Measured on iPhone row by row (progressive blur, veil); aligned to the bar's bottom.
                 let shift = bar.maxY - lc.screen.minY - CGFloat(measured.referenceBarBottom ?? Double(bar.maxY - lc.screen.minY))
                 let zone = CGRect(x: lc.screen.minX, y: lc.screen.minY, width: lc.screen.width, height: CGFloat(last) + shift)
                 list.append(.scrollEdge(zone, measured, shift: shift))
             } else if DesignStyle.current == .liquidGlass {
-                // Mesuré sur iOS 27 : flou ≈ 5 pt, voile blanc ≈ 65 %, filet à la base de la barre.
+                // Measured on iOS 27: blur ≈ 5 pt, white veil ≈ 65%, hairline at the bar's bottom.
                 let tint = dark ? RGBA(0.07, 0.07, 0.08, 0.72) : RGBA(0.99, 0.99, 1.0, 0.68)
                 list.append(.backdrop(top, blur: M.glassMaterialBlur, tint: tint))
                 let line = CGRect(x: top.minX, y: top.maxY - 1.0 / 3.0, width: top.width, height: 1.0 / 3.0)
@@ -533,7 +531,7 @@ final class NavigationNode: LayoutNode {
             list.append(.text(title, font, r, Color.primary.resolve(in: lc.colorScheme), .center))
         }
 
-        // Boutons de barre d'outils (pastilles de verre) : à droite, et à gauche après le bouton retour.
+        // Toolbar buttons (glass pills): on the right, and on the left after the back button.
         var right = bar.maxX - M.glassButtonLeading
         for node in trailing.reversed() {
             let size = node.sizeThatFits(.unspecified, lc)
@@ -549,7 +547,7 @@ final class NavigationNode: LayoutNode {
         }
 
         if let backID, DesignStyle.current == .liquidGlass {
-            // Bouton retour Liquid Glass : chevron dans une pastille de verre.
+            // Liquid Glass back button: chevron in a glass pill.
             let d = M.glassButtonSize
             let button = CGRect(x: bar.minX + M.glassButtonLeading, y: centerY - d / 2, width: d, height: d)
             let dark = lc.colorScheme == .dark
@@ -562,7 +560,7 @@ final class NavigationNode: LayoutNode {
             if backPressed { list.append(.popOpacity) }
             list.append(.hitRegion(id: backID, button))
         } else if let backID {
-            // Bouton retour : chevron + titre de l'écran précédent, dans la teinte de l'app.
+            // Back button: chevron + previous screen's title, in the app tint.
             let color = tint.resolve(in: lc.colorScheme)
             if backPressed { list.append(.pushOpacity(0.25)) }
             let c = M.backChevronRect
@@ -584,7 +582,7 @@ final class NavigationNode: LayoutNode {
     }
 }
 
-// MARK: - Liens et titres
+// MARK: - Links and titles
 
 public struct NavigationLink<Label: View, Destination: View>: View, _PrimitiveView {
     public typealias Body = Never

@@ -33,9 +33,9 @@ struct NavRoot: View {
                     NavigationLink(value: item) { Text("item \(item.id)") }
                 }
             }
-            .navigationTitle("Racine")
+            .navigationTitle("Root")
             .navigationDestination(for: Item.self) { item in
-                Text("détail \(item.id)").navigationTitle("Détail")
+                Text("detail \(item.id)").navigationTitle("Detail")
             }
         }
     }
@@ -45,23 +45,23 @@ struct NavRoot: View {
     let graph = ViewGraph()
     var list = renderScreen(NavRoot(), graph: graph)
     let ids = hitIDs(list)
-    #expect(ids.count == 3)  // bouton + 2 liens
+    #expect(ids.count == 3)  // button + 2 links
 
     graph.performAction(ids[0])  // taps = 1
     list = renderScreen(NavRoot(), graph: graph)
     #expect(texts(list).contains { $0.0 == "taps 1" })
 
-    graph.performAction(ids[2])  // ouvre « item 2 »
+    graph.performAction(ids[2])  // opens "item 2"
     list = renderScreen(NavRoot(), graph: graph)
-    #expect(texts(list).contains { $0.0 == "détail 2" })
-    // Liquid Glass : le bouton retour est une pastille sans libellé (le titre précédent n'est pas affiché).
-    #expect(!texts(list).contains { $0.0 == "Racine" })
+    #expect(texts(list).contains { $0.0 == "detail 2" })
+    // Liquid Glass: the back button is a pill without a label (the previous title is not shown).
+    #expect(!texts(list).contains { $0.0 == "Root" })
     let back = hitIDs(list).first { $0.hasSuffix("#back") }
     #expect(back != nil)
 
     graph.performAction(back!)
     list = renderScreen(NavRoot(), graph: graph)
-    // L'état de l'écran racine a survécu à la navigation.
+    // The root screen's state survived navigation.
     #expect(texts(list).contains { $0.0 == "taps 1" })
 }
 
@@ -69,7 +69,7 @@ struct NavRoot: View {
     let graph = ViewGraph()
     let list = renderScreen(List { Text("a"); Text("b") }, graph: graph)
     let rows = texts(list)
-    // Lignes de 44 pt minimum (texte de 20 pt + 2 × 8,5 = 37 → 44), marges 20 + 20.
+    // Rows at least 44 pt (20 pt text + 2 × 8.5 = 37 → 44), insets 20 + 20.
     #expect(rows[0].1.minX == ListMetrics.margin + ListMetrics.rowPaddingH)
     #expect(rows[1].1.midY - rows[0].1.midY == ListMetrics.rowMinHeight)
 }
@@ -82,14 +82,14 @@ struct NavRoot: View {
     let visibleBefore = hitIDs(list).count
     #expect(visibleBefore < 40)
 
-    graph.scroll(scrollID, by: 100_000)  // bien au-delà de la fin
+    graph.scroll(scrollID, by: 100_000)  // far past the end
     list = renderScreen(many, graph: graph)
     #expect(texts(list).contains { $0.0 == "row 39" })
     #expect(hitIDs(list).allSatisfy { !$0.isEmpty })
 }
 
 @Test func scrollOffsetSurvivesRebuild() {
-    // Régression : le décalage de défilement était effacé par le nettoyage de fin de passe.
+    // Regression: the scroll offset was cleared by end-of-pass cleanup.
     let graph = ViewGraph()
     let many = List { ForEach(0..<40) { i in Text("row \(i)") } }
     var list = renderScreen(many, graph: graph)
@@ -109,18 +109,18 @@ private func panIDs(_ list: DisplayList) -> [String] {
 @Test func backSwipeBeyondHalfPops() {
     let graph = ViewGraph()
     var list = renderScreen(NavRoot(), graph: graph)
-    graph.performAction(hitIDs(list)[2])  // ouvre « item 2 »
+    graph.performAction(hitIDs(list)[2])  // opens "item 2"
     list = renderScreen(NavRoot(), graph: graph)
     let swipe = panIDs(list).first { $0.hasSuffix("#backSwipe") }
     #expect(swipe != nil)
 
-    // Petit balayage lent : annulé, l'écran reste.
+    // Short slow swipe: cancelled, the screen stays.
     graph.panHandlers[swipe!]!.changed(CGSize(width: 80, height: 0))
     graph.panHandlers[swipe!]!.ended(CGSize(width: 80, height: 0), CGSize(width: 50, height: 0))
     list = renderScreen(NavRoot(), graph: graph)
-    #expect(texts(list).contains { $0.0 == "détail 2" })
+    #expect(texts(list).contains { $0.0 == "detail 2" })
 
-    // Balayage au-delà de la moitié de l'écran : retour à la racine.
+    // Swipe past half the screen: back to the root.
     graph.panHandlers[swipe!]!.changed(CGSize(width: 300, height: 0))
     graph.panHandlers[swipe!]!.ended(CGSize(width: 300, height: 0), CGSize(width: 600, height: 0))
     list = renderScreen(NavRoot(), graph: graph)
@@ -130,8 +130,8 @@ private func panIDs(_ list: DisplayList) -> [String] {
 struct SheetHost: View {
     @State var shown = true
     var body: some View {
-        Text(shown ? "ouverte" : "fermée")
-            .sheet(isPresented: $shown) { Text("contenu") }
+        Text(shown ? "open" : "closed")
+            .sheet(isPresented: $shown) { Text("content") }
     }
 }
 
@@ -143,5 +143,5 @@ struct SheetHost: View {
     graph.panHandlers[pan!]!.changed(CGSize(width: 0, height: 500))
     graph.panHandlers[pan!]!.ended(CGSize(width: 0, height: 500), CGSize(width: 0, height: 900))
     list = renderScreen(SheetHost(), graph: graph)
-    #expect(texts(list).contains { $0.0 == "fermée" })
+    #expect(texts(list).contains { $0.0 == "closed" })
 }

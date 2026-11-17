@@ -1,18 +1,18 @@
 import Foundation
 
-// MARK: - Objets dans l'environnement : .environment(objet) / @Environment(Type.self)
+// MARK: - Objects in the environment: .environment(object) / @Environment(Type.self)
 
 extension EnvironmentValues {
     func object<T: AnyObject>(_ type: T.Type) -> T {
         guard let object = objects[ObjectIdentifier(type)] as? T else {
-            fatalError("Aucun objet \(T.self) dans l'environnement : ajoutez .environment(…) à une vue parente.")
+            fatalError("No observable object of type \(T.self) found in the environment: add .environment(…) to an ancestor view.")
         }
         return object
     }
 }
 
 extension View {
-    /// Place un objet observable dans l'environnement (lu par `@Environment(Type.self)`).
+    /// Puts an observable object in the environment (read by `@Environment(Type.self)`).
     public func environment<T: AnyObject>(_ object: T?) -> some View {
         modifier(_EnvironmentModifier { env in
             if let object { env.objects[ObjectIdentifier(T.self)] = object }
@@ -22,7 +22,7 @@ extension View {
 
 // MARK: - @Bindable
 
-/// Liaisons vers les propriétés d'un objet observable : `@Bindable var store = store` puis `$store.titre`.
+/// Bindings to an observable object's properties: `@Bindable var store = store`, then `$store.title`.
 @propertyWrapper
 @dynamicMemberLookup
 public struct Bindable<Value> {
@@ -42,7 +42,7 @@ public struct Bindable<Value> {
 
 // MARK: - @AppStorage
 
-/// Valeur persistée dans les préférences (UserDefaults) ; la vue est redessinée quand elle change.
+/// Value persisted in UserDefaults; the view re-renders when it changes.
 @propertyWrapper
 public struct AppStorage<Value>: _DynamicProperty {
     final class Box { weak var graph: ViewGraph? }
@@ -89,7 +89,7 @@ extension AppStorage where Value: RawRepresentable {
     }
 }
 
-// MARK: - ForEach($tableau) { $élément in … }
+// MARK: - ForEach($array) { $element in … }
 
 extension Binding: Sequence where Value: MutableCollection {
     public typealias Element = Binding<Value.Element>
@@ -120,14 +120,14 @@ extension Binding: Identifiable where Value: Identifiable {
 }
 
 extension RangeReplaceableCollection where Self: MutableCollection {
-    /// Supprime les éléments aux positions données (utilisé avec `.onDelete`).
+    /// Removes the elements at the given offsets (used with `.onDelete`).
     public mutating func remove(atOffsets offsets: IndexSet) {
         for offset in offsets.sorted(by: >) {
             remove(at: index(startIndex, offsetBy: offset))
         }
     }
 
-    /// Déplace des éléments (utilisé avec `.onMove`).
+    /// Moves elements (used with `.onMove`).
     public mutating func move(fromOffsets source: IndexSet, toOffset destination: Int) {
         let moving = source.sorted().map { self[index(startIndex, offsetBy: $0)] }
         remove(atOffsets: source)
@@ -151,13 +151,13 @@ public struct UnitPoint: Hashable, Sendable {
 }
 
 
-// MARK: - Tâches asynchrones : .task
+// MARK: - Async tasks: .task
 
 struct _TaskModifier: _PrimitiveModifier {
     let action: @Sendable () async -> Void
     let id: AnyHashable?
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
-        // Lancée à l'apparition (et relancée quand `id` change), comme dans SwiftUI.
+        // Started on appear (and restarted when `id` changes), as in SwiftUI.
         let key = context.path + "/task" + (id.map { "#\($0)" } ?? "")
         let action = self.action
         context.graph.registerAppear(key) { Task { await action() } }

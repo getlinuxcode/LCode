@@ -18,7 +18,7 @@ public enum SceneBuilder {
     public static func buildBlock<S: Scene>(_ scene: S) -> S { scene }
 }
 
-/// Scène primitive : fournit la vue racine affichée par le simulateur.
+/// Primitive scene: provides the root view shown by the simulator.
 public protocol _PrimitiveScene {
     var _rootView: AnyView { get }
 }
@@ -40,7 +40,7 @@ public struct WindowGroup<Content: View>: Scene, _PrimitiveScene {
     public var _rootView: AnyView { AnyView(content()) }
 }
 
-/// Trouve la vue racine d'une scène (en descendant les scènes composées).
+/// Finds a scene's root view (descending through composed scenes).
 public func _rootView<S: Scene>(of scene: S) -> AnyView {
     if let primitive = scene as? _PrimitiveScene { return primitive._rootView }
     return _rootView(of: scene.body)

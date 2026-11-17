@@ -3,9 +3,8 @@
 import Combine
 import Foundation
 
-// AVFoundation pour le simulateur LSim : AVPlayer, AVPlayerItem, AVAsset, AVAudioPlayer, AVAudioSession.
-// La lecture est réelle (MediaEngine, par ffmpeg) ; l'image est affichée par `VideoPlayer` (AVKit) ou par
-// toute vue qui lit `AVPlayer._currentFrame`.
+// AVFoundation for LSim. Playback is real (MediaEngine, via ffmpeg); frames are shown by `VideoPlayer` (AVKit)
+// or any view reading `AVPlayer._currentFrame`.
 
 // MARK: - AVAsset
 
@@ -53,7 +52,7 @@ open class AVAsset: @unchecked Sendable {
         (try await a.read(self), try await b.read(self))
     }
 
-    /// Ancienne API synchrone (bloquante).
+    /// Legacy synchronous (blocking) API.
     public var duration: CMTime {
         (try? engine.probe().duration).flatMap { $0 }.map { CMTime(seconds: $0, preferredTimescale: 600) } ?? .indefinite
     }
@@ -69,11 +68,11 @@ public final class AVURLAsset: AVAsset, @unchecked Sendable {
     }
 }
 
-// MARK: - Observation clé-valeur
+// MARK: - Key-value observing
 
 #if !canImport(Darwin)
-/// Options d'observation (absentes de Foundation sous Linux) : acceptées pour compiler, `publisher(for:)`
-/// émet toujours la valeur initiale puis chaque changement.
+/// Missing from Foundation on Linux: accepted so code compiles; `publisher(for:)` always emits the
+/// initial value, then every change.
 public struct NSKeyValueObservingOptions: OptionSet, Sendable {
     public let rawValue: UInt
     public init(rawValue: UInt) { self.rawValue = rawValue }
@@ -167,9 +166,9 @@ open class AVPlayer: @unchecked Sendable {
     public var volume: Float = 1 { didSet { restartIfPlaying() } }
     public var isMuted = false { didSet { restartIfPlaying() } }
 
-    /// Dernière image décodée (pour VideoPlayer et les vues qui affichent la vidéo).
+    /// Last decoded frame (for VideoPlayer and other views showing the video).
     public private(set) var _currentFrame: CVPixelBuffer?
-    /// Une nouvelle image est arrivée (sur le fil principal).
+    /// A new frame arrived (on the main thread).
     public let _frames = PassthroughSubject<CVPixelBuffer, Never>()
     let changed = PassthroughSubject<Void, Never>()
 
@@ -205,7 +204,7 @@ open class AVPlayer: @unchecked Sendable {
                 NotificationCenter.default.post(name: .AVPlayerItemDidPlayToEndTime, object: item)
             }
         }
-        // Première image (vignette) dès que le média est décrit, et lecture différée si play() est déjà demandé.
+        // Show the first frame once the media is probed, and start deferred playback if play() was already called.
         itemToken = item.changed.sink { [weak self, weak item] in
             guard let self, let item, item.status == .readyToPlay else { return }
             self.changed.send()
@@ -275,7 +274,7 @@ open class AVPlayer: @unchecked Sendable {
         await withCheckedContinuation { c in seek(to: time) { c.resume(returning: $0) } }
     }
 
-    // MARK: Observateurs de temps
+    // MARK: Time observers
 
     public func addPeriodicTimeObserver(forInterval interval: CMTime, queue: DispatchQueue?,
                                         using block: @escaping (CMTime) -> Void) -> Any {
@@ -313,7 +312,6 @@ open class AVPlayer: @unchecked Sendable {
     }
 }
 
-/// File de lecture (enchaîne les éléments).
 public final class AVQueuePlayer: AVPlayer, @unchecked Sendable {
     private var queue: [AVPlayerItem] = []
     private var endToken: NSObjectProtocol?
@@ -338,7 +336,6 @@ public final class AVQueuePlayer: AVPlayer, @unchecked Sendable {
     public func removeAllItems() { queue = []; replaceCurrentItem(with: nil) }
 }
 
-/// Boucle un élément (`AVPlayerLooper(player:templateItem:)`).
 public final class AVPlayerLooper {
     private var token: NSObjectProtocol?
     public init(player: AVQueuePlayer, templateItem: AVPlayerItem) {
@@ -386,7 +383,7 @@ open class AVAudioPlayer: @unchecked Sendable {
     public convenience init(contentsOf url: URL, fileTypeHint: String?) throws { try self.init(contentsOf: url) }
 
     public convenience init(data: Data, fileTypeHint: String? = nil) throws {
-        let file = FileManager.default.temporaryDirectory.appendingPathComponent("lsim-son-\(UUID().uuidString)")
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("lsim-sound-\(UUID().uuidString)")
         try data.write(to: file)
         try self.init(contentsOf: file)
     }
@@ -427,7 +424,7 @@ open class AVAudioPlayer: @unchecked Sendable {
     }
 }
 
-// MARK: - AVAudioSession (sans effet dans le simulateur)
+// MARK: - AVAudioSession (no effect in the simulator)
 
 public final class AVAudioSession: @unchecked Sendable {
     public struct Category: RawRepresentable, Hashable, Sendable {
@@ -497,7 +494,7 @@ public final class AVAudioSession: @unchecked Sendable {
     public static let routeChangeNotification = Notification.Name("AVAudioSessionRouteChangeNotification")
 }
 
-// MARK: - Divers
+// MARK: - Misc
 
 public enum AVLayerVideoGravity: String, Sendable {
     case resize = "AVLayerVideoGravityResize"

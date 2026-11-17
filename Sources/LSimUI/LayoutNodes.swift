@@ -1,8 +1,8 @@
 import Foundation
 
-/// Nœud de layout. Protocole en deux temps, comme SwiftUI :
-/// 1. `sizeThatFits` : le parent propose une taille, l'enfant choisit la sienne ;
-/// 2. `render` : le parent place l'enfant dans un rectangle et l'enfant émet ses instructions de dessin.
+/// Layout node. Two-step protocol, as in SwiftUI:
+/// 1. `sizeThatFits`: the parent proposes a size, the child picks its own;
+/// 2. `render`: the parent places the child in a rect and the child emits its drawing commands.
 open class LayoutNode {
     public var layoutPriority: Double = 0
     private var cache: [ProposedViewSize: CGSize] = [:]
@@ -17,18 +17,18 @@ open class LayoutNode {
     }
 
     open func computeSize(_ proposal: ProposedViewSize, _ lc: LayoutContext) -> CGSize { .zero }
-    /// Dessin du nœud dans le rectangle donné (à surcharger).
+    /// Draws the node in the given rect (override).
     open func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {}
 
-    /// Identité stable (chemin dans l'arbre de vues), animation implicite et transition, posées à la
-    /// construction ; elles permettent d'animer le nœud d'une image à l'autre.
+    /// Stable identity (path in the view tree), implicit animation and transition, set at build time so
+    /// the node can be animated from frame to frame.
     var identity: String?
     var animation: Animation?
     var transition: AnyTransition?
-    /// Clé du nœud dans l'image en cours (pour animer ses grandeurs propres, comme l'opacité).
+    /// Node key in the current frame (to animate its own values, like opacity).
     var frameKey: String?
 
-    /// Point d'entrée du rendu : applique l'animation du cadre et les transitions, puis dessine.
+    /// Render entry point: applies frame animation and transitions, then draws.
     public final func render(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
         guard let animator = lc.animator, let identity else { return draw(in: rect, lc, &list) }
         let key = animator.key(identity)
@@ -37,8 +37,8 @@ open class LayoutNode {
         let v = animator.present(key, [Double(rect.minX), Double(rect.minY), Double(rect.width), Double(rect.height)],
                                  animation: animation, now: now)
         let presented = CGRect(x: v[0], y: v[1], width: max(0, v[2]), height: max(0, v[3]))
-        // Apparition pendant une transaction animée : transition (fondu par défaut) sur la racine du
-        // sous-arbre inséré seulement.
+        // Inserted during an animated transaction: transition (fade by default) on the root of the
+        // inserted subtree only.
         if let progress = animator.insertionProgress(key, animation: transition?.animation ?? animation),
            progress < 1 {
             let kinds = transition?.insertion ?? [.opacity]
@@ -73,20 +73,20 @@ open class LayoutNode {
         draw(in: presented, lc, &list)
     }
 
-    /// Axe d'expansion d'un Spacer / Divider (défini par la pile parente).
+    /// Expansion axis of a Spacer / Divider (set by the parent stack).
     var stackAxis: Axis?
     var isSpacer: Bool { false }
-    /// Une image (éventuellement enveloppée de modificateurs) : SwiftUI l'espace différemment.
+    /// An image (possibly wrapped in modifiers): SwiftUI spaces it differently.
     var isImage: Bool { (self as? SingleChildNode)?.child.isImage ?? false }
-    /// `.ignoresSafeArea()` quelque part dans la chaîne de modificateurs : le conteneur (écran de navigation)
-    /// lui donne tout l'écran, barres et zones sûres comprises.
+    /// `.ignoresSafeArea()` somewhere in the modifier chain: the container (navigation screen) gives it
+    /// the whole screen, bars and safe areas included.
     var ignoresSafeArea: Bool { (self as? SingleChildNode)?.child.ignoresSafeArea ?? false }
-    /// Rectangle où le contenu est réellement dessiné (après `.offset`) : zone de toucher, comme SwiftUI.
+    /// Rect where content is actually drawn (after `.offset`): the hit area, as in SwiftUI.
     func drawnRect(for rect: CGRect) -> CGRect { (self as? SingleChildNode)?.child.drawnRect(for: rect) ?? rect }
 }
 
-/// `.ignoresSafeArea()` : occupe tout l'écran (le conteneur l'y place) ; ailleurs, déborde dans les
-/// zones sûres qu'il touche.
+/// `.ignoresSafeArea()`: fills the screen (the container places it there); elsewhere, overflows into
+/// the safe areas it touches.
 final class IgnoresSafeAreaNode: SingleChildNode {
     override var ignoresSafeArea: Bool { true }
 
@@ -123,7 +123,7 @@ extension View {
     }
 }
 
-// MARK: - Feuilles
+// MARK: - Leaves
 
 final class TextNode: LayoutNode {
     let string: String
@@ -140,7 +140,7 @@ final class TextNode: LayoutNode {
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let size = lc.measurer.measure(string, font: font, maxWidth: p.width.flatMap { $0.isFinite ? $0 : nil })
-        // Comme iOS : arrondi au pixel physique supérieur (1/3 pt sur un écran @3x), pas au point entier.
+        // Like iOS: rounded up to the physical pixel (1/3 pt on @3x), not the whole point.
         let scale = lc.displayScale
         return CGSize(width: (size.width * scale).rounded(.up) / scale, height: (size.height * scale).rounded(.up) / scale)
     }
@@ -160,7 +160,7 @@ final class ShapeNode: LayoutNode {
     }
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
-        // Une forme accepte toute la place proposée ; 10 pt en taille idéale (comme SwiftUI).
+        // A shape accepts all the proposed space; 10 pt ideal size (as in SwiftUI).
         let size = p.replacingUnspecifiedDimensions()
         if kind == .circle {
             let side = min(size.width, size.height)
@@ -187,7 +187,7 @@ final class SpacerNode: LayoutNode {
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         guard let axis = stackAxis else {
-            // Hors pile : s'étend dans les deux directions.
+            // Outside a stack: expands in both directions.
             return CGSize(width: max(minLength, p.width ?? minLength), height: max(minLength, p.height ?? minLength))
         }
         let along = max(minLength, p[axis] ?? minLength)
@@ -196,10 +196,10 @@ final class SpacerNode: LayoutNode {
 }
 
 final class DividerNode: LayoutNode {
-    let thickness: CGFloat = 1.0 / 3.0  // un pixel physique sur un écran @3x
+    let thickness: CGFloat = 1.0 / 3.0  // one physical pixel on @3x
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
-        // Dans une VStack (ou hors pile) le séparateur est horizontal.
+        // In a VStack (or outside a stack) the divider is horizontal.
         let lineAxis: Axis = stackAxis == .horizontal ? .vertical : .horizontal
         let along = p[lineAxis] ?? 10
         return CGSize(along: along.isFinite ? along : 10, cross: thickness, axis: lineAxis)
@@ -210,7 +210,7 @@ final class DividerNode: LayoutNode {
     }
 }
 
-// MARK: - Piles
+// MARK: - Stacks
 
 final class StackNode: LayoutNode {
     let axis: Axis
@@ -242,15 +242,15 @@ final class StackNode: LayoutNode {
         return Self.defaultSpacing(between: children[index - 1], and: children[index], axis: axis)
     }
 
-    /// Espacement par défaut entre deux voisins (SwiftUI l'adapte selon les types de vues).
-    /// Mesuré : dans une pile verticale, une image touche sa voisine ; l'horizontal reste à 8 pt.
+    /// Default spacing between neighbors (SwiftUI adapts it to view types).
+    /// Measured: in a vertical stack an image touches its neighbor; horizontal stays at 8 pt.
     static func defaultSpacing(between a: LayoutNode, and b: LayoutNode, axis: Axis) -> CGFloat {
         if a.isSpacer || b.isSpacer { return 0 }
         if axis == .vertical, a.isImage || b.isImage, let s = DesignProfile.current.image.stackSpacing { return CGFloat(s) }
         return defaultSpacing
     }
 
-    /// Répartit la taille le long de l'axe entre les enfants (algorithme de SwiftUI).
+    /// Distributes the size along the axis among children (SwiftUI's algorithm).
     private func childSizes(_ p: ProposedViewSize, _ lc: LayoutContext) -> [CGSize] {
         let cross = p[axis.other]
         guard let along = p[axis] else {
@@ -260,8 +260,7 @@ final class StackNode: LayoutNode {
         let mins = children.map { $0.sizeThatFits(ProposedViewSize(along: 0, cross: cross, axis: axis), lc)[axis] }
         let maxs = children.map { $0.sizeThatFits(ProposedViewSize(along: .infinity, cross: cross, axis: axis), lc)[axis] }
 
-        // Ordre : priorité décroissante, puis du moins flexible au plus flexible ;
-        // les Spacers passent en dernier et se partagent le reste.
+        // Order: decreasing priority, then least to most flexible; Spacers go last and share the rest.
         let order = children.indices.sorted { a, b in
             let ca = children[a], cb = children[b]
             if ca.isSpacer != cb.isSpacer { return !ca.isSpacer }
@@ -274,11 +273,11 @@ final class StackNode: LayoutNode {
         var position = 0
         while position < order.count {
             let index = order[position]
-            // Enfants restants du même groupe (même priorité, même nature).
+            // Remaining children of the same group (same priority, same kind).
             let group = order[position...].prefix {
                 children[$0].isSpacer == children[index].isSpacer && children[$0].layoutPriority == children[index].layoutPriority
             }.count
-            // On réserve la taille minimale des groupes traités ensuite (spacers, priorités plus faibles).
+            // Reserve the minimum size of groups handled later (spacers, lower priorities).
             let laterMin = order[(position + group)...].reduce(CGFloat(0)) { $0 + mins[$1] }
             let share = max(0, remaining - laterMin) / CGFloat(group)
             let size = children[index].sizeThatFits(ProposedViewSize(along: share, cross: cross, axis: axis), lc)
@@ -337,7 +336,7 @@ final class ZStackNode: LayoutNode {
     }
 }
 
-// MARK: - Modificateurs de layout
+// MARK: - Layout modifiers
 
 class SingleChildNode: LayoutNode {
     let child: LayoutNode
@@ -436,7 +435,7 @@ final class FrameNode: SingleChildNode {
     }
 }
 
-/// Fond ou superposition : la vue secondaire prend la taille de la vue principale.
+/// Background or overlay: the secondary view takes the primary view's size.
 final class LayerNode: SingleChildNode {
     let layer: [LayoutNode]
     let alignment: Alignment
@@ -508,7 +507,7 @@ final class OffsetNode: SingleChildNode {
     }
 }
 
-/// Zone tactile (Button, onTapGesture), avec effet de surbrillance optionnel.
+/// Hit area (Button, onTapGesture), with optional highlight.
 final class TapNode: SingleChildNode {
     let id: String
     let isPressed: Bool
@@ -533,9 +532,9 @@ final class TapNode: SingleChildNode {
     }
 }
 
-// MARK: - Racine
+// MARK: - Root
 
-/// Dispose les vues racines dans la zone sûre de l'écran (centrées, comme un WindowGroup).
+/// Lays out root views in the screen's safe area (centered, like a WindowGroup).
 public func layoutRoot(_ nodes: [LayoutNode], in container: CGRect, _ lc: LayoutContext,
                        presentations: [LayoutNode] = []) -> DisplayList {
     let root: LayoutNode = nodes.count == 1 ? nodes[0] : StackNode(axis: .vertical, crossAlignment: 0.5, spacing: nil, children: nodes)
@@ -544,12 +543,12 @@ public func layoutRoot(_ nodes: [LayoutNode], in container: CGRect, _ lc: Layout
     func renderAll() -> DisplayList {
         var list = DisplayList()
         root.render(in: Alignment.center.place(size, in: container), lc, &list)
-        // Feuilles et alertes : dessinées sur tout l'écran, au-dessus du reste.
+        // Sheets and alerts: drawn over the whole screen, above everything.
         for presentation in presentations {
             presentation.render(in: screen, lc, &list)
         }
         return list
     }
-    // Avec un animateur : une ou deux passes (cibles, puis valeurs présentées).
+    // With an animator: one or two passes (targets, then presented values).
     return lc.animator?.frame(renderAll) ?? renderAll()
 }

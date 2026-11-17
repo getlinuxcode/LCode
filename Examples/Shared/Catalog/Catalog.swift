@@ -1,8 +1,10 @@
 import Foundation
 import SwiftUI
 
-// Catalogue de calibration : le MÊME code s'exécute sur iPhone (vrai SwiftUI) et dans LSim.
-// Chaque variante porte un identifiant stable ; on compare ensuite les deux rendus.
+// Calibration catalog: the SAME code runs on the iPhone (real SwiftUI) and in LSim.
+// Each variant has a stable ID; the two renders are then compared.
+// The on-screen labels of measured pages (button titles, page titles, sample sentences) are kept
+// as they were when Tests/Calibration was recorded: their widths are part of the reference frames.
 
 struct CatalogPage: Identifiable {
     let id: String
@@ -46,7 +48,7 @@ enum Catalog {
         pages += GestureCatalog.pages
         if #available(iOS 26, *) {
             pages.append(CatalogPage(id: "glass.refraction") { AnyView(GlassRefractionPage(background: .checker)) })
-            // Fonds codés : mesure directe du champ de réfraction et de la lumière du verre.
+            // Coded backgrounds: direct measurement of the glass refraction field and light.
             for (name, bg) in [("low", GlassBackground.low), ("high", .high),
                                ("xcoarse", .rampX(.coarse)), ("xsin", .rampX(.sin)), ("xcos", .rampX(.cos)),
                                ("ycoarse", .rampY(.coarse)), ("ysin", .rampY(.sin)), ("ycos", .rampY(.cos)),
@@ -61,7 +63,7 @@ enum Catalog {
     }
 }
 
-/// Applique un style de bouton (les styles SwiftUI sont des types distincts).
+/// Applies a button style (SwiftUI button styles are distinct types).
 struct AnyButtonStyleApplier {
     let apply: (AnyView) -> AnyView
     init(_ apply: @escaping (AnyView) -> AnyView) { self.apply = apply }
@@ -140,7 +142,7 @@ struct ButtonTintsPage: View {
     }
 }
 
-/// Une phrase témoin par style typographique : sert à ajuster l'approche du texte par corps.
+/// One sample sentence per text style, used to fit per-size tracking.
 struct TextStylesPage: View {
     let weight: Font.Weight
     let name: String
@@ -152,7 +154,7 @@ struct TextStylesPage: View {
         ("system15", 15, .system(size: 15)), ("system14", 14, .system(size: 14)),
     ]
 
-    /// Phrase témoin (assez courte pour tenir sur une ligne à chaque corps).
+    /// Sample sentence (short enough to fit on one line at every size; must match fit.py).
     static func sample(_ size: Int) -> String {
         size >= 28 ? "Portez ce whisky" : size >= 20 ? "Portez ce vieux whisky" : "Portez ce vieux whisky au juge blond"
     }
@@ -170,7 +172,7 @@ struct TextStylesPage: View {
     }
 }
 
-/// Symboles fréquents, dessinés à différents styles typographiques.
+/// Common symbols, drawn at several text styles.
 enum SymbolSamples {
     static let names = ["globe", "checkmark.circle.fill", "star.fill", "plus", "gear", "heart", "chevron.right"]
 }
@@ -235,7 +237,7 @@ struct ImageResizablePage: View {
                 Image(systemName: "heart").resizable().scaledToFill().frame(width: 50, height: 50)
                     .calibrate("resizable.fill")
             }
-            // Ligne exacte du modèle de `xtool new`.
+            // Exactly the `xtool new` template.
             VStack {
                 Image(systemName: "globe")
                     .imageScale(.large)
@@ -251,7 +253,7 @@ struct ImageResizablePage: View {
     }
 }
 
-/// Damier contrasté : rend la réfraction du verre visible dans toutes les directions.
+/// High-contrast checkerboard: makes glass refraction visible in every direction.
 struct Checkerboard: View {
     let columns: Int
     let rows: Int
@@ -269,17 +271,17 @@ struct Checkerboard: View {
     }
 }
 
-/// Fond posé derrière les formes de verre.
-/// Les dégradés codent la position : gris = position dans le fond. Une rampe grossière sur toute la
-/// largeur lève l'ambiguïté ; deux ondes en quadrature (sinus, cosinus, période 16 pt) donnent la position
-/// fine par leur phase, que le flou du verre ne déplace pas (il ne fait qu'atténuer le contraste).
+/// Background behind the glass shapes.
+/// Gradients encode position: grey = position in the background. A coarse full-width ramp resolves the
+/// ambiguity; two quadrature waves (sine, cosine, 16 pt period) give the fine position through their
+/// phase, which glass blur does not move (it only reduces contrast).
 enum GlassBackground {
     case checker, low, high
     case rampX(Ramp)
     case rampY(Ramp)
 }
 
-/// Rampe grossière, ou onde de 16 pt (sin, cos), ou onde intermédiaire de 64 pt (lève l'ambiguïté des 16 pt).
+/// Coarse ramp, 16 pt wave (sin, cos), or 64 pt wave (resolves the 16 pt ambiguity).
 enum Ramp {
     case coarse, sin, cos, sin64, cos64
     var period: Double { self == .sin64 || self == .cos64 ? 64 : 16 }
@@ -291,14 +293,14 @@ struct CodedBackground: View {
     let width: Int
     let height: Int
 
-    /// Niveaux de gris bornés (15 % à 70 %) : rien ne sature à travers le verre, qui éclaircit ou assombrit.
+    /// Grey levels limited to 15–70 % so nothing clips through the glass, which lightens or darkens (must match glassfield.py).
     static let lowLevel = 0.15, highLevel = 0.70
     static func gray(_ v: Double) -> Color {
         let g = lowLevel + (highLevel - lowLevel) * v
         return Color(red: g, green: g, blue: g)
     }
 
-    /// Arrêts de dégradé : rampe unique, ou onde 0,5 + 0,5·sin/cos (2π·x / 16 pt), 32 arrêts par période.
+    /// Gradient stops: a single ramp, or a 0.5 + 0.5·sin/cos(2π·x / period) wave with 32 stops per period.
     static func stops(length: Int, ramp: Ramp) -> [Gradient.Stop] {
         guard ramp != .coarse else { return [.init(color: gray(0), location: 0), .init(color: gray(1), location: 1)] }
         let count = Int(Double(length) / ramp.period * 32)
@@ -328,7 +330,7 @@ struct CodedBackground: View {
     }
 }
 
-/// Formes de verre posées sur un fond (damier, ou fonds codés pour mesurer la réfraction).
+/// Glass shapes over a background (checkerboard, or coded backgrounds to measure refraction).
 @available(iOS 26, *)
 struct GlassRefractionPage: View {
     let background: GlassBackground
@@ -343,7 +345,7 @@ struct GlassRefractionPage: View {
             }
             sample("glass.clear", width: 240, height: 64) { $0.glassEffect(.clear, in: Capsule()) }
             sample("glass.tinted", width: 240, height: 64) { $0.glassEffect(.regular.tint(.blue), in: Capsule()) }
-            // Petites formes, à la taille des boutons de barre (cercle de 44 pt, capsule de 44 pt de haut).
+            // Small shapes at bar-button size (44 pt circle, 44 pt-high capsule).
             HStack(spacing: 14) {
                 sample("glass.small", width: 44, height: 44, board: (78, 78)) { $0.glassEffect(.regular, in: Circle()) }
                 sample("glass.pill", width: 110, height: 44, board: (144, 78)) { $0.glassEffect(.regular, in: Capsule()) }
@@ -388,8 +390,8 @@ struct CatalogRoot: View {
         let pages = Catalog.pages
         ZStack {
             if page >= 0 && page < pages.count {
-                // Nouvelle identité à chaque page : sinon SwiftUI réutilise la vue précédente
-                // et onGeometryChange ne se redéclenche pas pour des cadres identiques.
+                // New identity per page: otherwise SwiftUI reuses the previous view and onGeometryChange
+                // does not fire again for identical frames.
                 pages[page].content().id(page)
             }
             #if canImport(UIKit)

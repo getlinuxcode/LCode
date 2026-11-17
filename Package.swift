@@ -6,13 +6,13 @@ let v5: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 let package = Package(
     name: "LCode",
     products: [
-        // Réimplémentation de l'API SwiftUI (sans dépendance graphique).
+        // SwiftUI API reimplementation (no graphics dependency).
         .library(name: "LSimUI", targets: ["LSimUI"]),
-        // Module que le code utilisateur importe sous le nom `SwiftUI` pour le simulateur.
+        // What user code imports as `SwiftUI` in simulator builds.
         .library(name: "SwiftUI", targets: ["SwiftUI"]),
-        // Combine pour le simulateur (le framework d'Apple n'existe pas sous Linux).
+        // Apple's Combine does not exist on Linux.
         .library(name: "Combine", targets: ["Combine"]),
-        // Médias pour le simulateur : lecture réelle par ffmpeg, affichée par VideoPlayer (AVKit).
+        // Media playback through ffmpeg, shown by VideoPlayer (AVKit).
         .library(name: "CoreMedia", targets: ["CoreMedia"]),
         .library(name: "CoreVideo", targets: ["CoreVideo"]),
         .library(name: "AVFoundation", targets: ["AVFoundation"]),
@@ -30,10 +30,9 @@ let package = Package(
             pkgConfig: "gtk4",
             providers: [.apt(["libgtk-4-dev"])]
         ),
-        // Optimisé même en debug : le rendu du verre et du flou se calcule pixel par pixel.
+        // Optimized even in debug: glass and blur rendering is computed per pixel.
         .target(name: "LSimHost", dependencies: ["LSimUI", "CGtk"], swiftSettings: v5 + [.unsafeFlags(["-O"])]),
         .target(name: "SwiftUI", dependencies: ["LSimUI", "LSimHost"], swiftSettings: v5),
-        // Cœur de l'IDE : projets xtool, génération et lancement du simulateur.
         .target(name: "LCodeKit", swiftSettings: v5),
         .executableTarget(name: "lcode", dependencies: ["LCodeKit"], swiftSettings: v5),
         .systemLibrary(
@@ -41,7 +40,6 @@ let package = Package(
             pkgConfig: "libadwaita-1",
             providers: [.apt(["libadwaita-1-dev"])]
         ),
-        // L'IDE : fenêtre GTK4/libadwaita façon Xcode (navigateur, éditeur, console, simulateur).
         .systemLibrary(
             name: "CSource",
             pkgConfig: "gtksourceview-5",

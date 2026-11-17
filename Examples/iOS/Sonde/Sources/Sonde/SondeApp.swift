@@ -14,8 +14,8 @@ struct SondeApp: App {
 struct RootView: View {
     var body: some View {
         TabView {
-            Tab("Tâches", systemImage: "checklist") { TasksView() }
-            Tab("Réglages", systemImage: "gear") { SettingsView() }
+            Tab("Tasks", systemImage: "checklist") { TasksView() }
+            Tab("Settings", systemImage: "gear") { SettingsView() }
         }
     }
 }

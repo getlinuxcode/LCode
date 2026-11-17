@@ -1,33 +1,32 @@
 import Foundation
 
-/// Profil de design : toutes les valeurs mesurables d'une version d'iOS, chargées depuis un fichier JSON
-/// (`Sources/LSimUI/Profiles/iOS-27.2.json`) que le banc de calibration réécrit automatiquement.
-///
-/// Ordre de chargement : `LSIM_PROFILE` (chemin d'un JSON, utilisé par le correcteur pour essayer
-/// des valeurs sans recompiler), puis le profil embarqué, puis les valeurs de repli ci-dessous.
+/// Design profile: every measurable value for an iOS version, loaded from a JSON file
+/// (`Sources/LSimUI/Profiles/iOS-27.2.json`) that the calibration bench rewrites automatically.
+/// Load order: `LSIM_PROFILE` (JSON path, lets the tuner try values without rebuilding), then the
+/// bundled profile, then the fallback values below.
 public struct DesignProfile: Codable, Sendable {
     public var name: String
     public var text: TextProfile
     public var button: ButtonProfile
-    /// Optionnel pour rester compatible avec les profils plus anciens.
+    /// Optional for compatibility with older profiles.
     public var imageSettings: ImageProfile?
     public var image: ImageProfile { imageSettings ?? .fallback }
-    /// Matériau Liquid Glass (optionnel pour rester compatible avec les profils plus anciens).
+    /// Liquid Glass material (optional for older profiles).
     public var glassSettings: GlassProfile?
     public var glass: GlassProfile { glassSettings ?? .fallback }
-    /// Barre de navigation mesurée (effet de bord de défilement…), optionnelle.
+    /// Measured navigation bar (scroll edge effect…), optional.
     public var navigation: NavigationProfile?
-    /// Courbes des préréglages d'animation mesurées sur iPhone (default, spring, smooth, snappy, bouncy…).
+    /// Animation preset curves measured on iPhone (default, spring, smooth, snappy, bouncy…).
     public var animations: [String: AnimationSetting]?
-    /// Règles de décision des gestes système mesurées au doigt (retour par balayage, feuille tirée).
+    /// System gesture decision rules measured by finger (swipe back, sheet pull-down).
     public var gestures: GestureProfile?
 
-    /// Chargé une seule fois, de façon sûre entre fils (initialisation paresseuse d'un `static let`).
+    /// Loaded once, thread-safely (lazy `static let`).
     private static let embedded: DesignProfile = load()
     private static let lock = NSLock()
     nonisolated(unsafe) private static var override: DesignProfile?
 
-    /// Profil actif (le style de compatibilité garde ses valeurs iOS 18 fixes).
+    /// Active profile (compatibility style keeps fixed iOS 18 values).
     public static var current: DesignProfile {
         if DesignStyle.current == .compatibility { return .compatibility }
         lock.lock()
@@ -35,7 +34,7 @@ public struct DesignProfile: Codable, Sendable {
         return override ?? embedded
     }
 
-    /// Remplace le profil actif (tests, correcteur) ; `nil` revient au profil chargé.
+    /// Overrides the active profile (tests, tuner); `nil` restores the loaded one.
     public static func use(_ profile: DesignProfile?) {
         lock.lock()
         override = profile
@@ -48,7 +47,7 @@ public struct DesignProfile: Codable, Sendable {
             do {
                 return try decoder.decode(DesignProfile.self, from: Data(contentsOf: URL(fileURLWithPath: path)))
             } catch {
-                print("[LSim] Profil illisible (\(path)) : \(error) — profil embarqué utilisé.")
+                print("[LSim] Unreadable profile (\(path)): \(error) — using the built-in profile.")
             }
         }
         if let url = Bundle.module.url(forResource: "iOS-27.2", withExtension: "json"),
@@ -61,12 +60,12 @@ public struct DesignProfile: Codable, Sendable {
 }
 
 public struct TextProfile: Codable, Sendable {
-    /// Approche (espacement des lettres, en points) par corps entier, pour SF Pro en graisse normale.
+    /// Tracking (letter spacing, points) per integer size, for SF Pro regular.
     public var tracking: [String: Double]
-    /// Approche des graisses semi-grasses et plus (≥ 600) : la police variable d'iOS espace
-    /// différemment selon la graisse. Les corps absents reprennent la table normale.
+    /// Tracking for semibold and heavier (≥ 600): iOS's variable font spaces weights differently.
+    /// Missing sizes fall back to the regular table.
     public var trackingSemibold: [String: Double]?
-    /// Approche des corps absents de la table au-delà de 40 pt (décroît vers 0 à 80 pt).
+    /// Tracking for sizes beyond 40 pt missing from the table (decreases to 0 at 80 pt).
     public var largeSizeTracking: Double
 
     public func tracking(forSize size: Double, weight: Int = 400) -> Double {
@@ -79,15 +78,15 @@ public struct TextProfile: Codable, Sendable {
     }
 }
 
-/// Symboles : taille relative au corps de la police selon `imageScale`, et marges du cadre autour de l'encre.
+/// Symbols: size relative to the font size per `imageScale`, and frame margins around the ink.
 public struct ImageProfile: Codable, Sendable {
     public var scaleSmall: Double
     public var scaleMedium: Double
     public var scaleLarge: Double
-    /// Marge horizontale / verticale du cadre autour de l'encre du glyphe, en fraction du corps.
+    /// Horizontal / vertical frame margin around the glyph ink, as a fraction of the font size.
     public var paddingH: Double
     public var paddingV: Double
-    /// Espacement par défaut (pile sans `spacing:`) entre une image et sa voisine.
+    /// Default spacing (stack without `spacing:`) between an image and its neighbor.
     public var stackSpacing: Double?
 
     public static let fallback = ImageProfile(scaleSmall: 0.78, scaleMedium: 1, scaleLarge: 1.29, paddingH: 0, paddingV: 0.09, stackSpacing: 8)
@@ -101,7 +100,7 @@ public struct ImageProfile: Codable, Sendable {
     }
 }
 
-/// Paire de couleurs claire / sombre, en composantes 0…1 (r, g, b, a).
+/// Light / dark color pair, components 0…1 (r, g, b, a).
 public struct ColorPair: Codable, Sendable, Hashable {
     public var light: [Double]
     public var dark: [Double]
@@ -121,41 +120,41 @@ public struct ButtonProfile: Codable, Sendable {
         public var fontSize: Double
         public var padH: Double
         public var padV: Double
-        /// Marge horizontale avec `.buttonBorderShape(.circle)`.
+        /// Horizontal padding with `.buttonBorderShape(.circle)`.
         public var circlePadH: Double
     }
 
-    /// Couleur du libellé.
+    /// Label color.
     public enum LabelColor: String, Codable, Sendable, CaseIterable {
-        case tint       // teinte (ou rouge si destructif)
-        case primary    // couleur primaire
+        case tint       // tint (red if destructive)
+        case primary
         case white
-        case inherit    // couleur de l'environnement (foregroundStyle), sinon primaire
+        case inherit    // environment foregroundStyle, else primary
     }
 
-    /// Remplissage du fond.
+    /// Background fill.
     public enum Fill: String, Codable, Sendable, CaseIterable {
         case none
-        case neutralOrTinted   // .bordered : gris neutre, ou teinte translucide si .tint / destructif
-        case solid             // .borderedProminent : teinte pleine
-        case glass             // verre clair
-        case glassTinted       // verre teinté
+        case neutralOrTinted   // .bordered: neutral grey, or translucent tint if .tint / destructive
+        case solid             // .borderedProminent: solid tint
+        case glass
+        case glassTinted
     }
 
     public struct Style: Codable, Sendable, Hashable {
         public var label: LabelColor
         public var destructiveLabel: LabelColor
-        /// La police suit `controlSize`.
+        /// Font follows `controlSize`.
         public var followsControlSize: Bool
         public var fill: Fill
         public var pressedOpacity: Double
     }
 
-    /// Clés : mini, small, regular, large, extraLarge.
+    /// Keys: mini, small, regular, large, extraLarge.
     public var sizes: [String: Size]
-    /// Clés : automatic, plain, borderless, bordered, borderedProminent, glass, glassProminent.
+    /// Keys: automatic, plain, borderless, bordered, borderedProminent, glass, glassProminent.
     public var styles: [String: Style]
-    /// Forme par défaut des boutons à fond : "capsule" ou "roundedRectangle".
+    /// Default shape of buttons with a background: "capsule" or "roundedRectangle".
     public var defaultShape: String
     public var roundedRectangleRadius: Double
     public var neutralFill: ColorPair
@@ -197,7 +196,7 @@ public struct ButtonProfile: Codable, Sendable {
 }
 
 extension DesignProfile {
-    /// Valeurs de repli (identiques au profil embarqué au moment de l'écriture).
+    /// Fallback values (identical to the bundled profile at the time of writing).
     static let fallbackTracking: [String: Double] = [
         "6": 0.24, "7": 0.23, "8": 0.21, "9": 0.17, "10": 0.12, "11": 0.06, "12": 0, "13": -0.08, "14": -0.15,
         "15": -0.23, "16": -0.31, "17": -0.30, "18": -0.44, "19": -0.45, "20": -0.45, "21": -0.36, "22": -0.26,
@@ -206,7 +205,7 @@ extension DesignProfile {
         "39": 0.38, "40": 0.37,
     ]
 
-    static let fallback = DesignProfile(name: "iOS 27.2 (repli)",
+    static let fallback = DesignProfile(name: "iOS 27.2 (fallback)",
                                         text: TextProfile(tracking: fallbackTracking, largeSizeTracking: 0.37),
                                         button: ButtonProfile(
         sizes: [
@@ -239,10 +238,10 @@ extension DesignProfile {
         glassRimAlphaDark: 0.18
     ))
 
-    /// Mode compatibilité (apps liées avec un SDK antérieur à iOS 26) : style iOS 18.
+    /// Compatibility mode (apps linked against an SDK before iOS 26): iOS 18 look.
     static let compatibility: DesignProfile = {
         var p = fallback
-        p.name = "compatibilité iOS 18"
+        p.name = "iOS 18 compatibility"
         let size = ButtonProfile.Size(fontSize: 17, padH: 12, padV: 7, circlePadH: 7)
         p.button.sizes = ["mini": size, "small": size, "regular": size, "large": size, "extraLarge": size]
         p.button.defaultShape = "roundedRectangle"
@@ -250,15 +249,15 @@ extension DesignProfile {
     }()
 }
 
-/// Mesures de la barre de navigation Liquid Glass.
+/// Liquid Glass navigation bar measurements.
 public struct NavigationProfile: Codable, Sendable {
     public var edgeLight: ScrollEdgeTable?
     public var edgeDark: ScrollEdgeTable?
 }
 
-/// Effet de bord de défilement sous la barre, ligne par ligne : sur fond gris, sortie = α·fond + β, avec
-/// un flou d'écart-type `blur` (points). `y` : points depuis le haut de l'écran de mesure, dont la barre
-/// se termine à `referenceBarBottom`.
+/// Scroll edge effect under the bar, row by row: on a grey background, output = α·background + β,
+/// with a `blur` std dev (points). `y`: points from the top of the measurement screen, whose bar ends
+/// at `referenceBarBottom`.
 public struct ScrollEdgeTable: Codable, Sendable, Hashable {
     public var y: [Double]
     public var alpha: [Double]
@@ -271,18 +270,18 @@ public struct ScrollEdgeTable: Codable, Sendable, Hashable {
     }
 }
 
-/// Préréglage d'animation mesuré : ressort (réponse, amortissement) ou courbe de Bézier nommée et durée.
+/// Measured animation preset: spring (response, damping) or named Bezier curve and duration.
 public struct AnimationSetting: Codable, Sendable {
     public struct Spring: Codable, Sendable { public var response: Double; public var damping: Double }
     public var spring: Spring?
     public var bezier: String?
     public var duration: Double?
-    /// Délai entre la transaction et le premier mouvement à l'écran (s), mesuré ; non appliqué.
+    /// Measured delay between the transaction and the first on-screen motion (s); not applied.
     public var lag: Double?
 }
 
-/// Décision au lâcher d'un geste : position projetée = déplacement + `projection` × vitesse, comparée à
-/// `threshold` × largeur de l'écran (balayage) ou course de la feuille.
+/// Release decision for a gesture: projected position = translation + `projection` × velocity, compared
+/// with `threshold` × screen width (swipe) or the sheet's travel.
 public struct GestureRule: Codable, Sendable {
     public var projection: Double
     public var threshold: Double

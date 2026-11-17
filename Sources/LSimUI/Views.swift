@@ -55,7 +55,7 @@ public struct Text: View, _PrimitiveView, Equatable {
     }
 }
 
-// MARK: - Piles
+// MARK: - Stacks
 
 public struct VStack<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
@@ -127,7 +127,7 @@ public struct Divider: View, _PrimitiveView {
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] { [DividerNode()] }
 }
 
-// MARK: - Couleurs et formes
+// MARK: - Colors and shapes
 
 extension Color: View, _PrimitiveView {
     public typealias Body = Never

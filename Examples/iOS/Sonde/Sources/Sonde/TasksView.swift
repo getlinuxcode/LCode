@@ -20,11 +20,11 @@ struct TasksView: View {
                         Label(task.priority.rawValue, systemImage: "flag")
                             .labelStyle(.iconOnly)
                     }
-                    .swipeActions { Button("Supprimer", role: .destructive) {} }
+                    .swipeActions { Button("Delete", role: .destructive) {} }
                 }
                 .onDelete { store.tasks.remove(atOffsets: $0) }
             }
-            .navigationTitle("Tâches")
+            .navigationTitle("Tasks")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showingSheet = true } label: { Image(systemName: "plus") }
@@ -32,8 +32,8 @@ struct TasksView: View {
             }
             .sheet(isPresented: $showingSheet) {
                 Form {
-                    TextField("Titre", text: $newTitle)
-                    Button("Ajouter") { store.add(newTitle); showingSheet = false }
+                    TextField("Title", text: $newTitle)
+                    Button("Add") { store.add(newTitle); showingSheet = false }
                 }
                 .presentationDetents([.medium])
             }

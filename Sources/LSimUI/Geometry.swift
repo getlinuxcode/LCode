@@ -6,7 +6,7 @@ public enum Axis: Hashable, Sendable {
     var other: Axis { self == .horizontal ? .vertical : .horizontal }
 }
 
-/// Taille proposée par un parent à un enfant. `nil` = taille idéale, `.infinity` = maximum.
+/// Size proposed by a parent to a child. `nil` = ideal size, `.infinity` = maximum.
 public struct ProposedViewSize: Hashable, Sendable {
     public var width: CGFloat?
     public var height: CGFloat?
@@ -87,7 +87,7 @@ public enum Edge: Int8, CaseIterable, Sendable {
     }
 }
 
-// MARK: - Alignements
+// MARK: - Alignment
 
 public struct HorizontalAlignment: Hashable, Sendable {
     let fraction: CGFloat
@@ -101,7 +101,7 @@ public struct VerticalAlignment: Hashable, Sendable {
     public static let top = VerticalAlignment(fraction: 0)
     public static let center = VerticalAlignment(fraction: 0.5)
     public static let bottom = VerticalAlignment(fraction: 1)
-    // Approximation : les lignes de base sont traitées comme le centre / le bas.
+    // Approximation: baselines are treated as center / bottom.
     public static let firstTextBaseline = VerticalAlignment(fraction: 0.5)
     public static let lastTextBaseline = VerticalAlignment(fraction: 1)
 }
@@ -125,7 +125,7 @@ public struct Alignment: Hashable, Sendable {
     public static let bottomLeading = Alignment(horizontal: .leading, vertical: .bottom)
     public static let bottomTrailing = Alignment(horizontal: .trailing, vertical: .bottom)
 
-    /// Position d'un enfant de taille `size` dans `rect`.
+    /// Position of a child of size `size` within `rect`.
     func place(_ size: CGSize, in rect: CGRect) -> CGRect {
         CGRect(
             x: rect.minX + (rect.width - size.width) * horizontal.fraction,

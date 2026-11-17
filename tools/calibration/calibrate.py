@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
-"""Calibration complète en une commande.
+"""Full calibration in one command.
 
-Usage : python3 -I tools/calibration/calibrate.py [--skip-install] [--run Calibration/<série>]
+Usage: python3 -I tools/calibration/calibrate.py [--skip-install] [--run Calibration/<run>]
 
-1. Compile le catalogue pour LSim, puis pour iOS, et l'installe sur l'iPhone (xtool).
-2. Reçoit les mesures : il suffit de toucher l'icône « LCode Catalogue » sur l'iPhone.
-3. Compare (rapport + planches), ajuste le profil de design automatiquement.
-4. Recompile LSim avec le nouveau profil, enregistre les références et vérifie la non-régression.
+1. Builds the catalog for LSim, then for iOS, and installs it on the iPhone (xtool).
+2. Receives the measurements: just tap the "LCode Catalog" icon on the iPhone.
+3. Compares (report + contact sheets) and fits the design profile automatically.
+4. Rebuilds LSim with the new profile, saves the references and checks for regressions.
 
-`--run` saute les étapes 1 et 2 et réutilise une série déjà reçue.
+`--run` skips steps 1 and 2 and reuses a run already received.
 """
 import argparse
 import glob
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import threading
@@ -39,7 +40,7 @@ MUX = ("127.0.0.1", 27015)
 
 
 def device_environment():
-    """Accès à l'iPhone en USB ou en Wi-Fi via netmuxd (démarré au besoin), sinon USB seul."""
+    """iPhone access over USB or Wi-Fi through netmuxd (started if needed), otherwise USB only."""
     import socket
 
     def listening():
@@ -63,8 +64,22 @@ def device_environment():
     return {"USBMUXD_SOCKET_ADDRESS": f"{MUX[0]}:{MUX[1]}"} if listening() else {}
 
 
+def ensure_server_address(port):
+    """Write the catalog's per-machine receiver address (CalibrationServer.swift, not in git) if missing."""
+    path = os.path.join(IOS_PROJECT, "Sources", "Catalog", "CalibrationServer.swift")
+    if os.path.exists(path):
+        return
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("192.0.2.1", 9))  # no packet sent: only picks the LAN interface
+        ip = s.getsockname()[0]
+    with open(path, "w") as f:
+        f.write("// Per-machine (not in git): address of the calibration receiver on the local network.\n"
+                f'let defaultCalibrationServer = "http://{ip}:{port}"\n')
+    print(f"Calibration receiver address: http://{ip}:{port} ({path})")
+
+
 def usb_connected():
-    """Un iPhone est-il branché en USB (vu par le usbmuxd du système) ?"""
+    """Is an iPhone plugged in over USB (as seen by the system usbmuxd)?"""
     try:
         out = subprocess.run(["idevice_id", "-l"], capture_output=True, text=True, timeout=10).stdout
         return bool(out.strip())
@@ -73,19 +88,19 @@ def usb_connected():
 
 
 def sh(command, cwd=ROOT, env=None):
-    """Commande shell avec la chaîne Swift de swiftly dans le PATH."""
+    """Shell command with the swiftly Swift toolchain on PATH."""
     full = f". {SWIFT_ENV} && {command}" if os.path.exists(SWIFT_ENV) else command
     result = subprocess.run(["bash", "-c", full], cwd=cwd, env={**os.environ, **(env or {})})
     if result.returncode != 0:
-        sys.exit(f"Échec : {command}")
+        sys.exit(f"Failed: {command}")
 
 
 def receive(port, out_dir, timeout):
-    """Attend une série complète (pages × 2 thèmes) envoyée par l'iPhone ; renvoie son dossier."""
+    """Waits for a complete run (pages × 2 schemes) sent by the iPhone; returns its folder."""
     receiver.Handler.out_dir = out_dir
     server = ThreadingHTTPServer(("0.0.0.0", port), receiver.Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print(f"En attente sur le port {port}. Touchez l'icône « LCode Catalogue » sur l'iPhone.", flush=True)
+    print(f"Waiting on port {port}. Tap the \"LCode Catalog\" icon on the iPhone.", flush=True)
     start = time.time()
     known = set(glob.glob(os.path.join(out_dir, "*")))
     try:
@@ -99,40 +114,40 @@ def receive(port, out_dir, timeout):
                     with open(files[0]) as f:
                         expected = 2 * json.load(f).get("pageCount", 0)
                 except (json.JSONDecodeError, OSError):
-                    continue  # fichier en cours d'écriture : on réessaie à la seconde suivante
+                    continue  # still being written: retry next second
                 if expected and len(files) >= expected:
                     return run
-        sys.exit("Délai dépassé : aucune série complète reçue.")
+        sys.exit("Timed out: no complete run received.")
     finally:
         server.shutdown()
 
 
 def receive_gestures(port, out_dir, timeout):
-    """Mode entraîneur : attend le lot de gestes faits au doigt sur l'iPhone."""
+    """Trainer mode: waits for the batch of finger-made gestures from the iPhone."""
     receiver.Handler.out_dir = out_dir
     receiver.Handler.mode = "gestures"
     receiver.Handler.want_symbols = False
     receiver.Handler.gestures_file = None
     server = ThreadingHTTPServer(("0.0.0.0", port), receiver.Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    print(f"En attente sur le port {port}. Touchez l'icône « LCode Catalogue » sur l'iPhone, "
-          "puis suivez les consignes à l'écran.", flush=True)
+    print(f"Waiting on port {port}. Tap the \"LCode Catalog\" icon on the iPhone, "
+          "then follow the on-screen instructions.", flush=True)
     start = time.time()
     try:
         while time.time() - start < timeout:
             time.sleep(1)
             if receiver.Handler.gestures_file:
                 return receiver.Handler.gestures_file
-        sys.exit("Délai dépassé : aucun lot de gestes reçu.")
+        sys.exit("Timed out: no gesture batch received.")
     finally:
         server.shutdown()
 
 
 def save_reference(run):
-    """Copie légère des mesures (cadres, sans images ni couches) pour la vérification."""
+    """Lightweight copy of the measurements (frames, no images or layers) used by check.py."""
     os.makedirs(REFERENCE, exist_ok=True)
     for path in glob.glob(os.path.join(REFERENCE, "*.json")):
-        if not path.endswith("residus.json"):
+        if not path.endswith("residuals.json"):
             os.remove(path)
     for path in glob.glob(os.path.join(run, "ios", "*.json")):
         with open(path) as f:
@@ -146,102 +161,104 @@ def save_reference(run):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--skip-install", action="store_true", help="ne pas recompiler / réinstaller l'app iOS")
-    parser.add_argument("--run", help="réutiliser une série déjà reçue")
+    parser.add_argument("--skip-install", action="store_true", help="do not rebuild / reinstall the iOS app")
+    parser.add_argument("--run", help="reuse a run already received")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--pages", help="passe partielle : préfixes de pages séparés par des virgules (ex. : nav.), "
-                                        "mesures directes seulement, sans ajustement ni références")
+    parser.add_argument("--pages", help="partial pass: comma-separated page prefixes (e.g. nav.), "
+                                        "direct measurements only, no fitting or references")
     parser.add_argument("--timeout", type=int, default=900)
-    parser.add_argument("--symboles", action="store_true",
-                        help="refaire l'export des SF Symbols (automatique si la table locale manque)")
-    parser.add_argument("--gestes", action="store_true",
-                        help="entraîneur de gestes : retours par balayage et feuilles tirées, faits au doigt")
+    parser.add_argument("--symbols", "--symboles", dest="symbols", action="store_true",
+                        help="redo the SF Symbols export (automatic if the local table is missing)")
+    parser.add_argument("--gestures", "--gestes", dest="gestures", action="store_true",
+                        help="gesture trainer: back swipes and sheet drags, done by finger")
     args = parser.parse_args()
     os.chdir(ROOT)
     t0 = time.time()
 
-    if args.gestes:
+    if args.gestures:
         if not args.skip_install:
             connection = device_environment()
-            step(f"Compilation et installation du catalogue sur l'iPhone (xtool, {'USB ou Wi-Fi' if connection else 'USB'})")
+            step(f"Building and installing the catalog on the iPhone (xtool, {'USB or Wi-Fi' if connection else 'USB'})")
             transport = "--usb" if usb_connected() or not connection else "--network"
+            ensure_server_address(args.port)
             sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
-        step("Gestes faits au doigt sur l'iPhone")
+        step("Finger-made gestures on the iPhone")
         path = receive_gestures(args.port, os.path.join(ROOT, "Calibration"), args.timeout * 2)
         venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
-        step("Seuils de décision des gestes")
+        step("Gesture decision thresholds")
         sh(f"'{venv}' -I tools/calibration/gesturefit.py '{path}' --write")
-        step("Recompilation de LSim avec le nouveau profil")
+        step("Rebuilding LSim with the new profile")
         sh("swift build --product CatalogExample")
-        step(f"Terminé en {time.time() - t0:.0f} s")
+        step(f"Done in {time.time() - t0:.0f} s")
         return
 
-    step("Compilation du catalogue pour LSim")
+    step("Building the catalog for LSim")
     sh("swift build --product CatalogExample")
 
     run = args.run
     if not run:
         if not args.skip_install:
             connection = device_environment()
-            step(f"Compilation et installation du catalogue sur l'iPhone (xtool, {'USB ou Wi-Fi' if connection else 'USB'})")
-            # L'USB s'il est branché (plus rapide), sinon le Wi-Fi : évite la question de xtool.
+            step(f"Building and installing the catalog on the iPhone (xtool, {'USB or Wi-Fi' if connection else 'USB'})")
+            # USB if plugged in (faster), else Wi-Fi: avoids xtool's interactive prompt.
             transport = "--usb" if usb_connected() or not connection else "--network"
+            ensure_server_address(args.port)
             sh(f"xtool dev run {transport}", cwd=IOS_PROJECT, env=connection)
         table = os.path.expanduser("~/.local/share/lcode/symbols/iOS-27.2.json")
-        receiver.Handler.want_symbols = args.symboles or not os.path.exists(table)
+        receiver.Handler.want_symbols = args.symbols or not os.path.exists(table)
         if args.pages:
             receiver.Handler.want_symbols = False
             receiver.Handler.only = [p.strip() for p in args.pages.split(",") if p.strip()]
-        step("Réception des mesures" + (" (avec export des SF Symbols)" if receiver.Handler.want_symbols else ""))
+        step("Receiving measurements" + (" (with SF Symbols export)" if receiver.Handler.want_symbols else ""))
         run = receive(args.port, os.path.join(ROOT, "Calibration"), args.timeout)
-        print(f"Série reçue : {run}")
+        print(f"Run received: {run}")
 
     if os.path.isdir(os.path.join(run, "symbols")):
-        step("Table des SF Symbols (appariement des dessins de l'iPhone aux glyphes de la police)")
+        step("SF Symbols table (matching iPhone drawings to font glyphs)")
         venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
         sh(f"'{venv}' -I tools/calibration/symbols.py '{run}'")
 
     if args.pages:
         venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
         if glob.glob(os.path.join(run, "ios", "glass.field.low.*.json")):
-            step("Verre Liquid Glass mesuré (fonds codés)")
+            step("Measured Liquid Glass (coded backgrounds)")
             sh(f"'{venv}' -I tools/calibration/glassfield.py '{run}'")
         if glob.glob(os.path.join(run, "ios", "nav.edge.low.*.json")):
-            step("Barre de navigation mesurée (effet de bord de défilement)")
+            step("Measured navigation bar (scroll edge effect)")
             sh(f"'{venv}' -I tools/calibration/navfield.py '{run}'")
-        step(f"Passe partielle terminée en {time.time() - t0:.0f} s : {run}")
+        step(f"Partial pass done in {time.time() - t0:.0f} s: {run}")
         return
 
-    step("Comparaison avant ajustement")
+    step("Comparison before fitting")
     sh(f"python3 -I tools/calibration/compare.py '{run}'")
 
-    step("Ajustement automatique du profil")
+    step("Automatic profile fitting")
     sh(f"python3 -I tools/calibration/fit.py '{run}'")
 
-    # Mesures directes (fonds codés) : verre et effet de bord de la barre de navigation.
+    # Direct measurements (coded backgrounds): glass and navigation bar edge effect.
     venv = os.path.expanduser("~/.local/share/lcode/venv/bin/python")
     if glob.glob(os.path.join(run, "ios", "glass.field.low.*.json")):
-        step("Verre Liquid Glass mesuré (fonds codés)")
+        step("Measured Liquid Glass (coded backgrounds)")
         sh(f"'{venv}' -I tools/calibration/glassfield.py '{run}' --write")
     if glob.glob(os.path.join(run, "ios", "nav.edge.low.*.json")):
-        step("Barre de navigation mesurée (effet de bord de défilement)")
+        step("Measured navigation bar (scroll edge effect)")
         sh(f"'{venv}' -I tools/calibration/navfield.py '{run}' --write")
     if glob.glob(os.path.join(run, "ios", "anim.default.*.json")):
-        step("Courbes d'animation mesurées (image par image)")
+        step("Measured animation curves (frame by frame)")
         sh(f"'{venv}' -I tools/calibration/animfield.py '{run}' --write")
 
-    step("Recompilation de LSim avec le nouveau profil")
+    step("Rebuilding LSim with the new profile")
     sh("swift build --product CatalogExample")
 
-    step("Références et vérification de non-régression")
+    step("References and regression check")
     save_reference(run)
     sh("python3 -I tools/calibration/check.py --update")
     sh("python3 -I tools/calibration/check.py")
     sh("swift test 2>&1 | grep -E 'Test run|✘'")
 
-    step(f"Terminé en {time.time() - t0:.0f} s")
-    print(f"Rapport d'ajustement : {os.path.join(run, 'ajustement.md')}")
-    print(f"Planches : {os.path.join(run, 'planches')}")
+    step(f"Done in {time.time() - t0:.0f} s")
+    print(f"Fit report: {os.path.join(run, 'fit-report.md')}")
+    print(f"Contact sheets: {os.path.join(run, 'sheets')}")
 
 
 if __name__ == "__main__":

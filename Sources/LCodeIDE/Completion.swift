@@ -2,11 +2,10 @@ import CAdw
 import CSource
 import Foundation
 
-/// Fenêtre d'autocomplétion d'un éditeur, comme Xcode : s'ouvre sous le mot en cours dès qu'on tape un
-/// identifiant ou un « . », se filtre à chaque frappe ; ↑ ↓ pour choisir, Entrée ou Tab pour insérer,
-/// Échap pour fermer, Ctrl+Espace pour la demander.
+/// Xcode-style code completion popup: opens under the current word when typing an identifier or `.`, filters as
+/// you type; ↑ ↓ to choose, Return or Tab to insert, Esc to close, Ctrl+Space to request.
 final class CompletionController {
-    /// Demande au serveur de langage : texte, ligne et colonne UTF-16 du curseur (à partir de 0).
+    /// Asks the language server: text, 0-based line and UTF-16 column of the cursor.
     typealias Provider = (_ text: String, _ line: Int, _ character: Int, _ done: @escaping ([CompletionItem]) -> Void) -> Void
 
     private let view: UnsafeMutablePointer<GtkWidget>
@@ -16,12 +15,12 @@ final class CompletionController {
     private let scroller: UnsafeMutablePointer<GtkWidget>
     var provider: Provider?
 
-    /// Suggestions reçues pour la demande en cours, et celles affichées (filtrées par le mot tapé).
+    /// Items received for the current request, and those shown (filtered by the typed word).
     private var received: [CompletionItem] = []
     private var shown: [CompletionItem] = []
     private var generation = 0
     private var scheduled = false
-    /// Insertion en cours par la complétion elle-même : ne relance pas de demande.
+    /// Set while the completion inserts text, so it does not trigger a new request.
     private var inserting = false
     private static let maxRows = 50
 
@@ -50,7 +49,6 @@ final class CompletionController {
         gtk_scrolled_window_set_child(cast(raw(scroller)), list)
         gtk_popover_set_child(cast(raw(popover)), scroller)
 
-        // Clic (ou double clic) sur une suggestion : insertion.
         connectArg(raw(list), "row-activated") { [weak self] row in
             guard let self, let row else { return }
             let index = Int(gtk_list_box_row_get_index(row.assumingMemoryBound(to: GtkListBoxRow.self)))
@@ -65,9 +63,9 @@ final class CompletionController {
         if isVisible { gtk_popover_popdown(cast(raw(popover))) }
     }
 
-    // MARK: - Déclenchement
+    // MARK: - Triggering
 
-    /// Après une modification du texte : demande des suggestions si l'on tape un identifiant ou après un « . ».
+    /// After a text change: request items when typing an identifier or after a `.`.
     func textChanged() {
         guard !inserting, provider != nil else { return }
         let (word, cursor) = wordBeforeCursor()
@@ -84,7 +82,7 @@ final class CompletionController {
         }
     }
 
-    /// Ctrl+Espace : demande immédiate, même sans mot commencé.
+    /// Ctrl+Space: immediate request, even without a started word.
     func trigger() {
         request()
     }
@@ -116,10 +114,10 @@ final class CompletionController {
         }
     }
 
-    // MARK: - Affichage
+    // MARK: - Display
 
-    /// Garde les suggestions qui commencent par le mot tapé (sans tenir compte de la casse), puis celles qui le
-    /// contiennent ; l'ordre de pertinence du serveur est conservé dans chaque groupe.
+    /// Keeps items that start with the typed word (case-insensitive), then those containing it, preserving the
+    /// server's ranking within each group.
     private func filter(_ word: String) {
         let w = word.lowercased()
         var items = received
@@ -128,7 +126,7 @@ final class CompletionController {
             let inner = received.filter { !$0.filterText.lowercased().hasPrefix(w) && $0.filterText.lowercased().contains(w) }
             items = prefix + inner
         }
-        // Mot déjà complet et seule suggestion : rien à proposer.
+        // The word is already complete and the only match: nothing to offer.
         if items.count == 1, items[0].insertText == word { items = [] }
         shown = Array(items.prefix(Self.maxRows))
         guard !shown.isEmpty else { hide(); return }
@@ -167,7 +165,7 @@ final class CompletionController {
         select(0)
     }
 
-    /// Place la fenêtre sous le début du mot en cours.
+    /// Positions the popup under the start of the current word.
     private func place(wordLength: Int) {
         var cursor = GtkTextIter()
         gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer))
@@ -191,16 +189,16 @@ final class CompletionController {
         let i = max(0, min(shown.count - 1, index))
         guard let row = gtk_list_box_get_row_at_index(cast(raw(list)), Int32(i)) else { return }
         gtk_list_box_select_row(cast(raw(list)), row)
-        // Garde la ligne choisie visible (lignes de hauteur égale).
+        // Keep the selected row visible (rows have equal height).
         let adj = gtk_scrolled_window_get_vadjustment(cast(raw(scroller)))
         let h = Double(max(1, gtk_widget_get_height(UnsafeMutableRawPointer(row).assumingMemoryBound(to: GtkWidget.self))))
         let top = Double(i) * h, page = gtk_adjustment_get_page_size(adj), value = gtk_adjustment_get_value(adj)
         if top < value { gtk_adjustment_set_value(adj, top) } else if top + h > value + page { gtk_adjustment_set_value(adj, top + h - page) }
     }
 
-    // MARK: - Clavier
+    // MARK: - Keyboard
 
-    /// Touches traitées quand la fenêtre est ouverte ; renvoie vrai si la touche est consommée.
+    /// Handles keys while the popup is open; returns true when consumed.
     func handleKey(_ keyval: guint, ctrl: Bool) -> Bool {
         if ctrl && Int32(keyval) == GDK_KEY_space { trigger(); return true }
         guard isVisible else { return false }
@@ -221,7 +219,7 @@ final class CompletionController {
 
     // MARK: - Insertion
 
-    /// Remplace le mot en cours par la suggestion ; pour un appel avec arguments, le curseur va entre les parenthèses.
+    /// Replaces the current word with the item; for calls with arguments the cursor lands between the parentheses.
     private func accept(_ item: CompletionItem) {
         hide()
         let (word, cursor) = wordBeforeCursor()
@@ -242,7 +240,7 @@ final class CompletionController {
         }
     }
 
-    // MARK: - Texte
+    // MARK: - Text
 
     private var fullText: String {
         var a = GtkTextIter(), z = GtkTextIter()
@@ -256,7 +254,7 @@ final class CompletionController {
         return String(cString: c)
     }
 
-    /// Identifiant juste avant le curseur (lettres, chiffres, _).
+    /// Identifier right before the cursor (letters, digits, _).
     private func wordBeforeCursor() -> (word: String, cursor: GtkTextIter) {
         var cursor = GtkTextIter()
         gtk_text_buffer_get_iter_at_mark(buffer, &cursor, gtk_text_buffer_get_insert(buffer))

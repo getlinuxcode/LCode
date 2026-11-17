@@ -1,9 +1,9 @@
 import CAdw
 import Foundation
 
-// Petits outils pour piloter GTK depuis Swift : conversions de pointeurs, signaux, fil principal.
+// Helpers for driving GTK from Swift: pointer casts, signals, main thread.
 
-/// Conversion d'un pointeur GTK vers un autre type de la hiérarchie GObject (équivalent des macros GTK_*).
+/// Casts a GTK pointer to another GObject type (like the GTK_* macros).
 @inline(__always)
 func cast<T>(_ pointer: UnsafeMutableRawPointer?) -> UnsafeMutablePointer<T> {
     pointer!.assumingMemoryBound(to: T.self)
@@ -14,7 +14,7 @@ func raw<T>(_ pointer: UnsafeMutablePointer<T>?) -> UnsafeMutableRawPointer? {
     pointer.map { UnsafeMutableRawPointer($0) }
 }
 
-/// Types GTK importés comme pointeurs opaques (structures incomplètes).
+/// For GTK types imported as opaque pointers (incomplete structs).
 @inline(__always)
 func cast(_ pointer: UnsafeMutableRawPointer?) -> OpaquePointer {
     OpaquePointer(pointer!)
@@ -25,7 +25,7 @@ func raw(_ pointer: OpaquePointer?) -> UnsafeMutableRawPointer? {
     pointer.map { UnsafeMutableRawPointer($0) }
 }
 
-/// Fermetures Swift appelées par les signaux GTK (gardées en vie tant que l'application tourne).
+/// Swift closure called by a GTK signal (kept alive for the app's lifetime).
 final class SignalBox {
     let action: () -> Void
     init(_ action: @escaping () -> Void) { self.action = action }
@@ -33,7 +33,7 @@ final class SignalBox {
 
 private var signalBoxes: [SignalBox] = []
 
-/// Connecte un signal sans argument utile (clicked, activate, changed…).
+/// Connects a signal without useful arguments (clicked, activate, changed…).
 func connect(_ instance: UnsafeMutableRawPointer?, _ signal: String, _ action: @escaping () -> Void) {
     let box = SignalBox(action)
     signalBoxes.append(box)
@@ -43,7 +43,7 @@ func connect(_ instance: UnsafeMutableRawPointer?, _ signal: String, _ action: @
     _ = lcode_connect(instance, signal, unsafeBitCast(callback, to: GCallback.self), Unmanaged.passUnretained(box).toOpaque())
 }
 
-/// Connecte un signal qui transmet un pointeur en premier argument (row-activated, notify…).
+/// Connects a signal whose first argument is a pointer (row-activated, notify…).
 func connectArg(_ instance: UnsafeMutableRawPointer?, _ signal: String, _ action: @escaping (UnsafeMutableRawPointer?) -> Void) {
     final class ArgBox { let action: (UnsafeMutableRawPointer?) -> Void; init(_ a: @escaping (UnsafeMutableRawPointer?) -> Void) { action = a } }
     let box = ArgBox(action)
@@ -54,8 +54,7 @@ func connectArg(_ instance: UnsafeMutableRawPointer?, _ signal: String, _ action
     _ = lcode_connect(instance, signal, unsafeBitCast(callback, to: GCallback.self), Unmanaged.passRetained(box).toOpaque())
 }
 
-/// Connecte un signal qui attend un booléen en retour (close-request…) : renvoie toujours FALSE
-/// (le traitement par défaut continue).
+/// Connects a signal that returns a boolean (close-request…); always returns FALSE so default handling runs.
 func connectReturningFalse(_ instance: UnsafeMutableRawPointer?, _ signal: String, _ action: @escaping () -> Void) {
     let box = SignalBox(action)
     signalBoxes.append(box)
@@ -66,7 +65,7 @@ func connectReturningFalse(_ instance: UnsafeMutableRawPointer?, _ signal: Strin
     _ = lcode_connect(instance, signal, unsafeBitCast(callback, to: GCallback.self), Unmanaged.passUnretained(box).toOpaque())
 }
 
-/// Exécute une fermeture sur le fil de GTK (depuis n'importe quel fil).
+/// Runs a closure on the GTK thread, from any thread.
 func onMain(_ action: @escaping () -> Void) {
     let box = Unmanaged.passRetained(SignalBox(action)).toOpaque()
     let callback: @convention(c) (UnsafeMutableRawPointer?) -> gboolean = { data in
@@ -77,7 +76,7 @@ func onMain(_ action: @escaping () -> Void) {
     g_idle_add(callback, box)
 }
 
-/// Exécute une fermeture une fois, après un délai (millisecondes), sur le fil de GTK.
+/// Runs a closure once on the GTK thread after a delay in milliseconds.
 func after(_ milliseconds: UInt32, _ action: @escaping () -> Void) {
     let box = Unmanaged.passRetained(SignalBox(action)).toOpaque()
     let callback: @convention(c) (UnsafeMutableRawPointer?) -> gboolean = { data in
@@ -88,10 +87,10 @@ func after(_ milliseconds: UInt32, _ action: @escaping () -> Void) {
     g_timeout_add(milliseconds, callback, box)
 }
 
-/// Ajoute à une fenêtre une action « win.<nom> » déclenchée par un raccourci clavier.
+/// Adds a `win.<name>` action triggered by a keyboard shortcut.
 func addAction(_ window: UnsafeMutablePointer<GtkWidget>, _ name: String, accel: String, _ action: @escaping () -> Void) {
     let simple = g_simple_action_new(name, nil)
-    // « activate » transmet (action, paramètre, données) : rappel à trois arguments.
+    // "activate" passes (action, parameter, data): a three-argument callback.
     connectArg(raw(simple), "activate") { _ in action() }
     g_action_map_add_action(OpaquePointer(window), simple)
     lcode_shortcut(window, accel, "win." + name)

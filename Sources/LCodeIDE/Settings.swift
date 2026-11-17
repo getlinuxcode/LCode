@@ -1,7 +1,8 @@
 import CAdw
 import Foundation
+import LCodeKit
 
-/// Réglages persistants de l'IDE (~/.config/lcode/reglages.json) : apparence, projets récents.
+/// Persistent IDE settings (~/.config/lcode/settings.json): appearance, language, recent projects.
 final class Settings {
     static let shared = Settings()
 
@@ -9,9 +10,9 @@ final class Settings {
         case system, light, dark
         var title: String {
             switch self {
-            case .system: return "Selon le système"
-            case .light: return "Clair"
-            case .dark: return "Sombre"
+            case .system: return tr("Follow System")
+            case .light: return tr("Light")
+            case .dark: return tr("Dark")
             }
         }
     }
@@ -20,6 +21,19 @@ final class Settings {
         var appearance: Appearance = .system
         var recents: [String] = []
         var previewVisible = true
+        /// Language code (`en`, `fr`…); nil follows the system.
+        var language: String?
+
+        init() {}
+
+        // Tolerates missing keys, so older files keep loading.
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            appearance = try c.decodeIfPresent(Appearance.self, forKey: .appearance) ?? .system
+            recents = try c.decodeIfPresent([String].self, forKey: .recents) ?? []
+            previewVisible = try c.decodeIfPresent(Bool.self, forKey: .previewVisible) ?? true
+            language = try c.decodeIfPresent(String.self, forKey: .language)
+        }
     }
 
     private var stored = Stored()
@@ -28,8 +42,14 @@ final class Settings {
     private init() {
         let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config/lcode")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        url = dir.appendingPathComponent("reglages.json")
-        if let data = try? Data(contentsOf: url), let s = try? JSONDecoder().decode(Stored.self, from: data) { stored = s }
+        url = dir.appendingPathComponent("settings.json")
+        // Earlier versions used reglages.json.
+        let legacy = dir.appendingPathComponent("reglages.json")
+        let source = FileManager.default.fileExists(atPath: url.path) ? url : legacy
+        if let data = try? Data(contentsOf: source), let s = try? JSONDecoder().decode(Stored.self, from: data) {
+            stored = s
+            if source == legacy { save() }
+        }
     }
 
     private func save() {
@@ -46,7 +66,18 @@ final class Settings {
         set { stored.previewVisible = newValue; save() }
     }
 
-    /// Projets récents (le plus récent d'abord), seulement ceux qui existent encore.
+    /// Interface language; takes effect on next launch.
+    var language: String? {
+        get { stored.language }
+        set { stored.language = newValue; save() }
+    }
+
+    /// Must run before any UI is built.
+    func applyLanguage() {
+        Localization.preferred = stored.language
+    }
+
+    /// Recent projects, newest first, that still exist.
     var recents: [URL] {
         stored.recents.map { URL(fileURLWithPath: $0) }
             .filter { FileManager.default.fileExists(atPath: $0.appendingPathComponent("Package.swift").path) }
@@ -64,7 +95,6 @@ final class Settings {
         save()
     }
 
-    /// Applique l'apparence à toute l'application (libadwaita).
     func applyAppearance() {
         let scheme: AdwColorScheme
         switch stored.appearance {

@@ -1,8 +1,10 @@
 import Foundation
 import SwiftUI
 
-// Pages de calibration des contrôles : chaque contrôle seul dans ses états, puis un formulaire réaliste.
-// Repères `.calibrate` sur chaque contrôle (cadres SwiftUI), couches et captures relevées sur iPhone.
+// Control calibration pages: each control alone in its states, then a realistic form.
+// `.calibrate` markers on each control (SwiftUI frames); layers and screenshots recorded on the iPhone.
+// Labels whose width sets a marker's frame (menu picker, progress label) stay as in the reference
+// measurements of Tests/Calibration.
 
 enum ControlCatalog {
     static var pages: [CatalogPage] {
@@ -26,10 +28,10 @@ struct TogglePage: View {
     var body: some View {
         VStack(spacing: 20) {
             PageTitle(text: "Toggle")
-            Toggle("Désactivé", isOn: $off).calibrate("toggle.off")
-            Toggle("Activé", isOn: $on).calibrate("toggle.on")
-            Toggle("Teinté", isOn: $on).tint(.green).calibrate("toggle.tinted")
-            Toggle("Inactif", isOn: $on).disabled(true).calibrate("toggle.disabled")
+            Toggle("Off", isOn: $off).calibrate("toggle.off")
+            Toggle("On", isOn: $on).calibrate("toggle.on")
+            Toggle("Tinted", isOn: $on).tint(.green).calibrate("toggle.tinted")
+            Toggle("Disabled", isOn: $on).disabled(true).calibrate("toggle.disabled")
             Toggle(isOn: $on) { EmptyView() }.labelsHidden().calibrate("toggle.bare")
         }
         .padding(.horizontal, 20)
@@ -60,7 +62,7 @@ struct StepperPage: View {
     var body: some View {
         VStack(spacing: 20) {
             PageTitle(text: "Stepper")
-            Stepper("Quantité : \(value)", value: $value, in: 0...10).calibrate("stepper.value")
+            Stepper("Quantity: \(value)", value: $value, in: 0...10).calibrate("stepper.value")
             Stepper("Minimum", value: .constant(0), in: 0...10).calibrate("stepper.min")
             Stepper(value: $value) { EmptyView() }.labelsHidden().calibrate("stepper.bare")
         }
@@ -74,16 +76,16 @@ struct PickerPage: View {
     var body: some View {
         VStack(spacing: 24) {
             PageTitle(text: "Picker")
-            Picker("Vue", selection: $three) {
-                Text("Jour").tag(0)
-                Text("Semaine").tag(1)
-                Text("Mois").tag(2)
+            Picker("View", selection: $three) {
+                Text("Day").tag(0)
+                Text("Week").tag(1)
+                Text("Month").tag(2)
             }
             .pickerStyle(.segmented)
             .calibrate("picker.segmented3")
-            Picker("Choix", selection: $two) {
-                Text("Un").tag(0)
-                Text("Deux").tag(1)
+            Picker("Choice", selection: $two) {
+                Text("One").tag(0)
+                Text("Two").tag(1)
             }
             .pickerStyle(.segmented)
             .calibrate("picker.segmented2")
@@ -128,14 +130,14 @@ struct ProgressPage: View {
 
 struct TextFieldPage: View {
     @State private var empty = ""
-    @State private var filled = "Bonjour"
+    @State private var filled = "Hello"
     var body: some View {
         VStack(spacing: 20) {
             PageTitle(text: "TextField")
-            TextField("Nom", text: $empty).calibrate("textfield.plain")
-            TextField("Nom", text: $empty).textFieldStyle(.roundedBorder).calibrate("textfield.rounded")
-            TextField("Nom", text: $filled).textFieldStyle(.roundedBorder).calibrate("textfield.filled")
-            SecureField("Mot de passe", text: $empty).textFieldStyle(.roundedBorder).calibrate("textfield.secure")
+            TextField("Name", text: $empty).calibrate("textfield.plain")
+            TextField("Name", text: $empty).textFieldStyle(.roundedBorder).calibrate("textfield.rounded")
+            TextField("Name", text: $filled).textFieldStyle(.roundedBorder).calibrate("textfield.filled")
+            SecureField("Password", text: $empty).textFieldStyle(.roundedBorder).calibrate("textfield.secure")
         }
         .padding(.horizontal, 20)
     }
@@ -149,17 +151,17 @@ struct FormPage: View {
     @State private var name = ""
     var body: some View {
         Form {
-            Section("Réglages") {
+            Section("Settings") {
                 Toggle("Notifications", isOn: $on).calibrate("form.toggle")
-                Picker("Affichage", selection: $choice) {
-                    Text("Jour").tag(0); Text("Semaine").tag(1)
+                Picker("Display", selection: $choice) {
+                    Text("Day").tag(0); Text("Week").tag(1)
                 }
                 .calibrate("form.picker")
-                Stepper("Copies : \(count)", value: $count).calibrate("form.stepper")
+                Stepper("Copies: \(count)", value: $count).calibrate("form.stepper")
             }
-            Section("Détails") {
+            Section("Details") {
                 Slider(value: $level).calibrate("form.slider")
-                TextField("Nom", text: $name).calibrate("form.textfield")
+                TextField("Name", text: $name).calibrate("form.textfield")
             }
         }
     }
@@ -168,11 +170,11 @@ struct FormPage: View {
 struct AlertPage: View {
     var body: some View {
         Color.clear
-            .alert("Supprimer la photo ?", isPresented: .constant(true)) {
-                Button("Annuler", role: .cancel) {}
-                Button("Supprimer", role: .destructive) {}
+            .alert("Delete the photo?", isPresented: .constant(true)) {
+                Button("Cancel", role: .cancel) {}
+                Button("Delete", role: .destructive) {}
             } message: {
-                Text("Cette action est définitive.")
+                Text("This cannot be undone.")
             }
     }
 }

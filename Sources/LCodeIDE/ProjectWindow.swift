@@ -3,9 +3,8 @@ import CSource
 import Foundation
 import LCodeKit
 
-/// Fenêtre d'un projet (comme celle d'Xcode) : navigateur à gauche, éditeur à onglets au centre, aperçu
-/// à droite, journal en bas (compilation, problèmes, sortie de l'app, appareil). Barre : exécuter, arrêter,
-/// destination (simulateurs et iPhone détectés en USB ou Wi-Fi), menu.
+/// Project window, laid out like Xcode's: navigator on the left, tabbed editor in the center, preview on the
+/// right, logs at the bottom. Toolbar: run, stop, destination (simulators and iPhones over USB or Wi-Fi), menu.
 final class ProjectWindow {
     private(set) var project: XtoolProject
     let window: UnsafeMutablePointer<GtkWidget>
@@ -13,10 +12,10 @@ final class ProjectWindow {
     private let monitor = DeviceMonitor()
     private var navigator: FileNavigator!
     private var preview: PreviewPane!
-    /// Simulateur intégré (panneau de droite pendant l'exécution) et pile Aperçu / Simulateur.
+    /// Embedded simulator (right pane while running), stacked with the preview.
     private let simulator = SimulatorPane()
     private var sideStack: UnsafeMutablePointer<GtkWidget>!
-    /// Serveur de langage (sourcekit-lsp) pour l'autocomplétion, sur la copie d'aperçu du projet.
+    /// sourcekit-lsp for completion, running on the preview copy of the project.
     private var language: LanguageServer!
 
     private var titleWidget: UnsafeMutablePointer<GtkWidget>!
@@ -36,14 +35,14 @@ final class ProjectWindow {
     private var problemsLabel: UnsafeMutablePointer<GtkWidget>!
     private var status: UnsafeMutablePointer<GtkWidget>!
 
-    /// Onglets ouverts, dans l'ordre du carnet.
+    /// Open tabs, in notebook order.
     private enum Tab { case document(EditorDocument), assets(AssetEditor), signing(SigningEditor) }
     private var tabs: [(url: URL, tab: Tab, page: UnsafeMutablePointer<GtkWidget>)] = []
     private var diagnostics: [Diagnostic] = []
-    /// Problèmes de signature de la dernière installation sur iPhone (page Signature et capabilities).
+    /// Signing problems from the last iPhone install.
     private var signingIssues: [SigningIssue] = []
-    /// Adresse fictive de l'onglet « Signature et capabilities » (les onglets sont repérés par URL).
-    private var signingURL: URL { project.root.appendingPathComponent("Signature et capabilities") }
+    /// Pseudo-URL of the Signing & Capabilities tab (tabs are keyed by URL; its last component is the tab title).
+    private var signingURL: URL { project.root.appendingPathComponent(tr("Signing & Capabilities")) }
 
     init(project: XtoolProject) {
         self.project = project
@@ -63,7 +62,7 @@ final class ProjectWindow {
         }
         monitor.onChange = { [weak self] devices in self?.updateDestinations(devices) }
         monitor.start()
-        // Fichier de départ : la première vue du projet, sinon l'app.
+        // Initial file: ContentView, else the first view, else the app.
         let swiftFiles = project.targets.first { $0.name == project.appTarget }.map { target in
             (FileManager.default.enumerator(at: target.path, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? [])
                 .filter { $0.pathExtension == "swift" }.sorted { $0.path < $1.path }
@@ -75,23 +74,22 @@ final class ProjectWindow {
         gtk_window_present(cast(raw(window)))
     }
 
-    // MARK: - Interface
+    // MARK: - UI
 
     private func buildUI() {
-        // Barre d'en-tête.
         let header = adw_header_bar_new()!
         titleWidget = adw_window_title_new(project.name, "")
         adw_header_bar_set_title_widget(cast(raw(header)), titleWidget)
         let runButton = gtk_button_new_from_icon_name("media-playback-start-symbolic")!
-        gtk_widget_set_tooltip_text(runButton, "Exécuter sur la destination (Ctrl+R)")
+        gtk_widget_set_tooltip_text(runButton, tr("Run on the Destination (Ctrl+R)"))
         connect(raw(runButton), "clicked") { [weak self] in self?.run() }
         stopButton = gtk_button_new_from_icon_name("media-playback-stop-symbolic")
-        gtk_widget_set_tooltip_text(stopButton, "Arrêter (Ctrl+.)")
+        gtk_widget_set_tooltip_text(stopButton, tr("Stop (Ctrl+.)"))
         gtk_widget_set_sensitive(stopButton, 0)
         connect(raw(stopButton), "clicked") { [weak self] in self?.stop() }
         destinationModel = gtk_string_list_new(nil)!
         destinationDropDown = gtk_drop_down_new(cast(raw(destinationModel)), nil)
-        gtk_widget_set_tooltip_text(destinationDropDown, "Destination : simulateur ou iPhone (USB, Wi-Fi)")
+        gtk_widget_set_tooltip_text(destinationDropDown, tr("Destination: simulator or iPhone (USB, Wi-Fi)"))
         updateDestinations([])
         adw_header_bar_pack_start(cast(raw(header)), runButton)
         adw_header_bar_pack_start(cast(raw(header)), stopButton)
@@ -102,16 +100,16 @@ final class ProjectWindow {
         gtk_menu_button_set_popover(cast(raw(menuButton)), mainMenu())
         let previewButton = gtk_toggle_button_new()!
         gtk_button_set_icon_name(cast(raw(previewButton)), "sidebar-show-right-symbolic")
-        gtk_widget_set_tooltip_text(previewButton, "Aperçu (Ctrl+Alt+Entrée)")
+        gtk_widget_set_tooltip_text(previewButton, tr("Preview (Ctrl+Alt+Enter)"))
         gtk_toggle_button_set_active(cast(raw(previewButton)), Settings.shared.previewVisible ? 1 : 0)
         let searchButton = gtk_button_new_from_icon_name("edit-find-symbolic")!
-        gtk_widget_set_tooltip_text(searchButton, "Rechercher dans le fichier (Ctrl+F)")
+        gtk_widget_set_tooltip_text(searchButton, tr("Find in File (Ctrl+F)"))
         connect(raw(searchButton), "clicked") { [weak self] in self?.toggleSearch() }
         adw_header_bar_pack_end(cast(raw(header)), menuButton)
         adw_header_bar_pack_end(cast(raw(header)), previewButton)
         adw_header_bar_pack_end(cast(raw(header)), searchButton)
 
-        // Navigateur.
+        // Navigator.
         navigator = FileNavigator(root: project.root, window: self)
         navigator.onOpen = { [weak self] in self?.open($0) }
         let navBox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)!
@@ -124,11 +122,11 @@ final class ProjectWindow {
         gtk_label_set_xalign(cast(raw(navTitle)), 0)
         let addButton = gtk_button_new_from_icon_name("list-add-symbolic")!
         gtk_widget_add_css_class(addButton, "flat")
-        gtk_widget_set_tooltip_text(addButton, "Nouveau fichier (Ctrl+N)")
+        gtk_widget_set_tooltip_text(addButton, tr("New File (Ctrl+N)"))
         connect(raw(addButton), "clicked") { [weak self] in self?.newFile() }
         let signingButton = gtk_button_new_from_icon_name("security-high-symbolic")!
         gtk_widget_add_css_class(signingButton, "flat")
-        gtk_widget_set_tooltip_text(signingButton, "Signature et capabilities")
+        gtk_widget_set_tooltip_text(signingButton, tr("Signing & Capabilities"))
         connect(raw(signingButton), "clicked") { [weak self] in self?.openSigning() }
         gtk_box_append(cast(raw(navBar)), navTitle)
         gtk_box_append(cast(raw(navBar)), signingButton)
@@ -137,7 +135,7 @@ final class ProjectWindow {
         gtk_box_append(cast(raw(navBox)), navigator.widget)
         gtk_widget_set_size_request(navBox, 220, -1)
 
-        // Éditeur : barre de recherche et onglets.
+        // Editor: find bar and tabs.
         searchEntry = gtk_search_entry_new()
         gtk_widget_set_size_request(searchEntry, 320, -1)
         searchBar = gtk_search_bar_new()
@@ -156,7 +154,7 @@ final class ProjectWindow {
         gtk_box_append(cast(raw(editorBox)), searchBar)
         gtk_box_append(cast(raw(editorBox)), notebook)
 
-        // Journal.
+        // Logs.
         buildLog = logView()
         appLog = logView()
         deviceLog = logView()
@@ -171,21 +169,21 @@ final class ProjectWindow {
             if case let .document(doc)? = self.tabs.first(where: { $0.url == d.file })?.tab { doc.goTo(line: d.line, column: d.column) }
         }
         logNotebook = gtk_notebook_new()
-        problemsLabel = gtk_label_new("Problèmes")
+        problemsLabel = gtk_label_new(tr("Issues"))
         func page(_ child: UnsafeMutablePointer<GtkWidget>, _ title: String, label: UnsafeMutablePointer<GtkWidget>? = nil) {
             let scroller = gtk_scrolled_window_new()!
             gtk_scrolled_window_set_child(cast(raw(scroller)), child)
             gtk_notebook_append_page(cast(raw(logNotebook)), scroller, label ?? gtk_label_new(title))
         }
-        page(buildLog, "Compilation")
+        page(buildLog, tr("Build"))
         page(problems, "", label: problemsLabel)
-        page(appLog, "Sortie de l'app")
-        page(deviceLog, "Appareil")
+        page(appLog, tr("App Output"))
+        page(deviceLog, tr("Device"))
         let clear = gtk_button_new_from_icon_name("edit-clear-all-symbolic")!
         gtk_widget_add_css_class(clear, "flat")
-        gtk_widget_set_tooltip_text(clear, "Effacer")
+        gtk_widget_set_tooltip_text(clear, tr("Clear"))
         connect(raw(clear), "clicked") { [weak self] in self?.clearCurrentLog() }
-        status = gtk_label_new("Prêt")
+        status = gtk_label_new(tr("Ready"))
         gtk_widget_add_css_class(status, "dim-label")
         gtk_widget_set_margin_end(status, 8)
         let actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4)!
@@ -199,7 +197,7 @@ final class ProjectWindow {
         gtk_paned_set_position(cast(raw(editorPane)), 660)
         gtk_paned_set_shrink_end_child(cast(raw(editorPane)), 1)
 
-        // Aperçu.
+        // Preview.
         preview = PreviewPane(project: project)
         preview.overrides = { [weak self] in
             var texts: [URL: String] = [:]
@@ -214,9 +212,9 @@ final class ProjectWindow {
         gtk_revealer_set_transition_type(cast(raw(previewRevealer)), GTK_REVEALER_TRANSITION_TYPE_SLIDE_LEFT)
         sideStack = gtk_stack_new()!
         gtk_stack_set_transition_type(cast(raw(sideStack)), GTK_STACK_TRANSITION_TYPE_CROSSFADE)
-        gtk_stack_add_named(cast(raw(sideStack)), preview.widget, "apercu")
-        gtk_stack_add_named(cast(raw(sideStack)), simulator.widget, "simulateur")
-        gtk_stack_set_visible_child_name(cast(raw(sideStack)), "apercu")
+        gtk_stack_add_named(cast(raw(sideStack)), preview.widget, "preview")
+        gtk_stack_add_named(cast(raw(sideStack)), simulator.widget, "simulator")
+        gtk_stack_set_visible_child_name(cast(raw(sideStack)), "preview")
         runner.screen = simulator.screen
         simulator.send = { [weak self] in self?.runner.sendToApp($0) }
         gtk_revealer_set_child(cast(raw(previewRevealer)), sideStack)
@@ -267,7 +265,7 @@ final class ProjectWindow {
             self.language.stop()
             App.shared.projectClosed(self)
         }
-        // Apparence : l'éditeur suit le thème clair ou sombre.
+        // The editor follows the light or dark style.
         connectArg(raw(adw_style_manager_get_default()), "notify::dark") { [weak self] _ in
             for t in self?.tabs ?? [] { if case let .document(doc) = t.tab { doc.applyScheme(); doc.overlayTypes() } }
         }
@@ -283,7 +281,7 @@ final class ProjectWindow {
         return view
     }
 
-    /// Menu principal : fichiers, projets, apparence.
+    /// Main menu: files, projects, appearance, language.
     private func mainMenu() -> UnsafeMutablePointer<GtkWidget> {
         let popover = gtk_popover_new()!
         let box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0)!
@@ -295,40 +293,60 @@ final class ProjectWindow {
             gtk_box_append(cast(raw(box)), b)
         }
         func separator() { gtk_box_append(cast(raw(box)), gtk_separator_new(GTK_ORIENTATION_HORIZONTAL)) }
-        item("Nouveau fichier…  (Ctrl+N)") { [weak self] in self?.newFile() }
-        item("Nouveau dossier…") { [weak self] in self?.navigator.newFolder() }
-        item("Enregistrer tout  (Ctrl+Alt+S)") { [weak self] in self?.saveAll() }
-        item("Paquets…") { [weak self] in if let self { PackagesDialog.present(for: self) } }
-        item("Signature et capabilities") { [weak self] in self?.openSigning() }
-        item("Compte Apple…") { [weak self] in self?.showAccount() }
+        item(tr("New File…  (Ctrl+N)")) { [weak self] in self?.newFile() }
+        item(tr("New Folder…")) { [weak self] in self?.navigator.newFolder() }
+        item(tr("Save All  (Ctrl+Alt+S)")) { [weak self] in self?.saveAll() }
+        item(tr("Package Dependencies…")) { [weak self] in if let self { PackagesDialog.present(for: self) } }
+        item(tr("Signing & Capabilities")) { [weak self] in self?.openSigning() }
+        item(tr("Apple Account…")) { [weak self] in self?.showAccount() }
         separator()
         let win = window
-        item("Nouveau projet…") { App.shared.newProject(from: win) }
-        item("Ouvrir un projet…") { App.shared.openProjectDialog(from: win) }
-        item("Fenêtre d'accueil") { App.shared.showWelcome() }
+        item(tr("New Project…")) { App.shared.newProject(from: win) }
+        item(tr("Open Project…")) { App.shared.openProjectDialog(from: win) }
+        item(tr("Welcome Window")) { App.shared.showWelcome() }
         separator()
-        let appearanceTitle = gtk_label_new("Apparence")!
-        gtk_widget_add_css_class(appearanceTitle, "dim-label")
-        gtk_label_set_xalign(cast(raw(appearanceTitle)), 0)
-        gtk_widget_set_margin_start(appearanceTitle, 10)
-        gtk_widget_set_margin_top(appearanceTitle, 6)
-        gtk_box_append(cast(raw(box)), appearanceTitle)
-        var first: UnsafeMutablePointer<GtkWidget>?
-        for appearance in Settings.Appearance.allCases {
-            let check = gtk_check_button_new_with_label(appearance.title)!
-            gtk_widget_set_margin_start(check, 6)
-            if let first { gtk_check_button_set_group(cast(raw(check)), cast(raw(first))) } else { first = check }
-            gtk_check_button_set_active(cast(raw(check)), Settings.shared.appearance == appearance ? 1 : 0)
-            connect(raw(check), "toggled") {
-                if gtk_check_button_get_active(cast(raw(check))) != 0 { Settings.shared.appearance = appearance }
-            }
-            gtk_box_append(cast(raw(box)), check)
+        func heading(_ text: String) {
+            let label = gtk_label_new(text)!
+            gtk_widget_add_css_class(label, "dim-label")
+            gtk_label_set_xalign(cast(raw(label)), 0)
+            gtk_widget_set_margin_start(label, 10)
+            gtk_widget_set_margin_top(label, 6)
+            gtk_box_append(cast(raw(box)), label)
         }
+        func choices<T: Equatable>(_ options: [(T, String)], selected: T, _ choose: @escaping (T) -> Void) {
+            var first: UnsafeMutablePointer<GtkWidget>?
+            for (value, title) in options {
+                let check = gtk_check_button_new_with_label(title)!
+                gtk_widget_set_margin_start(check, 6)
+                if let first { gtk_check_button_set_group(cast(raw(check)), cast(raw(first))) } else { first = check }
+                gtk_check_button_set_active(cast(raw(check)), selected == value ? 1 : 0)
+                connect(raw(check), "toggled") {
+                    if gtk_check_button_get_active(cast(raw(check))) != 0 { choose(value) }
+                }
+                gtk_box_append(cast(raw(box)), check)
+            }
+        }
+        heading(tr("Appearance"))
+        choices(Settings.Appearance.allCases.map { ($0, $0.title) }, selected: Settings.shared.appearance) {
+            Settings.shared.appearance = $0
+        }
+        separator()
+        heading(tr("Language"))
+        let languages: [(String?, String)] = [(nil, tr("System Default"))]
+            + Localization.available.map { ($0, Localization.displayName($0)) }
+        choices(languages, selected: Settings.shared.language) { Settings.shared.language = $0 }
+        let note = gtk_label_new(tr("Applies on next launch."))!
+        gtk_widget_add_css_class(note, "dim-label")
+        gtk_widget_add_css_class(note, "caption")
+        gtk_label_set_xalign(cast(raw(note)), 0)
+        gtk_widget_set_margin_start(note, 10)
+        gtk_widget_set_margin_bottom(note, 6)
+        gtk_box_append(cast(raw(box)), note)
         gtk_popover_set_child(cast(raw(popover)), box)
         return popover
     }
 
-    // MARK: - Onglets
+    // MARK: - Tabs
 
     func open(_ url: URL) {
         if let i = tabs.firstIndex(where: { $0.url.standardizedFileURL == url.standardizedFileURL }) {
@@ -348,7 +366,7 @@ final class ProjectWindow {
             page = editor.widget
         } else {
             guard let text = try? String(contentsOf: url, encoding: .utf8) else {
-                Dialogs.message(window, title: "Ouverture impossible", message: "\(url.lastPathComponent) n'est pas un fichier texte.")
+                Dialogs.message(window, title: tr("Couldn’t Open File"), message: tr("%@ is not a text file.", url.lastPathComponent))
                 return
             }
             let doc = EditorDocument(url: url, text: text)
@@ -368,7 +386,6 @@ final class ProjectWindow {
             page = doc.scroller
             for d in diagnostics where d.isError && d.file == url { doc.markError(line: d.line) }
         }
-        // Étiquette : icône, nom, bouton de fermeture.
         let label = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6)!
         let icon = url == signingURL ? "security-high-symbolic" : url.pathExtension == "xcassets" ? "image-x-generic-symbolic" : "text-x-script-symbolic"
         gtk_box_append(cast(raw(label)), gtk_image_new_from_icon_name(icon))
@@ -446,7 +463,7 @@ final class ProjectWindow {
         if let url = currentURL { closeTab(url) }
     }
 
-    /// Fichier renommé ou déplacé depuis le navigateur : l'onglet suit.
+    /// A file renamed or moved in the navigator: its tab follows.
     func fileMoved(from old: URL, to new: URL) {
         let affected = tabs.filter { $0.url.path == old.path || $0.url.path.hasPrefix(old.path + "/") }
         for t in affected {
@@ -462,7 +479,7 @@ final class ProjectWindow {
         }
     }
 
-    // MARK: - Fichiers
+    // MARK: - Files
 
     private func newFile() {
         let folder = currentURL?.deletingLastPathComponent()
@@ -475,13 +492,13 @@ final class ProjectWindow {
         do {
             try doc.save()
             updateTabTitle(doc)
-            // Enregistrer relance l'app si elle tourne (sur le simulateur).
+            // Saving relaunches the app if it is running in the simulator.
             if runner.isRunning, selectedDestination.simulatorID != nil {
-                append("▸ Enregistré : relance du simulateur.\n", to: buildLog)
+                append(tr("▸ Saved: relaunching the simulator.") + "\n", to: buildLog)
                 run()
             }
         } catch {
-            Dialogs.message(window, title: "Enregistrement impossible", message: "\(error)")
+            Dialogs.message(window, title: tr("Couldn’t Save File"), message: "\(error)")
         }
     }
 
@@ -489,7 +506,7 @@ final class ProjectWindow {
         for t in tabs { if case let .document(doc) = t.tab, doc.dirty { try? doc.save(); updateTabTitle(doc) } }
     }
 
-    // MARK: - Recherche
+    // MARK: - Find
 
     private func toggleSearch() {
         let on = gtk_search_bar_get_search_mode(cast(raw(searchBar))) == 0
@@ -502,7 +519,7 @@ final class ProjectWindow {
         currentDocument?.search(text, forward: forward)
     }
 
-    // MARK: - Exécution
+    // MARK: - Run
 
     private var selectedDestination: Destination {
         let i = Int(gtk_drop_down_get_selected(cast(raw(destinationDropDown))))
@@ -516,7 +533,7 @@ final class ProjectWindow {
         var titles = destinations.map { UnsafePointer(strdup($0.title)) as UnsafePointer<CChar>? }
         titles.append(nil)
         titles.withUnsafeBufferPointer { gtk_string_list_splice(cast(raw(destinationModel)), 0, guint(n), $0.baseAddress) }
-        // Un iPhone qui apparaît devient la destination s'il n'y en avait pas ; sinon on garde le choix.
+        // Keep the current choice when it still exists.
         if let previous, let i = destinations.firstIndex(of: previous) {
             gtk_drop_down_set_selected(cast(raw(destinationDropDown)), guint(i))
         } else if previous?.simulatorID != nil || previous == nil, let first = devices.first, let i = destinations.firstIndex(of: first),
@@ -524,7 +541,7 @@ final class ProjectWindow {
             gtk_drop_down_set_selected(cast(raw(destinationDropDown)), guint(i))
         }
         if !devices.isEmpty, n > 0, n <= Destination.simulators.count {
-            append("▸ iPhone détecté : \(devices.map(\.title).joined(separator: ", ")).\n", to: buildLog)
+            append(tr("▸ iPhone detected: %@.", devices.map(\.title).joined(separator: ", ")) + "\n", to: buildLog)
         }
     }
 
@@ -542,29 +559,28 @@ final class ProjectWindow {
         }
     }
 
-    /// Pendant une exécution dans le simulateur, le panneau de droite montre l'app (l'aperçu se met en pause) ;
-    /// à l'arrêt, l'aperçu revient.
+    /// While running in the simulator, the right pane shows the app (the preview pauses); it comes back on stop.
     private var simulatorShown = false
     private func updateSidePanel(_ state: Runner.State) {
         guard selectedDestination.simulatorID != nil else { return }
-        let device = selectedDestination.title.replacingOccurrences(of: " (simulateur)", with: "")
+        let device = selectedDestination.name
         simulator.update(state, device: device, dark: Settings.isDark)
         let show = state == .building || state == .running || (state == .failed && simulatorShown)
         if show && !simulatorShown {
             simulatorShown = true
             preview.stopServer()
-            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "simulateur")
+            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "simulator")
             gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), 1)
         } else if state == .idle && simulatorShown {
             simulatorShown = false
-            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "apercu")
+            gtk_stack_set_visible_child_name(cast(raw(sideStack)), "preview")
             gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), Settings.shared.previewVisible ? 1 : 0)
             if Settings.shared.previewVisible { preview.refresh() }
         }
     }
 
-    /// Relit le projet (Package.swift modifié : paquets…) et met à jour l'exécution, l'aperçu, la complétion
-    /// et l'onglet Package.swift s'il est ouvert.
+    /// Reloads the project (e.g. after a Package.swift change) and updates the runner, preview, completion
+    /// and open tabs.
     func reloadProject(_ done: @escaping () -> Void = {}) {
         let root = project.root
         Thread.detachNewThread { [weak self] in
@@ -582,7 +598,7 @@ final class ProjectWindow {
                         if case let .document(doc) = t.tab, !doc.dirty { doc.reloadFromDisk() }
                         if case let .signing(editor) = t.tab { editor.projectChanged() }
                     }
-                    self.append("▸ Projet rechargé (\(loaded.dependencies.count) paquet(s)).\n", to: self.buildLog)
+                    self.append(tr("▸ Project reloaded (%d package(s)).", loaded.dependencies.count) + "\n", to: self.buildLog)
                 }
                 done()
             }
@@ -599,19 +615,18 @@ final class ProjectWindow {
         gtk_widget_set_sensitive(stopButton, state == .building || state == .running ? 1 : 0)
         let text: String
         switch state {
-        case .idle: text = "Prêt"
-        case .building: text = "Compilation…"
-        case .running: text = "En cours d'exécution"
-        case .failed: text = "Échec de la compilation"
+        case .idle: text = tr("Ready")
+        case .building: text = tr("Building…")
+        case .running: text = tr("Running")
+        case .failed: text = tr("Build Failed")
         }
         gtk_label_set_text(cast(raw(status)), text)
         if state == .running { gtk_notebook_set_current_page(cast(raw(logNotebook)), 2) }
         if state == .failed, !diagnostics.filter(\.isError).isEmpty { gtk_notebook_set_current_page(cast(raw(logNotebook)), 1) }
     }
 
-    // MARK: - Signature
+    // MARK: - Signing
 
-    /// Ouvre (ou montre) l'onglet « Signature et capabilities ».
     func openSigning() { open(signingURL) }
 
     func showAccount() {
@@ -620,18 +635,17 @@ final class ProjectWindow {
         }
     }
 
-    /// Fin d'une installation sur iPhone : les problèmes de signature vont au journal et à la page de signature.
+    /// After an iPhone install: signing problems go to the build log and the signing tab.
     private func signingIssuesFound(_ issues: [SigningIssue]) {
         signingIssues = issues
         for t in tabs { if case let .signing(editor) = t.tab { editor.issues = issues } }
         guard !issues.isEmpty else { return }
-        for issue in issues { append("✗ Signature : \(issue.message)\n", to: buildLog) }
-        append("▸ Détails : menu › Signature et capabilities.\n", to: buildLog)
-        // Pas de compte : on propose directement la connexion.
-        if issues.contains(where: { $0.message.hasPrefix("Aucun compte Apple") }) { showAccount() }
+        for issue in issues { append(tr("✗ Signing: %@", tr(issue.message)) + "\n", to: buildLog) }
+        append(tr("▸ Details: menu › Signing & Capabilities.") + "\n", to: buildLog)
+        if issues.contains(where: \.needsAccount) { showAccount() }
     }
 
-    // MARK: - Problèmes
+    // MARK: - Issues
 
     private func setDiagnostics(_ list: [Diagnostic]) {
         diagnostics = list.filter(\.isError) + list.filter { !$0.isError }
@@ -646,8 +660,8 @@ final class ProjectWindow {
             gtk_list_box_append(cast(raw(problems)), row)
         }
         let errors = diagnostics.filter(\.isError).count, warnings = diagnostics.count - errors
-        gtk_label_set_text(cast(raw(problemsLabel)), errors + warnings == 0 ? "Problèmes" : "Problèmes (\(errors) ✗, \(warnings) ⚠)")
-        // Lignes en erreur soulignées dans les fichiers ouverts.
+        gtk_label_set_text(cast(raw(problemsLabel)), errors + warnings == 0 ? tr("Issues") : tr("Issues (%d ✗, %d ⚠)", errors, warnings))
+        // Underline error lines in open files.
         for t in tabs {
             guard case let .document(doc) = t.tab else { continue }
             doc.clearErrors()
@@ -655,7 +669,7 @@ final class ProjectWindow {
         }
     }
 
-    // MARK: - Journal
+    // MARK: - Logs
 
     private func append(_ text: String, to view: UnsafeMutablePointer<GtkWidget>?) {
         guard let view else { return }

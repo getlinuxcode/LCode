@@ -9,44 +9,44 @@ public enum ShapeKind: Hashable, Sendable {
     case circle
 }
 
-/// Liste d'instructions de dessin, indépendante du backend graphique.
+/// Backend-independent list of drawing commands.
 public enum DisplayItem {
     case fill(ShapeKind, CGRect, RGBA)
     case stroke(ShapeKind, CGRect, RGBA, lineWidth: CGFloat)
     case text(String, Font, CGRect, RGBA, TextAlignment)
-    /// Symbole SF Symbols, ajusté au rectangle.
+    /// SF Symbol fitted to the rect.
     case symbol(String, Font, Image.Scale, CGRect, RGBA)
-    /// Image du catalogue d'assets (fichier PNG, JPEG, SVG…), étirée au rectangle.
+    /// Asset catalog image (PNG, JPEG, SVG…) stretched to the rect.
     case image(String, CGRect)
-    /// Image vidéo en mémoire (BGRA prémultiplié), étirée au rectangle.
+    /// In-memory video frame (premultiplied BGRA) stretched to the rect.
     case pixels(CVPixelBuffer, CGRect)
-    /// Chevron (›) ou flèche de retour (‹) dessinés en traits.
+    /// Chevron (›) or back arrow (‹) drawn as strokes.
     case chevron(CGRect, RGBA, lineWidth: CGFloat, pointingLeft: Bool)
     case pushOpacity(Double)
     case popOpacity
-    /// Translation et mise à l'échelle autour d'un point (transitions).
+    /// Translation and scale around a point (transitions).
     case pushTransform(dx: CGFloat, dy: CGFloat, scale: CGFloat, anchor: CGPoint)
     case popTransform
     case pushClip(ShapeKind, CGRect)
     case popClip
-    /// Fondu vertical d'une couleur opaque (en haut) vers transparent (en bas).
+    /// Vertical fade from an opaque color (top) to transparent (bottom).
     case fade(CGRect, RGBA)
-    /// Matière : floute ce qui est déjà dessiné dans la zone, puis applique un voile coloré.
+    /// Material: blurs what is already drawn in the area, then applies a tinted veil.
     case backdrop(CGRect, blur: CGFloat, tint: RGBA, shape: ShapeKind = .rectangle)
-    /// Effet de bord de défilement mesuré : flou progressif, transmission et voile ligne par ligne.
-    /// Le second rectangle situe la table (son y = 0 est en haut de ce rectangle, décalé de `shift`).
+    /// Measured scroll edge effect: progressive blur, transmission and veil per row.
+    /// The second rect positions the table (its y = 0 is at the rect's top, offset by `shift`).
     case scrollEdge(CGRect, ScrollEdgeTable, shift: CGFloat)
-    /// Dégradé linéaire dans une forme : couleurs, positions (0…1), points de départ et d'arrivée.
+    /// Linear gradient in a shape: colors, locations (0…1), start and end points.
     case linearGradient(ShapeKind, CGRect, [RGBA], [CGFloat], CGPoint, CGPoint)
-    /// Liquid Glass : réfraction, flou, saturation, voile et liseré sur ce qui est déjà dessiné.
+    /// Liquid Glass: refraction, blur, saturation, veil and rim over what is already drawn.
     case glass(ShapeKind, CGRect, GlassRender)
-    /// Zone interactive (bouton, onTapGesture). Les dernières zones dessinées sont au-dessus.
+    /// Hit area (button, onTapGesture). Areas drawn last are on top.
     case hitRegion(id: String, CGRect)
-    /// Repère de mesure (`accessibilityIdentifier`) : cadre de la vue identifiée.
+    /// Measurement marker (`accessibilityIdentifier`): frame of the identified view.
     case marker(id: String, CGRect)
-    /// Zone de geste de glisser (retour par balayage, feuille tirée vers le bas) ; `vertical` : sens du geste.
+    /// Drag gesture area (swipe back, sheet pull-down); `vertical`: gesture direction.
     case panRegion(id: String, CGRect, vertical: Bool)
-    /// Zone défilable : identifiant d'état, zone visible.
+    /// Scrollable area: state id, visible rect.
     case scrollRegion(id: String, CGRect)
 }
 
@@ -63,7 +63,7 @@ public struct DisplayList {
         case .popClip:
             _ = clips.popLast()
         case let .hitRegion(id, rect):
-            // Une zone interactive masquée par un découpage (liste défilée) n'est pas touchable.
+            // A hit area hidden by a clip (scrolled list) is not tappable.
             let visible = clips.last.map { $0.intersection(rect) } ?? rect
             guard !visible.isNull, !visible.isEmpty else { return }
             items.append(.hitRegion(id: id, visible))
@@ -78,12 +78,12 @@ public struct DisplayList {
         items.append(item)
     }
 
-    /// Ajoute les éléments d'une autre liste en respectant les découpages en cours.
+    /// Appends another list's items, honoring the current clips.
     mutating func append(contentsOf other: DisplayList) {
         for item in other.items { append(item) }
     }
 
-    /// Zone interactive la plus haute sous le point donné.
+    /// Topmost hit area under the point.
     public func hitTest(_ point: CGPoint) -> String? {
         for item in items.reversed() {
             if case let .hitRegion(id, rect) = item, rect.contains(point) { return id }
@@ -91,9 +91,9 @@ public struct DisplayList {
         return nil
     }
 
-    /// Repères de mesure (identifiant → cadre).
+    /// Measurement markers (id → frame).
     public var markers: [(id: String, rect: CGRect)] {
-        // Les transformations en cours (transitions) s'appliquent aux repères, comme au dessin.
+        // Active transforms (transitions) apply to markers as they do to drawing.
         var stack: [(dx: CGFloat, dy: CGFloat, scale: CGFloat, anchor: CGPoint)] = []
         var out: [(id: String, rect: CGRect)] = []
         for item in items {
@@ -114,8 +114,8 @@ public struct DisplayList {
         return out
     }
 
-    /// Zone défilable la plus haute sous le point donné.
-    /// Zone de geste la plus haute sous le point, pour le sens donné.
+    /// Topmost scrollable area under the point.
+    /// Topmost gesture area under the point, for the given direction.
     public func panTarget(_ point: CGPoint, vertical: Bool) -> String? {
         for item in items.reversed() {
             if case let .panRegion(id, rect, v) = item, v == vertical, rect.contains(point) { return id }
@@ -131,12 +131,12 @@ public struct DisplayList {
     }
 }
 
-/// Mesure du texte : fournie par le backend (Pango) ou par un faux mesureur dans les tests.
+/// Text measurement: provided by the backend (Pango) or a fake measurer in tests.
 public protocol TextMeasurer {
     func measure(_ text: String, font: Font, maxWidth: CGFloat?) -> CGSize
-    /// Mesure d'un symbole SF Symbols (nil si le symbole est inconnu).
+    /// SF Symbol measurement (nil if unknown).
     func measureSymbol(_ name: String, font: Font, scale: Image.Scale) -> SymbolMetrics?
-    /// Taille en pixels d'un fichier image (nil s'il est illisible).
+    /// Pixel size of an image file (nil if unreadable).
     func measureImage(_ path: String) -> CGSize?
 }
 
@@ -148,12 +148,12 @@ extension TextMeasurer {
 public final class LayoutContext {
     public let measurer: TextMeasurer
     public let colorScheme: ColorScheme
-    /// Écran complet et zones sûres : permet aux fonds (List, barres) de s'étendre sous la barre d'état.
+    /// Full screen and safe areas, so backgrounds (List, bars) can extend under the status bar.
     public let screen: CGRect
     public let safeArea: EdgeInsets
-    /// Pixels par point de l'appareil simulé (3 sur les iPhone récents).
+    /// Pixels per point of the simulated device (3 on recent iPhones).
     public var displayScale: CGFloat = 3
-    /// Animateur du graphe (nil : rendu sans animation).
+    /// Graph animator (nil: no animation).
     public var animator: Animator?
 
     public init(measurer: TextMeasurer, colorScheme: ColorScheme, screen: CGRect = .zero, safeArea: EdgeInsets = EdgeInsets()) {
@@ -163,7 +163,7 @@ public final class LayoutContext {
         self.safeArea = safeArea
     }
 
-    /// Étend un rectangle jusqu'aux bords de l'écran s'il touche les bords de la zone sûre.
+    /// Extends a rect to the screen edges if it touches the safe area edges.
     func extendingIntoSafeArea(_ rect: CGRect) -> CGRect {
         guard screen != .zero else { return rect }
         var r = rect

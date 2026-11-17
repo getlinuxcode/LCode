@@ -13,7 +13,7 @@ public struct Font: Hashable, Sendable {
     public enum TextStyle: CaseIterable, Hashable, Sendable {
         case largeTitle, title, title2, title3, headline, subheadline, body, callout, footnote, caption, caption2
 
-        /// Tailles Dynamic Type par défaut (catégorie « Large ») sur iOS.
+        /// Default iOS Dynamic Type sizes ("Large" category).
         var metrics: (size: CGFloat, weight: Weight) {
             switch self {
             case .largeTitle: (34, .regular)
@@ -35,7 +35,7 @@ public struct Font: Hashable, Sendable {
     public var weight: Weight
     public var design: Design
     public var isItalic: Bool
-    /// Décorations (portées par la police pour simplifier le rendu).
+    /// Decorations (carried by the font to keep rendering simple).
     public var isStrikethrough = false
     public var isUnderline = false
 

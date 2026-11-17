@@ -1,18 +1,17 @@
 # LCode — Architecture
 
-LCode est un IDE natif Linux (GTK4 / libadwaita) inspiré d'Xcode, pour développer
-des apps Apple (iOS, iPadOS, macOS, tvOS) en Swift / SwiftUI sans Mac.
+LCode is a native Linux IDE (GTK4 / libadwaita) inspired by Xcode, for building Apple apps in
+Swift / SwiftUI without a Mac.
 
-## Principes
+## Principles
 
-1. **Build réel = xtool.** Toute compilation pour un appareil Apple passe par
-   [xtool](https://github.com/xtool-org/xtool) (SDK iOS extrait d'un `Xcode.xip`
-   fourni par l'utilisateur, signature, installation sur appareil).
-2. **Simulateur = recompilation native Linux (approche B).** Le même code source
-   est compilé une seconde fois pour Linux, contre **LSimUI**, une
-   réimplémentation de l'API SwiftUI qui dessine dans une fenêtre imitant
-   l'appareil cible. On n'émule pas iOS : on reproduit le comportement SwiftUI.
-3. **Natif.** Interface GTK4 + libadwaita, pilotée depuis Swift.
+1. **Real builds = xtool.** Every build for an Apple device goes through
+   [xtool](https://github.com/xtool-org/xtool): iOS SDK extracted from an `Xcode.xip` supplied by the
+   user, signing, installation on the device.
+2. **Simulator = native Linux recompilation.** The same sources are compiled a second time for
+   Linux against **LSim**, a reimplementation of the SwiftUI API that draws into a window shaped like
+   the target device. iOS is not emulated: SwiftUI's behavior is reproduced.
+3. **Native.** GTK4 + libadwaita user interface, driven from Swift.
 
 ## Modules (SwiftPM)
 
@@ -20,140 +19,127 @@ des apps Apple (iOS, iPadOS, macOS, tvOS) en Swift / SwiftUI sans Mac.
 LCode/
 ├── Package.swift
 ├── Sources/
-│   ├── LSimUI/          API publique compatible SwiftUI (View, Text, VStack,
-│   │                    Button, @State, modifiers…) + moteur de layout.
-│   │                    Aucune dépendance graphique : produit un arbre de
-│   │                    rendu (display list) indépendant du backend.
-│   ├── CGtk/            module map système vers GTK4 / Cairo / Pango.
-│   ├── LSimRender/      backend Cairo/Pango : display list → pixels.
-│   ├── LSimDevice/      profils d'appareils (taille en points, échelle,
-│   │                    safe areas, coins arrondis, encoche / Dynamic Island).
-│   ├── LSimHost/        fenêtre du simulateur : cadre de l'appareil,
-│   │                    boucle d'événements, souris → touch, rotation, thème.
-│   ├── LCodeKit/        cœur de l'IDE : projets, intégration xtool,
-│   │                    sourcekit-lsp, génération du build « simulateur ».
-│   └── LCode/           application GTK (éditeur, navigateur, console…).
-└── Examples/            apps SwiftUI de test pour comparer avec le vrai simulateur.
+│   ├── LSimUI/          SwiftUI-compatible public API (View, Text, stacks, controls, @State,
+│   │                    modifiers…) + layout engine, animations, design profile.
+│   │                    No graphics dependency: produces a backend-independent display list.
+│   ├── LSimHost/        Cairo/Pango renderer (display list → pixels), device frame, event loop,
+│   │                    mouse → touch, keyboard, headless screenshots, serving frames to the IDE.
+│   ├── SwiftUI/         the module user code imports as `SwiftUI` (re-exports LSimUI + LSimHost).
+│   ├── Combine/         Combine for the simulator (Apple's framework does not exist on Linux).
+│   ├── AVFoundation/    AVPlayer, AVAudioPlayer…: real playback through ffmpeg / paplay.
+│   ├── AVKit/           VideoPlayer.
+│   ├── CoreMedia/       CMTime and friends.
+│   ├── CoreVideo/       CVPixelBuffer (BGRA video frames LSim can draw).
+│   ├── CGtk/ CAdw/ CSource/   system module maps for GTK4, libadwaita, GtkSourceView.
+│   ├── LCodeKit/        IDE core: xtool projects, simulator/preview build generation, SwiftPM
+│   │                    packages, signing, devices, templates, UI localization.
+│   ├── lcode/           command-line tool (`lcode new | open | run | preview`).
+│   └── LCodeIDE/        the GTK app (`lcode-ide`): editor, navigator, preview, simulator, console…
+├── Examples/            SwiftUI test apps (Counter, Fruits, calibration Catalog, Sonde probe).
+├── Tests/               LSimUI and LCodeKit tests, calibration references.
+└── tools/calibration/   calibration bench (Python).
 ```
 
-## Pipeline du simulateur
+## Simulator pipeline
 
 ```
-Projet utilisateur (SwiftUI)
-        │  LCodeKit génère un package Linux temporaire :
-        │  - mêmes sources
-        │  - `import SwiftUI`  → module LSimUI (via un module nommé SwiftUI)
-        │  - point d'entrée @main App → LSimHost
+User project (SwiftUI)
+        │  LCodeKit generates a temporary Linux package in <project>/.lcode/simulator/:
+        │  - targets are links to the project's sources
+        │  - `import SwiftUI` / `Combine` / `AVFoundation`… → LCode's modules
+        │  - SwiftPM dependencies that import those frameworks are copied and rewired the same way
+        │  - @main App entry point → LSimHost
         ▼
-swift build (toolchain Linux) ──► exécutable natif
+swift build (Linux toolchain) ──► native executable
         ▼
 LSimHost : App → Scene → View tree
         ▼
-LSimUI  : résolution des body, état (@State/@Observable), layout
+LSimUI  : body resolution, state (@State / @Observable / ObservableObject), layout
         ▼
-Display list ──► LSimRender (Cairo/Pango) ──► fenêtre GTK habillée en iPhone
+Display list ──► Cairo/Pango renderer ──► GTK window dressed as an iPhone (or the IDE's canvas)
 ```
 
-## Fidélité — ce qui compte
+Editing the project edits the simulator build, since its targets are links to the same sources.
 
-- **Layout** : algorithme de proposition de taille de SwiftUI (parent propose,
-  enfant choisit, parent place), spacing par défaut, priorités de layout,
-  `Spacer`, `frame`, `padding` (16 pt par défaut), safe areas.
-- **Typographie** : styles Dynamic Type (`.body` = 17 pt, `.largeTitle` = 34 pt…),
-  polices SF extraites localement (jamais redistribuées), repli sur une police libre.
-- **Couleurs système** : `accentColor` = systemBlue, labels primaire/secondaire,
-  fonds groupés, en clair et en sombre.
-- **Composants** : NavigationStack, List, TabView, sheet, alert, Form, Toggle…
-- **Animations** : courbes par défaut (spring), transitions.
+## Fidelity — what matters
 
-## Banc de calibration
+- **Layout**: SwiftUI's size-proposal algorithm (parent proposes, child chooses, parent places),
+  default spacing, layout priorities, `Spacer`, `frame`, `padding` (16 pt by default), safe areas.
+- **Typography**: Dynamic Type styles (`.body` = 17 pt, `.largeTitle` = 34 pt…), SF fonts installed
+  locally (never redistributed), free fallback font otherwise.
+- **System colors**: iOS 26+ palette, primary/secondary labels, grouped backgrounds, light and dark.
+- **Components**: NavigationStack, List, TabView, sheet, alert, Form, Toggle…
+- **Liquid Glass**: refraction, blur, saturation, tint and rim, measured on device.
+- **Animations**: default curves (spring), transitions, gestures thresholds.
 
-La fidélité ne repose pas sur des captures faites à la main mais sur des mesures exactes :
+## Calibration bench
 
-1. `Examples/Shared/Catalog/` : un catalogue SwiftUI (toutes les variantes d'un composant,
-   chacune avec un identifiant) compilé à la fois pour iOS (xtool) et pour LSim.
-2. Sur iPhone, l'app **LCode Catalogue** s'auto-inspecte page par page, en clair et en sombre :
-   cadres calculés par SwiftUI (`onGeometryChange`), couches Core Animation (rayons, courbes,
-   couleurs converties en sRVB, filtres, ombres) et capture sRVB, envoyés au PC.
-3. `tools/calibration/receiver.py` reçoit les mesures ; `tools/calibration/compare.py` fait rendre
-   les mêmes pages par LSim (`LSIM_SCREEN_ONLY`, `LSIM_DUMP`) et produit un rapport des écarts
-   et des planches iPhone | LSim | différence.
+Fidelity relies on exact measurements, not on hand-made screenshots:
 
-### Ajustement automatique
+1. `Examples/Shared/Catalog/`: a SwiftUI catalog (every variant of a component, each with an
+   identifier) compiled both for iOS (xtool) and for LSim.
+2. On the iPhone, the **LCode Catalog** app inspects itself page by page, in light and dark mode:
+   frames computed by SwiftUI (`onGeometryChange`), Core Animation layers (radii, curves, colors
+   converted to sRGB, filters, shadows) and sRGB screenshots, sent to the PC.
+3. `tools/calibration/receiver.py` receives the measurements; `tools/calibration/compare.py` has
+   LSim render the same pages (`LSIM_SCREEN_ONLY`, `LSIM_DUMP`) and produces a report of the
+   differences with iPhone | LSim | difference sheets.
 
-Les valeurs mesurables vivent dans un **profil de design** JSON
-(`Sources/LSimUI/Profiles/iOS-27.2.json`) : approche du texte par corps et par graisse, gabarits
-de boutons par taille, couleurs, matière du verre, et aussi les *comportements* (couleur du libellé,
-sensibilité à `controlSize`, type de remplissage). LSim le lit au démarrage ; `LSIM_PROFILE`
-permet d'en essayer une variante sans recompiler.
+### Automatic fitting
 
-Une seule commande fait tout :
+Measurable values live in a JSON **design profile** (`Sources/LSimUI/Profiles/iOS-27.2.json`):
+text tracking per size and weight, button metrics per control size, colors, glass material, and
+also *behaviors* (label color, `controlSize` sensitivity, fill type). LSim reads it at startup;
+`LSIM_PROFILE` points to a variant without recompiling.
+
+One command does everything:
 
 ```bash
 python3 -I tools/calibration/calibrate.py
 ```
 
-compile et installe le catalogue (xtool), attend que l'on touche l'icône sur l'iPhone, reçoit les
-mesures, puis `fit.py` ajuste le profil (lecture directe des couches, choix des comportements par
-recherche, marges et approche par correction des écarts, verre par recherche sur les pixels),
-recompile LSim, enregistre les références dans `Tests/Calibration/` et lance `check.py`
-(non-régression : échoue si un repère s'éloigne de plus de 0,5 pt de son résidu accepté).
-Les écarts qu'aucun réglage n'explique sont listés comme anomalies dans `ajustement.md` : ce sont
-eux, et eux seuls, qui demandent du code.
+It builds and installs the catalog (xtool), waits for the app to be launched on the iPhone,
+receives the measurements, then `fit.py` fits the profile (direct reading of layers, behavior
+choice by search, margins and tracking by error correction, glass by pixel search), rebuilds
+LSim, stores the references in `Tests/Calibration/` and runs `check.py` (non-regression: fails if
+a marker drifts more than 0.5 pt from its accepted residual). Differences no setting explains are
+listed as anomalies in the fit report: those, and only those, call for code changes.
 
-Les composants non encore passés au profil gardent des tables en code (`ListMetrics`,
-`NavigationMetrics`), par génération de design (`DesignStyle` : Liquid Glass ou compatibilité).
+Components not yet moved to the profile keep tables in code (`ListMetrics`, `NavigationMetrics`),
+per design generation (`DesignStyle`: Liquid Glass or compatibility).
 
-Pièges connus : les captures d'iPhone sont en Display P3 (convertir avant de comparer) ;
-`lld` inscrit la version minimale comme version du SDK (forcer `-platform_version`), sinon iOS
-affiche l'app en mode compatibilité ; `xtool launch` ne fonctionne pas sur iOS 27 (lancer l'app
-à la main).
+Known pitfalls: iPhone screenshots are Display P3 (convert before comparing); `lld` writes the
+minimum OS version as the SDK version (force `-platform_version`), otherwise iOS runs the app in
+compatibility mode; `xtool launch` does not work on iOS 27 (launch the app by hand).
 
-## Lancer un projet : `lcode run`
+## Running a project: `lcode run`
 
 ```bash
 swift build --product lcode
-.build/debug/lcode run <projet xtool>            # simulateur LSim
-.build/debug/lcode run <projet xtool> --device   # iPhone branché, via xtool
+.build/debug/lcode run <xtool project>            # LSim simulator
+.build/debug/lcode run <xtool project> --device   # connected iPhone, through xtool
 ```
 
-`LCodeKit` lit le projet (`swift package dump-package`), puis génère `<projet>/.lcode/simulateur/` :
-un paquet dont les cibles sont des **liens** vers les sources du projet, compilées pour Linux contre
-le module `SwiftUI` de LCode (LSimUI + LSimHost). Modifier le projet modifie donc le simulateur.
-Limites actuelles : paquets externes et ressources non pris en charge (signalés au lancement).
+`LCodeKit` reads the project (`swift package dump-package`) and generates the simulator package
+described above.
 
-### Couverture de l'API — sonde
+### API coverage — the probe
 
-`Examples/iOS/Sonde` est une app écrite « comme un développeur ordinaire » ; la relancer avec
-`lcode run Examples/iOS/Sonde` vérifie la couverture de LSimUI. Depuis le 16/11/2026 elle compile et
-s'affiche entièrement : `Image`/SF Symbols, `Label`, `TextField` (saisie au clavier), `Toggle`,
-`Slider`, `Stepper`, `Picker` (menu et segmenté), `DatePicker`, `ProgressView`, `Form`,
-`TabView`/`Tab`/`.tabItem`, `.sheet`, `.alert`, `.toolbar`, `@Bindable`, `@AppStorage`,
-`.environment(objet)`, `GeometryReader`, `LazyVGrid`, `ScrollView(.horizontal)`, `Link`, `.task`.
+`Examples/iOS/Sonde` is an app written "like an ordinary developer would"; running it with
+`lcode run Examples/iOS/Sonde` checks LSim's coverage.
 
-Approximations connues (à calibrer ou à compléter) : animations (`withAnimation` s'applique sans
-transition), menu de `Picker` (toucher = option suivante), `AsyncImage` sans téléchargement,
-`.swipeActions`/`.searchable`/`.refreshable` acceptés sans effet, gabarits iOS 26 des nouveaux
-contrôles estimés et non encore mesurés par le banc.
+Known approximations: `Picker` menus (tap selects the next option), `AsyncImage` without download,
+`.swipeActions` / `.searchable` / `.refreshable` accepted without effect, some iOS 26 control
+metrics estimated rather than measured.
 
-### Prochain chantier : Liquid Glass et animations
+## Accepted limits
 
-Vrai matériau de verre (réfraction/lentille de l'arrière-plan, reflets spéculaires), comportements
-des barres (rétraction de la barre d'onglets au défilement, transitions de navigation), et
-calibration des animations image par image (positions des couches Core Animation à chaque image).
+- UIKit, hardware and closed frameworks (ARKit, camera, HealthKit…): stubs.
+- The simulator validates UI and logic, not real performance.
+- Final testing happens on a real device through xtool.
 
-## Limites assumées
+## Roadmap
 
-- UIKit, frameworks matériels et fermés (ARKit, caméra, HealthKit…) : bouchons.
-- Le simulateur valide l'UI et la logique, pas les performances réelles.
-- Les tests finaux se font sur un vrai appareil via xtool.
-
-## Feuille de route
-
-1. **POC simulateur** : `VStack`, `HStack`, `Text`, `Button`, `Spacer`,
-   `padding`, `@State`, dans une fenêtre iPhone. ← *en cours*
-2. Navigation, List, modifiers courants, couleurs système, mode sombre.
-3. Génération automatique du build simulateur depuis un projet xtool.
-4. Shell de l'IDE : navigateur de fichiers, éditeur (GtkSourceView) + sourcekit-lsp,
-   console de build, bouton Run (simulateur / appareil via xtool).
-5. Profils iPad, Mac, Apple TV.
+- iPad, Mac and Apple TV device profiles.
+- More frameworks for the simulator (networking helpers, MapKit, SwiftData…).
+- Windows support.

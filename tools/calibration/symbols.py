@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Construit la table SF Symbols nom → glyphe, propre à cette machine.
+"""Builds the SF Symbols name → glyph table for this machine.
 
-Usage : ~/.local/share/lcode/venv/bin/python -I tools/calibration/symbols.py Calibration/<série>
+Usage: ~/.local/share/lcode/venv/bin/python -I tools/calibration/symbols.py Calibration/<run>
 
-L'iPhone a envoyé la liste des noms de symboles et un dessin de chacun (noir sur blanc, 64 × 64).
-Ce script dessine chaque glyphe de la zone privée (U+100000…) de la police SF Pro installée, puis
-apparie les formes (silhouettes normalisées, plus proche voisin). Le résultat ne contient que des
-correspondances nom → code de caractère, dérivées des données de l'utilisateur ; il est écrit hors
-du dépôt : ~/.local/share/lcode/symbols/iOS-27.2.json
+The iPhone sent the symbol names and a drawing of each (black on white, 64 × 64). This script draws
+every glyph of the private use area (U+100000…) of the installed SF Pro font and matches the shapes
+(normalised silhouettes, nearest neighbour). The result only holds name → code point mappings derived
+from the user's own data; it is written outside the repository: ~/.local/share/lcode/symbols/iOS-27.2.json
 """
 import argparse
 import base64
@@ -22,11 +21,11 @@ from PIL import Image, ImageDraw, ImageFont
 
 FONT = os.path.expanduser("~/.local/share/fonts/apple/SF-Pro-Text-Regular.otf")
 OUT = os.path.expanduser("~/.local/share/lcode/symbols/iOS-27.2.json")
-N = 48  # côté de la silhouette normalisée
+N = 48  # normalised silhouette side
 
 
 def normalize(gray):
-    """Silhouette : encre recadrée, mise à l'échelle sans déformation dans N × N, centrée. Renvoie (vecteur, rapport)."""
+    """Silhouette: ink cropped, scaled uniformly into N × N, centred. Returns (vector, aspect ratio)."""
     a = 255 - np.asarray(gray, dtype=np.float32)
     ys, xs = np.nonzero(a > 40)
     if len(xs) == 0:
@@ -44,7 +43,7 @@ def normalize(gray):
 
 
 def font_glyphs():
-    """Silhouettes de tous les glyphes de la zone privée de la police."""
+    """Silhouettes of all glyphs in the font's private use area."""
     cmap = TTFont(FONT, lazy=True).getBestCmap()
     cps = sorted(cp for cp in cmap if cp >= 0x100000)
     font = ImageFont.truetype(FONT, 48)
@@ -74,11 +73,11 @@ def main():
         with open(path) as f:
             entries += json.load(f)["symbols"]
     if not entries:
-        sys.exit(f"Aucun dessin de symbole dans {folder} (iOS a fourni {info.get('count')} noms).")
-    print(f"{len(entries)} symboles dessinés par l'iPhone ; police : {os.path.basename(FONT)}")
+        sys.exit(f"No symbol drawings in {folder} (iOS provided {info.get('count')} names).")
+    print(f"{len(entries)} symbols drawn by the iPhone; font: {os.path.basename(FONT)}")
 
     fv, fr, cps = font_glyphs()
-    print(f"{len(cps)} glyphes dans la zone privée de la police")
+    print(f"{len(cps)} glyphs in the font's private use area")
 
     table, distances, weak = {}, [], []
     for e in entries:
@@ -86,15 +85,15 @@ def main():
         v, ratio = normalize(Image.fromarray(pixels))
         if v is None:
             continue
-        sims = fv @ v                                   # similarité cosinus (vecteurs normés)
-        sims = sims - 0.5 * np.abs(np.log(np.maximum(fr, 1e-3) / max(ratio, 1e-3)))  # pénalise un rapport différent
+        sims = fv @ v                                   # cosine similarity (unit vectors)
+        sims = sims - 0.5 * np.abs(np.log(np.maximum(fr, 1e-3) / max(ratio, 1e-3)))  # penalise a different aspect ratio
         order = np.argsort(sims)[::-1]
         best = int(order[0])
         score = float(sims[best])
         margin = score - float(sims[order[1]])
         distances.append(score)
-        # Accepté si très ressemblant, ou assez ressemblant ET nettement meilleur que le deuxième candidat
-        # (les formes très fines, comme « minus », ont une similarité plus basse à cause de l'anticrénelage).
+        # Accept if very similar, or fairly similar AND clearly ahead of the runner-up
+        # (thin shapes like "minus" score lower because of anti-aliasing).
         if score < 0.9 and not (score >= 0.84 and margin >= 0.03):
             weak.append((e["name"], score))
             continue
@@ -104,10 +103,10 @@ def main():
     with open(args.out, "w") as f:
         json.dump({"source": os.path.basename(args.run.rstrip("/")), "font": os.path.basename(FONT),
                    "symbols": table, "aliases": info.get("aliases", {})}, f, sort_keys=True)
-    print(f"{len(table)} symboles appariés, {len(weak)} incertains écartés (similarité < 0,9).")
+    print(f"{len(table)} symbols matched, {len(weak)} uncertain ones dropped (similarity < 0.9).")
     for name in ("globe", "checkmark.circle.fill", "star.fill", "plus", "gear", "heart", "chevron.right"):
-        print(f"  {name:24s} → U+{table[name]:X}" if name in table else f"  {name:24s} → (non apparié)")
-    print(f"Table écrite : {args.out}")
+        print(f"  {name:24s} → U+{table[name]:X}" if name in table else f"  {name:24s} → (unmatched)")
+    print(f"Table written: {args.out}")
 
 
 if __name__ == "__main__":

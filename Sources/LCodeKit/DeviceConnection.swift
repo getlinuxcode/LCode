@@ -3,12 +3,11 @@ import Foundation
 import Glibc
 #endif
 
-/// Accès à l'iPhone en USB **ou en Wi-Fi**.
+/// iPhone access over USB **or Wi-Fi**.
 ///
-/// Le service système `usbmuxd` ne connaît que l'USB. LCode lance à côté `netmuxd` (dans
-/// ~/.local/share/lcode/bin), en mode relais : il transmet l'USB à `usbmuxd` et ajoute les iPhone
-/// annoncés sur le réseau local (appairés une fois en USB, synchronisation Wi-Fi active).
-/// Les outils (xtool, libimobiledevice) y accèdent via `USBMUXD_SOCKET_ADDRESS`.
+/// The system `usbmuxd` only knows USB. LCode runs `netmuxd` (from ~/.local/share/lcode/bin) as a relay:
+/// it forwards USB to `usbmuxd` and adds iPhones announced on the local network (paired once over USB,
+/// Wi-Fi sync enabled). Tools (xtool, libimobiledevice) reach it through `USBMUXD_SOCKET_ADDRESS`.
 public enum DeviceConnection {
     public static let host = "127.0.0.1"
     public static let port: UInt16 = 27015
@@ -16,8 +15,7 @@ public enum DeviceConnection {
         (NSHomeDirectory() as NSString).appendingPathComponent(".local/share/lcode/bin/netmuxd")
     }
 
-    /// Variables d'environnement à passer à xtool ; démarre netmuxd au besoin.
-    /// Renvoie un dictionnaire vide si netmuxd n'est pas installé (USB seul, comportement d'origine).
+    /// Environment to pass to xtool; starts netmuxd if needed. Empty when netmuxd is not installed (USB only).
     public static func environment() -> [String: String] {
         guard FileManager.default.isExecutableFile(atPath: netmuxd) else { return [:] }
         if !isListening() {
@@ -27,7 +25,7 @@ public enum DeviceConnection {
         return isListening() ? ["USBMUXD_SOCKET_ADDRESS": "\(host):\(port)"] : [:]
     }
 
-    /// Option de transport pour `xtool dev run` : l'USB s'il est branché (plus rapide), sinon le Wi-Fi.
+    /// Transport flag for `xtool dev run`: USB when plugged in (faster), otherwise Wi-Fi.
     public static func transportFlag(_ environment: [String: String]) -> String {
         if environment.isEmpty { return "--usb" }
         let usb = (try? Shell.capture(["idevice_id", "-l"]))?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -49,7 +47,7 @@ public enum DeviceConnection {
         }
     }
 
-    /// Lance netmuxd en arrière-plan, détaché (il survit à la commande lcode).
+    /// Starts netmuxd detached, so it outlives the lcode command.
     static func startNetmuxd() {
         let log = (NSHomeDirectory() as NSString).appendingPathComponent(".local/share/lcode/netmuxd.log")
         let command = "nohup '\(netmuxd)' --disable-unix --host \(host) --port \(port) "

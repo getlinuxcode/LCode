@@ -7,7 +7,7 @@ public enum ButtonRole: Hashable, Sendable {
 public enum _ButtonStyleKind: Hashable, Sendable {
     case automatic, plain, borderless, bordered, borderedProminent, glass, glassProminent
 
-    /// Styles dessinés avec un fond (forme + marges).
+    /// Styles drawn with a background (shape + padding).
     var hasBackground: Bool { [.bordered, .borderedProminent, .glass, .glassProminent].contains(self) }
 }
 
@@ -55,7 +55,7 @@ public struct Button<Label: View>: View, _PrimitiveView {
         }
         if env.isEnabled { context.graph.registerAction(id, action) }
 
-        // Toutes les valeurs viennent du profil de design (réécrit par le banc de calibration).
+        // All values come from the design profile (rewritten by the calibration bench).
         let profile = DesignProfile.current.button
         let style = profile.style(env.buttonStyle)
         let size = profile.size(env.controlSize)
@@ -73,7 +73,7 @@ public struct Button<Label: View>: View, _PrimitiveView {
         if !env.isInList && style.followsControlSize {
             labelCtx.environment.font = env.font ?? .system(size: CGFloat(size.fontSize))
         }
-        // Le style ne se propage pas aux boutons imbriqués dans le label.
+        // The style does not propagate to buttons nested in the label.
         labelCtx.environment.buttonStyle = .automatic
         labelCtx.environment.isInList = false
 
@@ -112,7 +112,7 @@ public struct Button<Label: View>: View, _PrimitiveView {
             node = LayerNode(node, layer: [background], alignment: .center, isBackground: true)
         }
 
-        // Dans une List, un bouton sans fond occupe toute la ligne (surbrillance gérée par la liste).
+        // In a List, a borderless button fills the row (the list handles highlighting).
         if env.isInList && style.fill == .none && env.buttonStyle != .plain {
             return [RowActionNode(node, id: id, isLink: false)]
         }
@@ -169,7 +169,7 @@ extension View {
     }
 }
 
-/// Rend son enfant carré (côté = la plus grande dimension), pour les boutons circulaires.
+/// Makes its child square (side = largest dimension), for circular buttons.
 final class SquareNode: SingleChildNode {
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let s = child.sizeThatFits(p, lc)
@@ -183,7 +183,7 @@ final class SquareNode: SingleChildNode {
     }
 }
 
-/// Fond en verre (approximation : remplissage clair ou teinté, liseré, reflet, ombre douce).
+/// Glass background (approximation: light or tinted fill, rim, highlight, soft shadow).
 final class GlassShapeNode: LayoutNode {
     let shape: ShapeKind
     let tint: Color?
@@ -200,7 +200,7 @@ final class GlassShapeNode: LayoutNode {
     }
 
     override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        // Vrai matériau Liquid Glass ; un verre « proéminent » est entièrement teinté.
+        // Real Liquid Glass material; a "prominent" glass is fully tinted.
         var glass = Glass.regular.render(lc.colorScheme)
         if let tint {
             let t = tint.resolve(in: lc.colorScheme)

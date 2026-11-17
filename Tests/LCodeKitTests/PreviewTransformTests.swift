@@ -31,13 +31,13 @@ struct ContentView: View {
     #expect(result.previews[0] == PreviewInfo(line: 12, name: "Clair", symbol: "__LSimPreview_0"))
     #expect(result.previews[1].line == 18)
     #expect(result.previews[1].name == nil)
-    // Mêmes lignes : les erreurs du compilateur pointent sur le vrai fichier.
+    // Same lines: compiler errors point at the real file.
     #expect(result.text.split(separator: "\n", omittingEmptySubsequences: false).count
             == source.split(separator: "\n", omittingEmptySubsequences: false).count)
     #expect(!result.text.contains("@main"))
     #expect(!result.text.contains("@Previewable"))
     #expect(!result.text.contains("#Preview(") && !result.text.contains("#Preview {\n"))
-    // La chaîne qui contient « } #Preview { » est intacte.
+    // The string containing "} #Preview {" is untouched.
     #expect(result.text.contains("Text(\"} #Preview { faux }\")"))
     #expect(result.text.contains("enum __LSimPreview_0 { @ViewBuilder static func body() -> some View {"))
     #expect(result.text.contains("} }"))

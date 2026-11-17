@@ -8,14 +8,13 @@ public protocol ViewModifier {
     @ViewBuilder func body(content: Content) -> Body
 }
 
-/// Le contenu passé à `ViewModifier.body(content:)`.
 public struct _ViewModifier_Content<Modifier: ViewModifier>: View, _PrimitiveView {
     public typealias Body = Never
     let make: (BuildContext) -> [LayoutNode]
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] { make(context) }
 }
 
-/// Modificateur interne qui agit directement sur les nœuds.
+/// Internal modifier that acts directly on nodes.
 public protocol _PrimitiveModifier {
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode]
 }
@@ -56,7 +55,7 @@ extension View {
     }
 }
 
-/// Applique une transformation à chaque nœud produit par le contenu.
+/// Applies a transform to each node produced by the content.
 struct _NodeModifier: _PrimitiveModifier {
     let transform: (LayoutNode, BuildContext) -> LayoutNode
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
@@ -127,7 +126,7 @@ extension View {
     }
 }
 
-// MARK: - Fond, superposition, apparence
+// MARK: - Background, overlay, appearance
 
 struct _LayerModifier<Layer: View>: _PrimitiveModifier {
     let layer: Layer
@@ -176,7 +175,7 @@ extension View {
     }
 }
 
-// MARK: - Environnement
+// MARK: - Environment
 
 extension View {
     public func font(_ font: Font?) -> some View {
@@ -224,12 +223,12 @@ extension View {
     }
 }
 
-// MARK: - Identité
+// MARK: - Identity
 
 struct _IdentityModifier: _PrimitiveModifier {
     let id: String
     func _apply(_ context: BuildContext, _ content: (BuildContext) -> [LayoutNode]) -> [LayoutNode] {
-        // Un nouvel identifiant = un nouveau chemin : la vue est recréée et son état repart de zéro.
+        // A new id means a new path: the view is recreated and its state starts over.
         content(context.child("id=\(id)"))
     }
 }
@@ -240,7 +239,7 @@ extension View {
     }
 }
 
-// MARK: - Accessibilité
+// MARK: - Accessibility
 
 final class MarkerNode: SingleChildNode {
     let id: String
@@ -256,13 +255,13 @@ final class MarkerNode: SingleChildNode {
 }
 
 extension View {
-    /// Identifiant d'accessibilité ; LSim l'utilise aussi comme repère de mesure.
+    /// Accessibility identifier; LSim also uses it as a measurement marker.
     public func accessibilityIdentifier(_ identifier: String) -> some View {
         modifier(_NodeModifier { node, _ in MarkerNode(node, id: identifier) })
     }
 }
 
-// MARK: - Interactions et cycle de vie
+// MARK: - Interactions and lifecycle
 
 struct _TapModifier: _PrimitiveModifier {
     let action: () -> Void

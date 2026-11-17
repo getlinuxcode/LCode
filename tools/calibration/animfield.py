@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Courbes d'animation mesurées sur iPhone (pages anim.*) : ajustement des ressorts et des durées.
+"""Animation curves measured on the iPhone (anim.* pages): fits springs and durations.
 
-Usage : ~/.local/share/lcode/venv/bin/python -I tools/calibration/animfield.py <série> [--write]
+Usage: ~/.local/share/lcode/venv/bin/python -I tools/calibration/animfield.py <run> [--write]
 
-Chaque page déplace un carré rouge de x = 40 à x = 300 ; l'iPhone relève sa position à chaque image de
-l'écran (secondes depuis le déclenchement). On en tire l'avancement p(t) = (x − 40) / 260, puis :
-  - pour un ressort, la réponse et l'amortissement qui collent le mieux (moindres carrés) ;
-  - pour une courbe de Bézier, la durée et les points de contrôle.
-`--write` range les paramètres dans le profil (`animations`), que LSimUI utilise pour ses préréglages.
+Each page moves a red square from x = 40 to x = 300; the iPhone samples its position every display
+frame (seconds since the trigger). Progress p(t) = (x − 40) / 260 is then fitted with:
+  - a spring: best response and damping (least squares);
+  - a Bezier curve: duration and control points.
+`--write` stores the parameters in the profile (`animations`), used by LSimUI for its presets.
 """
 import argparse
 import json
@@ -19,7 +19,7 @@ import numpy as np
 
 PROFILE = "Sources/LSimUI/Profiles/iOS-27.2.json"
 START, END = 40.0, 300.0
-# Nature supposée de chaque préréglage (le meilleur des deux est retenu de toute façon).
+# Apple presets written to the profile; the other pages only validate the fit.
 PRESETS = {"default", "spring", "smooth", "snappy", "bouncy", "easeInOut", "linear"}
 PAGES = ["default", "spring", "easeInOut", "linear", "smooth", "snappy", "bouncy", "springCustom", "easeOut1"]
 
@@ -97,11 +97,10 @@ def main():
     for page in PAGES:
         data = load(args.run, page)
         if data is None:
-            print(f"{page:13s} : pas d'échantillons")
+            print(f"{page:13s}: no samples")
             continue
         t, p = data
-        # Le déclenchement est relevé avant que la transaction n'atteigne l'écran : léger retard possible.
-        # Retard entre le déclenchement et le début réel du mouvement : ajusté avec la courbe (pas de 4 ms).
+        # The trigger is stamped before the transaction reaches the screen: the lag is fitted with the curve (4 ms steps).
         lag0 = float(t[np.argmax(p > 0.005)]) if (p > 0.005).any() else 0.0
         s = b = None
         for offset in np.arange(max(0.0, lag0 - 0.06), lag0 + 0.004, 0.004):
@@ -113,20 +112,19 @@ def main():
                 b = cb + (offset,)
         lag = s[3] if s[0] <= b[0] else b[3]
         kind = "spring" if s[0] <= b[0] else "bezier"
-        print(f"{page:13s} : {len(t)} images, retard {lag * 1000:.0f} ms, max {p.max():.3f} | "
-              f"ressort réponse {s[1]} amort. {s[2]} (écart {s[0]:.4f}) | {b[1]} {b[2]} s (écart {b[0]:.4f}) → {kind}")
+        print(f"{page:13s}: {len(t)} frames, lag {lag * 1000:.0f} ms, max {p.max():.3f} | "
+              f"spring response {s[1]} damping {s[2]} (rms {s[0]:.4f}) | {b[1]} {b[2]} s (rms {b[0]:.4f}) → {kind}")
         result[page] = ({"spring": {"response": s[1], "damping": s[2]}} if kind == "spring"
                         else {"bezier": b[1], "duration": b[2]})
         result[page]["lag"] = round(lag, 4)
     if args.write and result:
         with open(PROFILE) as f:
             profile = json.load(f)
-        # Seuls les préréglages d'Apple sont écrits (les autres pages servent à valider l'ajustement).
         profile["animations"] = {k: v for k, v in result.items() if k in PRESETS}
         with open(PROFILE, "w") as f:
             json.dump(profile, f, indent=2, sort_keys=True, ensure_ascii=False)
             f.write("\n")
-        print(f"Animations écrites dans {PROFILE}")
+        print(f"Animations written to {PROFILE}")
 
 
 if __name__ == "__main__":

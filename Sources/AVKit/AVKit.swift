@@ -1,8 +1,7 @@
 @_exported import AVFoundation
 import SwiftUI
 
-// AVKit pour le simulateur LSim : `VideoPlayer`, la vue SwiftUI qui affiche un AVPlayer (image réelle, toucher
-// pour lecture / pause, comme les commandes minimales d'iOS).
+// AVKit for LSim: `VideoPlayer` shows an AVPlayer's real frames; a tap toggles play/pause like iOS's minimal controls.
 
 public struct VideoPlayer<VideoOverlay: View>: View {
     let player: AVPlayer?
@@ -23,7 +22,7 @@ public struct VideoPlayer<VideoOverlay: View>: View {
     }
 }
 
-/// Surface vidéo réutilisable (VideoPlayer, doublures de lecteurs) : image courante du lecteur, ajustée.
+/// Reusable video surface (VideoPlayer, player stand-ins): the player's current frame, fitted.
 public struct PlayerSurface<Overlay: View>: View {
     let player: AVPlayer?
     let overlay: Overlay
@@ -70,7 +69,7 @@ extension PlayerSurface where Overlay == EmptyView {
     }
 }
 
-/// Contrôleur de lecture plein écran (UIKit) : non disponible dans le simulateur, présent pour compiler.
+/// UIKit full-screen controller: unavailable in the simulator, present so code compiles.
 open class AVPlayerViewController {
     public var player: AVPlayer?
     public var showsPlaybackControls = true

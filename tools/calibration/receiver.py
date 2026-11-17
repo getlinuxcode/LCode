@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Récepteur des mesures envoyées par l'app « LCode Catalogue » sur iPhone.
+"""Receives the measurements sent by the "LCode Catalog" app on the iPhone.
 
-Usage : python3 tools/calibration/receiver.py [--port 8765] [--out Calibration]
-Chaque page reçue est enregistrée dans <out>/<run>/ios/<page>.<clair|sombre>.{json,png}.
+Usage: python3 tools/calibration/receiver.py [--port 8765] [--out Calibration]
+Each page is saved as <out>/<run>/ios/<page>.<light|dark>.{json,png}.
 """
 import argparse
 import base64
@@ -22,13 +22,13 @@ def safe(name: str) -> str:
 class Handler(BaseHTTPRequestHandler):
     out_dir = "Calibration"
     want_symbols = True
-    only = []  # préfixes de pages à capturer (vide : toutes)
-    mode = "pages"  # « gestures » : l'app ouvre l'entraîneur de gestes (essais faits au doigt)
-    gestures_file = None  # chemin du dernier lot de gestes reçu
+    only = []  # page prefixes to capture (empty: all)
+    mode = "pages"  # "gestures": the app opens the gesture trainer (finger-made trials)
+    gestures_file = None  # path of the last gesture batch received
 
     def do_GET(self):
         if self.path == "/config":
-            # L'app demande si elle doit exporter les SF Symbols (long : 8 600 dessins).
+            # Whether the app should export SF Symbols (slow: ~8,600 drawings).
             body = json.dumps({"symbols": self.want_symbols, "only": self.only, "mode": self.mode}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -54,14 +54,14 @@ class Handler(BaseHTTPRequestHandler):
             return
         run = safe(payload.get("run", "run"))
         if self.path == "/gestures":
-            folder = os.path.join(self.out_dir, "gestes")
+            folder = os.path.join(self.out_dir, "gestures")
             os.makedirs(folder, exist_ok=True)
             path = os.path.join(folder, f"{run}.json")
             with open(path + ".tmp", "w") as f:
                 json.dump(payload, f, indent=1)
             os.replace(path + ".tmp", path)
             Handler.gestures_file = path
-            print(f"gestes reçus : {len(payload.get('back', []))} balayages, {len(payload.get('sheet', []))} feuilles → {path}", flush=True)
+            print(f"gestures received: {len(payload.get('back', []))} swipes, {len(payload.get('sheet', []))} sheets → {path}", flush=True)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"ok")
@@ -73,9 +73,9 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(folder, name), "w") as f:
                 json.dump(payload, f)
             if payload.get("kind") == "info":
-                print(f"symboles : {payload.get('count')} noms fournis par iOS ({payload.get('info', {}).get('source', 'source introuvable')})", flush=True)
+                print(f"symbols: {payload.get('count')} names provided by iOS ({payload.get('info', {}).get('source', 'source not found')})", flush=True)
             else:
-                print(f"symboles : lot {payload.get('start')} / {payload.get('total')} ({len(payload.get('symbols', []))} rendus)", flush=True)
+                print(f"symbols: batch {payload.get('start')} / {payload.get('total')} ({len(payload.get('symbols', []))} rendered)", flush=True)
             self.send_response(200)
             self.end_headers()
             self.wfile.write(b"ok")
@@ -89,12 +89,12 @@ class Handler(BaseHTTPRequestHandler):
         if png:
             with open(base + ".png", "wb") as f:
                 f.write(base64.b64decode(png))
-        # Écriture atomique : le PC surveille ces fichiers et ne doit jamais en lire un à moitié écrit.
+        # Atomic write: the PC polls these files and must never read a half-written one.
         with open(base + ".json.tmp", "w") as f:
             json.dump(payload, f, indent=1, sort_keys=True)
         os.replace(base + ".json.tmp", base + ".json")
-        print(f"reçu {page} ({scheme}) : {len(payload.get('markers', []))} repères, "
-              f"{len(payload.get('layers', []))} couches — {payload.get('device')} iOS {payload.get('system')}", flush=True)
+        print(f"received {page} ({scheme}): {len(payload.get('markers', []))} markers, "
+              f"{len(payload.get('layers', []))} layers — {payload.get('device')} iOS {payload.get('system')}", flush=True)
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"ok")
@@ -110,7 +110,7 @@ def main():
     args = parser.parse_args()
     Handler.out_dir = args.out
     server = ThreadingHTTPServer(("0.0.0.0", args.port), Handler)
-    print(f"En attente des mesures sur le port {args.port} → {args.out}/", flush=True)
+    print(f"Waiting for measurements on port {args.port} → {args.out}/", flush=True)
     server.serve_forever()
 
 

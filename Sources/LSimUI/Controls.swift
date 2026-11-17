@@ -1,11 +1,11 @@
 import Foundation
 
-// Contrôles de saisie et d'affichage. Les dimensions sont des estimations au gabarit iOS 26,
-// destinées à être recalées par le banc de calibration.
+// Input and display controls. Sizes are estimates against the iOS 26 template, to be refined by the
+// calibration bench.
 
-// MARK: - Outils communs
+// MARK: - Shared helpers
 
-/// Premier texte d'un sous-arbre (libellés d'options de Picker).
+/// First text in a subtree (Picker option labels).
 func firstText(in node: LayoutNode) -> String? {
     if let t = node as? TextNode { return t.string }
     if let s = node as? SingleChildNode { return firstText(in: s.child) }
@@ -18,7 +18,7 @@ func group(_ nodes: [LayoutNode], axis: Axis = .horizontal) -> LayoutNode {
     nodes.count == 1 ? nodes[0] : StackNode(axis: axis, crossAlignment: 0.5, spacing: nil, children: nodes)
 }
 
-/// Ligne « libellé … contrôle » (Toggle, Stepper, Picker, DatePicker).
+/// "Label … control" row (Toggle, Stepper, Picker, DatePicker).
 func controlRow(_ label: [LayoutNode], _ trailing: LayoutNode) -> LayoutNode {
     var children = label
     children.append(SpacerNode(minLength: 8))
@@ -26,8 +26,8 @@ func controlRow(_ label: [LayoutNode], _ trailing: LayoutNode) -> LayoutNode {
     return StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)
 }
 
-/// Dans une ligne de liste, iOS ne compte pas la hauteur du contrôle (interrupteur, stepper) : la ligne prend
-/// la hauteur du libellé et le contrôle déborde, centré (mesuré sur iPhone : cadre de 20,3 pt dans un Form).
+/// In a list row iOS ignores the control's height (switch, stepper): the row takes the label's height and
+/// the control overflows, centered (measured on iPhone: 20.3 pt frame in a Form).
 final class RowOverflowNode: SingleChildNode {
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         CGSize(width: child.sizeThatFits(p, lc).width, height: 0)
@@ -38,7 +38,7 @@ final class RowOverflowNode: SingleChildNode {
     }
 }
 
-/// Nœud de taille fixe dessiné par une fermeture.
+/// Fixed-size node drawn by a closure.
 final class DrawNode: LayoutNode {
     let size: (ProposedViewSize) -> CGSize
     let paint: (CGRect, LayoutContext, inout DisplayList) -> Void
@@ -71,7 +71,7 @@ public struct Label<Title: View, Icon: View>: View, _PrimitiveView {
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         let ctx = context.child("Label")
         var iconCtx = ctx.child("icon")
-        // Dans une liste, l'icône prend la teinte (comme les réglages iOS).
+        // In a list the icon takes the tint (like iOS Settings).
         if context.environment.isInList { iconCtx.environment.foregroundColor = context.environment.tint ?? .accentColor }
         let iconNodes = LSimUI._makeNodes(icon, iconCtx)
         let titleNodes = LSimUI._makeNodes(title, ctx.child("title"))
@@ -130,8 +130,8 @@ public struct Toggle<Label: View>: View, _PrimitiveView {
         let enabled = context.environment.isEnabled
         if enabled { context.graph.registerAction(id) { isOn.wrappedValue.toggle() } }
         let tint = context.environment.tint ?? .green
-        // Interrupteur iOS 27 (couches mesurées) : cadre de 61 × 28, piste de 63 pt qui déborde à droite,
-        // curseur blanc de 37 × 24 ; piste éteinte gris (120, 120, 128) à 43 % (clair) / 58 % (sombre).
+        // iOS 27 switch (measured layers): 61 × 28 frame, 63 pt track overflowing right, 37 × 24 white thumb;
+        // off track grey (120, 120, 128) at 43% (light) / 58% (dark).
         let control = DrawNode(size: { _ in CGSize(width: 61, height: 28) }) { frame, lc, list in
             let rect = CGRect(x: frame.minX, y: frame.minY, width: 63, height: frame.height)
             let offTrack = Color(light: .rgb255(120, 120, 128, 0.43), dark: .rgb255(120, 120, 128, 0.58))
@@ -150,7 +150,7 @@ public struct Toggle<Label: View>: View, _PrimitiveView {
         labelCtx.environment.isInList = false
         let labelNodes = LSimUI._makeNodes(label, labelCtx)
         if context.environment.labelsHidden { return [control] }
-        // Désactivé : seul l'interrupteur s'estompe, le libellé reste (mesuré sur iPhone).
+        // Disabled: only the switch fades, the label stays (measured on iPhone).
         return [controlRow(labelNodes, context.environment.isInList ? RowOverflowNode(control) : control)]
     }
 }
@@ -201,7 +201,7 @@ public struct TextField<Label: View>: View, _PrimitiveView {
     }
 }
 
-/// Champ de texte : prend la largeur proposée ; curseur d'insertion quand il est actif.
+/// Text field: takes the proposed width; insertion caret when focused.
 final class TextFieldNode: LayoutNode {
     let text: TextNode
     let id: String
@@ -224,7 +224,7 @@ final class TextFieldNode: LayoutNode {
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let line = text.sizeThatFits(.unspecified, lc)
         let width = p.width.flatMap { $0.isFinite ? $0 : nil } ?? max(line.width, 100)
-        // Champ iOS (mesuré) : ligne de 22 pt pour un texte de 17 pt (20,3 pt), plus 2 × 6 pt avec bordure (34 pt).
+        // iOS field (measured): 22 pt line for 17 pt text (20.3 pt), plus 2 × 6 pt with a border (34 pt).
         let fieldLine = line.height * 22 / 20.333
         return CGSize(width: width, height: fieldLine + (bordered ? 12 : 0))
     }
@@ -309,7 +309,7 @@ public struct SubmitTriggers: OptionSet, Sendable {
     public static let search = SubmitTriggers(rawValue: 2)
 }
 
-/// `@FocusState` : accepté ; le focus réel est géré par le simulateur (toucher un champ).
+/// `@FocusState`: accepted; actual focus is handled by the simulator (tapping a field).
 @propertyWrapper
 public struct FocusState<Value: Hashable>: _DynamicProperty {
     let state: State<Value>
@@ -335,7 +335,7 @@ public struct Slider<Label: View>: View, _PrimitiveView {
     let value: Binding<Double>
     let range: ClosedRange<Double>
     let step: Double?
-    /// Libellés des valeurs extrêmes (`minimumValueLabel` / `maximumValueLabel`), de part et d'autre.
+    /// Min / max value labels (`minimumValueLabel` / `maximumValueLabel`), on either side.
     var minimumLabel: AnyView?
     var maximumLabel: AnyView?
 
@@ -375,7 +375,7 @@ public struct Slider<Label: View>: View, _PrimitiveView {
             list.append(.fill(.capsule, CGRect(x: track.minX, y: track.minY, width: x - track.minX + thumb.width / 2, height: 6),
                               tint.resolve(in: lc.colorScheme)))
             let knob = CGRect(x: x, y: rect.midY - thumb.height / 2, width: thumb.width, height: thumb.height)
-            // Ombre douce tout autour du curseur (visible sur fond blanc), plus marquée vers le bas.
+            // Soft shadow all around the thumb (visible on white), stronger below.
             list.append(.fill(.capsule, knob.insetBy(dx: -1, dy: -1).offsetBy(dx: 0, dy: 1), RGBA(0, 0, 0, 0.06)))
             list.append(.fill(.capsule, knob.insetBy(dx: -0.5, dy: -0.5), RGBA(0, 0, 0, 0.06)))
             list.append(.fill(.capsule, knob, RGBA(1, 1, 1)))
@@ -422,7 +422,7 @@ public struct Stepper<Label: View>: View, _PrimitiveView {
     let label: Label
     let increment: () -> Void
     let decrement: () -> Void
-    /// Boutons actifs (un bouton à la borne de l'intervalle s'estompe, comme sur iPhone).
+    /// Enabled buttons (a button at the range bound fades, as on iPhone).
     var canIncrement = true
     var canDecrement = true
 
@@ -444,7 +444,7 @@ public struct Stepper<Label: View>: View, _PrimitiveView {
             list.append(.fill(.capsule, rect, Color.tertiarySystemFill.resolve(in: lc.colorScheme)))
             let left = CGRect(x: rect.minX, y: rect.minY, width: rect.width / 2, height: rect.height)
             let right = CGRect(x: rect.midX, y: rect.minY, width: rect.width / 2, height: rect.height)
-            // Trait central : 1 × 24 pt (couches mesurées).
+            // Center divider: 1 × 24 pt (measured layers).
             list.append(.fill(.rectangle, CGRect(x: rect.midX - 0.5, y: rect.midY - 12, width: 1, height: 24),
                               Color.separator.resolve(in: lc.colorScheme)))
             for (node, half, id, active) in [(minus, left, minusID, canDecrement), (plus, right, plusID, canIncrement)] {
@@ -501,9 +501,9 @@ extension Stepper where Label == Text {
     }
 }
 
-// MARK: - Picker (style menu par défaut, et segmenté)
+// MARK: - Picker (default menu style, and segmented)
 
-/// `.tag(valeur)` : valeur associée à une option de Picker.
+/// `.tag(value)`: value attached to a Picker option.
 final class TagNode: SingleChildNode {
     let tag: AnyHashable
     init(_ child: LayoutNode, tag: AnyHashable) {
@@ -591,13 +591,13 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
             }]
         }
 
-        // Style menu : « Libellé … Valeur ⌃⌄ ». Toucher passe à l'option suivante (en attendant le vrai menu).
+        // Menu style: "Label … Value ⌃⌄". Tapping selects the next option (until a real menu exists).
         let id = context.path + "/Picker"
         if !options.isEmpty {
             context.graph.registerAction(id) { select(((index ?? -1) + 1) % options.count) }
         }
-        // Hors liste : bouton teinté « Valeur ⌃⌄ », sans libellé, marges 12 × 7 (106 × 34,3 pt mesurés pour
-        // « Semaine ») ; en liste : libellé à gauche, valeur grise à droite.
+        // Outside a list: tinted "Value ⌃⌄" button, no label, 12 × 7 padding (106 × 34.3 pt measured for a
+        // 6-letter value); in a list: label on the left, grey value on the right.
         let inList = context.environment.isInList
         let valueColor: Color = inList ? .secondary : (context.environment.tint ?? .accentColor)
         let valueText = TextNode(index.map { options[$0].title } ?? "", font: context.environment.font ?? .body,
@@ -622,7 +622,7 @@ extension Picker where Label == Text {
     }
 }
 
-// MARK: - DatePicker (style compact)
+// MARK: - DatePicker (compact style)
 
 public struct DatePickerComponents: OptionSet, Sendable {
     public let rawValue: Int
@@ -648,7 +648,7 @@ public struct DatePicker<Label: View>: View, _PrimitiveView {
         let date = selection.wrappedValue
         var pills: [LayoutNode] = []
         let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.locale = Locale(identifier: "en_US")
         if components.contains(.date) {
             formatter.dateStyle = .medium
             formatter.timeStyle = .none
@@ -702,7 +702,7 @@ public struct ProgressView<Label: View>: View, _PrimitiveView {
                 list.append(.fill(.capsule, CGRect(x: rect.minX, y: rect.minY, width: w, height: rect.height), tint.resolve(in: lc.colorScheme)))
             }
         } else {
-            // Indicateur d'activité : 8 rayons de gris dégradé (image figée).
+            // Activity indicator: 8 spokes in graded grey (static image).
             indicator = DrawNode(size: { _ in CGSize(width: 20, height: 20) }) { rect, lc, list in
                 for i in 0..<8 {
                     let a = Double(i) / 8 * 2 * .pi
@@ -748,7 +748,7 @@ public struct Link<Label: View>: View, _PrimitiveView {
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
         let destination = self.destination
-        return Button(action: { print("[LSim] Le lien ouvrirait : \(destination.absoluteString)") }, label: { label })._makeNodes(context)
+        return Button(action: { print("[LSim] Link would open: \(destination.absoluteString)") }, label: { label })._makeNodes(context)
     }
 }
 
@@ -758,7 +758,7 @@ extension Link where Label == Text {
     }
 }
 
-/// Image téléchargée : le simulateur n'effectue pas encore la requête et montre l'espace réservé.
+/// Downloaded image: the simulator does not perform the request yet and shows the placeholder.
 public struct AsyncImage<Content: View>: View, _PrimitiveView {
     public typealias Body = Never
     let placeholder: AnyView

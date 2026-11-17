@@ -3,18 +3,15 @@ import Foundation
 import FoundationNetworking
 #endif
 
-// Combine pour le simulateur LSim (Linux n'a pas le framework d'Apple) : l'essentiel de l'API utilisée par
-// les apps et les paquets — éditeurs, sujets, @Published, ObservableObject, opérateurs courants, Timer et
-// NotificationCenter, `values` pour `for await`. Les abonnements sont simplifiés : pas de demande
-// (backpressure), chaque valeur est transmise dès qu'elle est émise.
+// Combine for LSim (Linux has no Apple framework): the API surface apps and packages actually use.
+// Subscriptions are simplified: no demand (backpressure), every value is delivered as soon as it is sent.
 
-// MARK: - Abonnements
+// MARK: - Subscriptions
 
 public protocol Cancellable {
     func cancel()
 }
 
-/// Annule l'abonnement quand il est libéré (ou à l'appel de `cancel()`).
 public final class AnyCancellable: Cancellable, Hashable {
     private var action: (() -> Void)?
     private let lock = NSLock()
@@ -57,9 +54,9 @@ public enum Subscribers {
 
 extension Subscribers.Completion: Equatable where Failure: Equatable {}
 
-// MARK: - Éditeur
+// MARK: - Publisher
 
-/// Éditeur de valeurs. Dans LSim, l'abonnement passe par `_subscribe` (valeurs, puis fin éventuelle).
+/// In LSim, subscribing goes through `_subscribe` (values, then an optional completion).
 public protocol Publisher<Output, Failure> {
     associatedtype Output
     associatedtype Failure: Error
@@ -68,7 +65,7 @@ public protocol Publisher<Output, Failure> {
                     _ receiveCompletion: @escaping (Subscribers.Completion<Failure>) -> Void) -> AnyCancellable
 }
 
-/// Éditeur défini par sa fonction d'abonnement (support des opérateurs).
+/// Publisher defined by its subscribe function (backs the operators).
 public struct _ClosurePublisher<Output, Failure: Error>: Publisher {
     let body: (@escaping (Output) -> Void, @escaping (Subscribers.Completion<Failure>) -> Void) -> AnyCancellable
     public func _subscribe(_ v: @escaping (Output) -> Void, _ c: @escaping (Subscribers.Completion<Failure>) -> Void) -> AnyCancellable {
@@ -96,7 +93,7 @@ extension Publisher {
         AnyPublisher(_ClosurePublisher(body: body))
     }
 
-    // MARK: Abonnés
+    // MARK: Subscribers
 
     public func sink(receiveCompletion: @escaping (Subscribers.Completion<Failure>) -> Void,
                      receiveValue: @escaping (Output) -> Void) -> AnyCancellable {
@@ -114,7 +111,7 @@ extension Publisher where Failure == Never {
         _subscribe(receiveValue, { _ in })
     }
 
-    /// `publisher.assign(to: &$propriété)` : l'abonnement vit aussi longtemps que l'objet.
+    /// `publisher.assign(to: &$property)`: the subscription lives as long as the object.
     public func assign(to published: inout Published<Output>.Publisher) {
         let subject = published.subject
         let token = _subscribe({ subject.send($0) }, { _ in })
@@ -122,7 +119,7 @@ extension Publisher where Failure == Never {
     }
 }
 
-// MARK: - Éditeurs simples
+// MARK: - Simple publishers
 
 public struct Just<Output>: Publisher {
     public typealias Failure = Never
@@ -157,7 +154,7 @@ public struct Fail<Output, Failure: Error>: Publisher {
     }
 }
 
-/// Résultat unique produit plus tard (une seule exécution de la promesse, rejouée aux abonnés suivants).
+/// The promise runs once; its result is replayed to later subscribers.
 public final class Future<Output, Failure: Error>: Publisher {
     public typealias Promise = (Result<Output, Failure>) -> Void
     private var result: Result<Output, Failure>?
@@ -213,7 +210,7 @@ public struct Deferred<DeferredPublisher: Publisher>: Publisher {
     }
 }
 
-// MARK: - Sujets
+// MARK: - Subjects
 
 public protocol Subject<Output, Failure>: AnyObject, Publisher {
     func send(_ value: Output)
@@ -224,7 +221,7 @@ extension Subject where Output == Void {
     public func send() { send(()) }
 }
 
-/// Base commune des sujets : liste d'abonnés protégée par un verrou.
+/// Common subject base: lock-protected subscriber list.
 public class _SubjectBase<Output, Failure: Error> {
     typealias Entry = (value: (Output) -> Void, completion: (Subscribers.Completion<Failure>) -> Void)
     var subscribers: [UUID: Entry] = [:]
@@ -304,9 +301,9 @@ public final class CurrentValueSubject<Output, Failure: Error>: _SubjectBase<Out
     }
 }
 
-// MARK: - @Published et ObservableObject
+// MARK: - @Published and ObservableObject
 
-/// Éditeur de `objectWillChange` (émis juste avant chaque changement d'une propriété @Published).
+/// Sent just before each @Published property change.
 public final class ObservableObjectPublisher: Publisher {
     public typealias Output = Void
     public typealias Failure = Never
@@ -323,7 +320,7 @@ public protocol ObservableObject: AnyObject {
     var objectWillChange: ObjectWillChangePublisher { get }
 }
 
-/// `objectWillChange` par défaut : un éditeur par objet, créé au premier accès.
+/// Default `objectWillChange`: one publisher per object, created on first access.
 private final class WillChangeRegistry: @unchecked Sendable {
     static let shared = WillChangeRegistry()
     private struct Entry { weak var object: AnyObject?; let publisher: ObservableObjectPublisher }
@@ -351,8 +348,7 @@ private func _sendWillChange<T: ObservableObject>(_ object: T) {
 
 @propertyWrapper
 public struct Published<Value> {
-    /// Éditeur de `$propriété` : la valeur courante à l'abonnement, puis chaque nouvelle valeur (avant
-    /// qu'elle soit stockée, comme sur iOS).
+    /// `$property`: the current value on subscription, then each new value before it is stored (as on iOS).
     public struct Publisher: Combine.Publisher {
         public typealias Output = Value
         public typealias Failure = Never
@@ -367,7 +363,7 @@ public struct Published<Value> {
     public init(wrappedValue: Value) { subject = CurrentValueSubject(wrappedValue) }
     public init(initialValue: Value) { self.init(wrappedValue: initialValue) }
 
-    @available(*, unavailable, message: "@Published ne s'utilise que dans une classe")
+    @available(*, unavailable, message: "@Published is only available on properties of classes")
     public var wrappedValue: Value {
         get { fatalError() }
         set { fatalError() }
@@ -391,9 +387,9 @@ public struct Published<Value> {
     }
 }
 
-// MARK: - Ordonnanceurs
+// MARK: - Schedulers
 
-/// Durée pour `debounce`, `throttle`, `delay` : `.milliseconds(300)`, `.seconds(1)`, ou un nombre de secondes.
+/// Interval for `debounce`, `throttle`, `delay`: `.milliseconds(300)`, `.seconds(1)`, or a number of seconds.
 public struct SchedulerTimeIntervalConvertible: ExpressibleByFloatLiteral, ExpressibleByIntegerLiteral, Sendable {
     public let seconds: Double
     public init(seconds: Double) { self.seconds = seconds }
@@ -420,7 +416,7 @@ extension DispatchQueue: Scheduler {
 
 extension RunLoop: Scheduler {
     public func _schedule(_ action: @escaping () -> Void) {
-        // RunLoop.main : le fil principal (pompé par le simulateur) ; autre : exécution sur place.
+        // RunLoop.main is the main thread (serviced by the simulator); anything else runs inline.
         if self === RunLoop.main { DispatchQueue.main.async(execute: action) } else { perform(action) }
     }
     public func _schedule(after seconds: Double, _ action: @escaping () -> Void) {
@@ -443,7 +439,7 @@ public struct ImmediateScheduler: Scheduler {
     }
 }
 
-// MARK: - Opérateurs
+// MARK: - Operators
 
 extension Publisher {
     public func map<T>(_ transform: @escaping (Output) -> T) -> AnyPublisher<T, Failure> {
@@ -564,7 +560,6 @@ extension Publisher {
         }
     }
 
-    /// N'émet qu'après `interval` sans nouvelle valeur (la dernière reçue).
     public func debounce<S: Scheduler>(for interval: SchedulerTimeIntervalConvertible, scheduler: S, options: Any? = nil)
         -> AnyPublisher<Output, Failure> {
         make { v, c in
@@ -580,7 +575,6 @@ extension Publisher {
         }
     }
 
-    /// Au plus une valeur par `interval` (la première ou la dernière de la fenêtre).
     public func throttle<S: Scheduler>(for interval: SchedulerTimeIntervalConvertible, scheduler: S, latest: Bool)
         -> AnyPublisher<Output, Failure> {
         make { v, c in
@@ -713,7 +707,6 @@ extension Publisher where Output: Equatable {
 extension Publisher where Output == Never {}
 
 extension Publisher where Failure == Never {
-    /// Valeurs pour `for await valeur in éditeur.values`.
     public var values: AsyncStream<Output> {
         AsyncStream { continuation in
             let token = self._subscribe({ continuation.yield($0) }, { _ in continuation.finish() })
@@ -736,7 +729,7 @@ extension Publisher {
     }
 }
 
-// MARK: - Publishers.* (types nommés utilisés dans les signatures)
+// MARK: - Publishers.* (named types used in signatures)
 
 public enum Publishers {
     public typealias Map<Upstream: Publisher, Output> = AnyPublisher<Output, Upstream.Failure>
@@ -755,7 +748,7 @@ public enum Publishers {
     }
 }
 
-// MARK: - Timer et NotificationCenter
+// MARK: - Timer and NotificationCenter
 
 extension Timer {
     /// `Timer.publish(every: 1, on: .main, in: .common).autoconnect()`
@@ -774,7 +767,7 @@ extension Timer {
 
         init(interval: TimeInterval) { self.interval = interval }
 
-        /// Démarre le minuteur (sur le fil principal).
+        /// Starts the timer on the main thread.
         public func connect() -> Cancellable {
             lock.lock(); defer { lock.unlock() }
             if source == nil {

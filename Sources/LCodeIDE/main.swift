@@ -4,19 +4,21 @@ import Foundation
 
 import LCodeKit
 
-// Un processus fils (aperçu, app, serveur de langage) qui meurt ne doit pas faire tomber l'IDE.
+// A dying child process (preview, app, language server) must not take the IDE down.
 signal(SIGPIPE, SIG_IGN)
 
-// lcode-ide [<projet>] — l'IDE LCode. Sans projet : fenêtre d'accueil (récents, créer, ouvrir).
+// lcode-ide [<project>] — without a project, shows the welcome window.
 
-/// Racine du dépôt LCode (ce fichier est dans Sources/LCodeIDE/).
+/// Root of the LCode repository (this file is in Sources/LCodeIDE/).
 let lcodeRoot = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+Settings.shared.applyLanguage()
 
 let application = adw_application_new("fr.lcode.ide", G_APPLICATION_NON_UNIQUE)!
 connect(raw(application), "activate") {
     gtk_source_init()
-    // Thèmes de couleurs Xcode, livrés avec LCode.
+    // Xcode color schemes shipped with LCode.
     gtk_source_style_scheme_manager_append_search_path(gtk_source_style_scheme_manager_get_default(),
                                                        lcodeRoot.appendingPathComponent("Sources/LCodeIDE/Styles").path)
     Settings.shared.applyAppearance()

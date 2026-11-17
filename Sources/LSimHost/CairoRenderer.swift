@@ -3,14 +3,14 @@ import CGtk
 import Foundation
 import LSimUI
 
-/// Mesure et dessin du texte avec Pango (même contexte pour les deux, pour des métriques identiques).
+/// Text measuring and drawing with Pango (one shared context so both use identical metrics).
 final class PangoText: TextMeasurer {
     let context: OpaquePointer
 
     init() {
         let fontMap = pango_cairo_font_map_get_default()
         context = pango_font_map_create_context(fontMap)
-        // Métriques non arrondies : le layout reste stable quelle que soit l'échelle.
+        // Unhinted metrics keep the layout stable at any scale.
         let options = cairo_font_options_create()
         cairo_font_options_set_hint_metrics(options, CAIRO_HINT_METRICS_OFF)
         cairo_font_options_set_hint_style(options, CAIRO_HINT_STYLE_NONE)
@@ -20,10 +20,10 @@ final class PangoText: TextMeasurer {
     }
 
     static func family(for font: Font) -> String {
-        // Les polices Apple sont utilisées si elles sont installées localement, sinon des équivalents libres.
+        // Apple fonts when installed locally, free equivalents otherwise.
         switch font.design {
         case .default:
-            // Taille optique, comme iOS : SF Pro Text sous 20 pt, SF Pro Display au-delà.
+            // Optical size, like iOS: SF Pro Text below 20 pt, SF Pro Display above.
             font.size < 20
                 ? "SF Pro Text, SF Pro, Inter, Noto Sans, sans-serif"
                 : "SF Pro Display, SF Pro, Inter Display, Inter, Noto Sans, sans-serif"
@@ -33,15 +33,14 @@ final class PangoText: TextMeasurer {
         }
     }
 
-    /// Approche (tracking) appliquée par iOS à la police système, en points (table des Human Interface Guidelines).
-    /// Approche appliquée par iOS à la police système, lue dans le profil de design (ajustée par le banc).
+    /// iOS system font tracking in points, read from the design profile (tuned by calibration).
     static func tracking(for font: Font) -> CGFloat {
         guard font.design != .monospaced else { return 0 }
         return CGFloat(DesignProfile.current.text.tracking(forSize: Double(font.size), weight: font.weight.rawValue))
     }
 
-    /// Interlignes « Dynamic Type » des HIG. Non utilisés : le banc de calibration a montré que SwiftUI
-    /// utilise la hauteur naturelle de la police (17 pt → 20,3 pt). Conservés pour référence.
+    /// HIG Dynamic Type line heights. Unused: calibration showed SwiftUI uses the font's natural
+    /// height (17 pt → 20.3 pt). Kept for reference.
     static func lineHeight(for font: Font) -> CGFloat? {
         let table: [CGFloat: CGFloat] = [34: 41, 28: 34, 22: 28, 20: 25, 17: 22, 16: 21, 15: 20, 13: 18, 12: 16, 11: 13]
         return table[font.size]
@@ -78,14 +77,14 @@ final class PangoText: TextMeasurer {
         return layout
     }
 
-    /// Police du symbole : le corps de la police SwiftUI multiplié par le facteur d'échelle d'image.
+    /// Symbol font: the SwiftUI font size times the image scale factor.
     static func symbolFont(_ font: Font, _ scale: Image.Scale) -> Font {
         var f = font
         f.size = font.size * CGFloat(DesignProfile.current.image.factor(scale))
         return f
     }
 
-    /// Encre et boîte typographique d'un symbole (en points, relatives à l'origine du texte) ; nil si inconnu.
+    /// Ink and logical boxes of a symbol (points, relative to the text origin); nil if unknown.
     func symbolBoxes(_ name: String, font: Font, scale: Image.Scale) -> (ink: CGRect, logical: CGRect)? {
         guard let character = SymbolTable.shared.character(for: name) else { return nil }
         let layout = makeLayout(character, font: Self.symbolFont(font, scale), width: nil, alignment: .leading)
@@ -99,8 +98,8 @@ final class PangoText: TextMeasurer {
         return (rect(ink), rect(logical))
     }
 
-    /// Cadre d'un symbole, d'après les mesures sur iPhone : largeur = chasse du glyphe (+ marge éventuelle),
-    /// hauteur = hauteur de l'encre + une marge proportionnelle au corps (≈ 0,09 × corps de chaque côté).
+    /// Symbol frame as measured on iPhone: width = glyph advance (+ optional padding),
+    /// height = ink height + padding proportional to the font size (≈ 0.09 × size per side).
     func measureSymbol(_ name: String, font: Font, scale: Image.Scale) -> SymbolMetrics? {
         guard let box = symbolBoxes(name, font: font, scale: scale) else { return nil }
         let p = DesignProfile.current.image
@@ -124,7 +123,7 @@ final class PangoText: TextMeasurer {
     }
 }
 
-/// Images décodées, à la taille en pixels où elles sont dessinées (net, y compris pour le SVG).
+/// Images decoded at the pixel size they are drawn at (sharp, SVG included).
 private final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
     private var pixbufs: [String: OpaquePointer] = [:]
@@ -139,12 +138,12 @@ private final class ImageCache: @unchecked Sendable {
     }
 }
 
-/// Traduit une DisplayList en appels Cairo.
+/// Turns a DisplayList into Cairo calls.
 struct CairoRenderer {
     let cr: OpaquePointer
     let text: PangoText
 
-    /// Image étirée au rectangle, décodée à la résolution de l'écran.
+    /// Image stretched to the rect, decoded at screen resolution.
     func drawImage(_ path: String, in rect: CGRect) {
         guard rect.width > 0, rect.height > 0 else { return }
         var sx = Double(rect.width), sy = Double(rect.height)
@@ -160,7 +159,7 @@ struct CairoRenderer {
         cairo_restore(cr)
     }
 
-    /// Dessine une image vidéo (BGRA prémultiplié = ARGB32 natif de Cairo en petit-boutiste).
+    /// Draws a video frame (premultiplied BGRA = Cairo's native ARGB32 on little-endian).
     func drawPixels(_ buffer: CVPixelBuffer, in rect: CGRect) {
         guard buffer.width > 0, buffer.height > 0, rect.width > 0, rect.height > 0,
               buffer.bytesPerRow >= buffer.width * 4, buffer.data.count >= buffer.bytesPerRow * buffer.height else { return }
@@ -220,13 +219,12 @@ struct CairoRenderer {
 
     func fill(_ kind: ShapeKind, _ r: CGRect, _ color: RGBA) {
         setColor(color)
-        // Comme Core Animation, les rectangles pleins sont alignés sur les pixels de l'écran :
-        // deux aplats juxtaposés ne laissent pas transparaître le fond entre eux.
+        // Like Core Animation, solid rects snap to device pixels so adjacent fills leave no seam.
         path(kind, kind == .rectangle ? snapped(r) : r)
         cairo_fill(cr)
     }
 
-    /// Rectangle arrondi aux pixels de l'écran (dans l'espace de l'utilisateur).
+    /// Rect snapped to device pixels (in user space).
     func snapped(_ r: CGRect) -> CGRect {
         var x0 = Double(r.minX), y0 = Double(r.minY), x1 = Double(r.maxX), y1 = Double(r.maxY)
         cairo_user_to_device(cr, &x0, &y0)
@@ -252,7 +250,7 @@ struct CairoRenderer {
             case let .fill(kind, rect, color):
                 fill(kind, rect, color)
             case let .text(string, font, rect, color, alignment):
-                // +1 pt de marge pour éviter un retour à la ligne dû aux arrondis.
+                // +1 pt so rounding does not cause an extra line break.
                 drawText(string, font: font, at: rect.origin, width: rect.width + 1, color: color, alignment: alignment)
             case let .pushTransform(dx, dy, scale, anchor):
                 cairo_save(cr)
@@ -329,11 +327,11 @@ struct CairoRenderer {
         }
     }
 
-    /// Dessine un symbole : son encre est centrée et mise à l'échelle dans le rectangle (sans déformation).
+    /// Draws a symbol with its ink centered and aspect-fit in the rect.
     func drawSymbol(_ name: String, font: Font, scale: Image.Scale, in rect: CGRect, color: RGBA) {
         guard let character = SymbolTable.shared.character(for: name),
               let box = text.symbolBoxes(name, font: font, scale: scale), box.ink.width > 0, box.ink.height > 0 else {
-            // Symbole inconnu : cadre de substitution.
+            // Unknown symbol: placeholder frame.
             setColor(RGBA(color.r, color.g, color.b, color.a * 0.35))
             path(.roundedRectangle(cornerRadius: 3), rect.insetBy(dx: 1, dy: 1))
             cairo_set_line_width(cr, 1)
@@ -347,7 +345,7 @@ struct CairoRenderer {
         cairo_save(cr)
         cairo_translate(cr, rect.midX, rect.midY)
         cairo_scale(cr, k, k)
-        // Horizontalement : la boîte typographique (chasse) est centrée ; verticalement : l'encre.
+        // Center the advance box horizontally and the ink vertically.
         cairo_translate(cr, -(box.logical.midX), -(box.ink.midY))
         setColor(color)
         cairo_move_to(cr, 0, 0)
@@ -355,7 +353,7 @@ struct CairoRenderer {
         cairo_restore(cr)
     }
 
-    /// Flou approchant un flou gaussien (trois passes de flou boîte) sur une zone déjà dessinée.
+    /// Approximate Gaussian blur (three box passes) of an already drawn area.
     func blurRegion(_ rect: CGRect, sigma: CGFloat, shape: ShapeKind = .rectangle) {
         let target = cairo_get_group_target(cr)
         guard cairo_surface_get_type(target) == CAIRO_SURFACE_TYPE_IMAGE else { return }
@@ -380,7 +378,6 @@ struct CairoRenderer {
 
         let pixels = UnsafeMutableRawPointer(raw).assumingMemoryBound(to: UInt32.self)
         let w = right - left, h = bottom - top
-        // Trois passes de flou boîte de demi-largeur r ≈ σ·√3 / … (approximation classique).
         let r = max(1, Int((radius * 0.95).rounded()))
         var buffer = [UInt32](repeating: 0, count: w * h)
         for y in 0..<h { for x in 0..<w { buffer[y * w + x] = pixels[(top + y) * stride + left + x] } }
@@ -388,8 +385,7 @@ struct CairoRenderer {
             Self.boxBlur(&buffer, w, h, r, horizontal: true)
             Self.boxBlur(&buffer, w, h, r, horizontal: false)
         }
-        // Le résultat flouté est recomposé à travers la forme (capsule, coins arrondis…) et les
-        // découpages en cours, au lieu d'être écrit directement dans les pixels.
+        // Composite through the shape and current clip instead of writing pixels directly.
         let blurred = buffer.withUnsafeMutableBytes { bytes -> OpaquePointer? in
             cairo_image_surface_create_for_data(bytes.baseAddress!.assumingMemoryBound(to: UInt8.self),
                                                 CAIRO_FORMAT_ARGB32, Int32(w), Int32(h), Int32(w * 4))
@@ -417,7 +413,7 @@ struct CairoRenderer {
             func channels(_ p: UInt32) -> (Int, Int, Int, Int) {
                 (Int(p >> 24 & 0xFF), Int(p >> 16 & 0xFF), Int(p >> 8 & 0xFF), Int(p & 0xFF))
             }
-            // Bords étendus (le pixel du bord est répété).
+            // Clamp to edge.
             for k in -r...r {
                 let c = channels(line[min(max(k, 0), length - 1)])
                 sums[0] += c.0; sums[1] += c.1; sums[2] += c.2; sums[3] += c.3

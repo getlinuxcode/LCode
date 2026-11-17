@@ -1,19 +1,18 @@
 import Foundation
 import LCodeKit
 
-/// Compilation et exécution dans le simulateur, en arrière-plan : la sortie arrive ligne par ligne.
+/// Builds and runs in the background (simulator or iPhone), streaming output.
 final class Runner {
     var project: XtoolProject
     let lcodeRoot: URL
-    /// Sorties (compilation, app, journal de l'appareil) et changements d'état, sur le fil principal.
+    /// Output (build, app, device log) and state callbacks, on the main thread.
     var onOutput: (String) -> Void = { _ in }
     var onAppOutput: (String) -> Void = { _ in }
     var onDeviceLog: (String) -> Void = { _ in }
-    /// Sortie complète de la dernière compilation (pour la liste des problèmes).
+    /// Full output of the last build (for the issue list).
     private(set) var lastBuildOutput = ""
     var onBuildFinished: (String) -> Void = { _ in }
     var onState: (State) -> Void = { _ in }
-    /// Problèmes de compte ou de signature relevés à la fin d'une installation sur iPhone.
     var onSigningIssues: ([SigningIssue]) -> Void = { _ in }
 
     enum State: Equatable { case idle, building, running, failed }
@@ -21,7 +20,7 @@ final class Runner {
     private var build: Process?
     private var app: Process?
     private var restartPending = false
-    /// Écran intégré à l'IDE : l'app y est servie (sinon, fenêtre séparée du simulateur).
+    /// Embedded screen the app is served to (otherwise it opens its own simulator window).
     var screen: SimulatorScreen?
     private var appInput: FileHandle?
 
@@ -30,7 +29,7 @@ final class Runner {
         self.lcodeRoot = lcodeRoot
     }
 
-    /// Environnement des sous-processus : la chaîne Swift de swiftly en tête du PATH.
+    /// Child process environment, with swiftly's toolchain first in PATH.
     static var environment: [String: String] {
         var env = ProcessInfo.processInfo.environment
         let swiftly = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".local/share/swiftly/bin").path
@@ -43,7 +42,7 @@ final class Runner {
         onMain { self.onState(s) }
     }
 
-    /// Séquences de couleur du terminal (ESC [ … m) : retirées pour la console.
+    /// Terminal escape sequences, stripped for the console.
     private static let ansi = try! NSRegularExpression(pattern: "\u{1B}\\[[0-9;?]*[A-Za-z]")
 
     private static func clean(_ text: String) -> String {
@@ -64,13 +63,13 @@ final class Runner {
     private var buildBuffer = ""
     private var syslog: Process?
 
-    /// Compile puis lance l'app dans le simulateur (arrête d'abord l'exécution en cours).
+    /// Builds and launches the app in the simulator, stopping any current run first.
     func run(device: String, dark: Bool) {
         if build != nil { restartPending = true; return }
         stopApp()
         buildBuffer = ""
         set(.building)
-        emit("▸ Compilation de \(project.name) pour le simulateur…\n")
+        emit(tr("▸ Building %@ for the simulator…", project.name) + "\n")
         let simulator = SimulatorBuild(project: project, lcodeRoot: lcodeRoot)
         simulator.warnings.forEach { emit("⚠︎ \($0)\n") }
         do {
@@ -98,18 +97,18 @@ final class Runner {
                 return
             }
             guard p.terminationStatus == 0 else {
-                self.emit("✗ Échec de la compilation.\n")
+                self.emit(tr("✗ Build failed.") + "\n")
                 self.set(.failed)
                 return
             }
-            self.emit(String(format: "✓ Compilé en %.1f s.\n", Date().timeIntervalSince(started)))
+            self.emit(tr("✓ Built in %.1f s.", Date().timeIntervalSince(started)) + "\n")
             self.launch(binary: self.binaryPath(simulator), device: device, dark: dark)
         }
         do {
             try process.run()
             build = process
         } catch {
-            emit("✗ Impossible de lancer swift build : \(error)\n")
+            emit(tr("✗ Couldn’t start swift build: %@", "\(error)") + "\n")
             set(.failed)
         }
     }
@@ -139,21 +138,21 @@ final class Runner {
         process.terminationHandler = { [weak self] p in
             guard let self, self.app === p else { return }
             self.app = nil
-            self.emit("▸ Simulateur fermé.\n")
+            self.emit(tr("▸ Simulator closed.") + "\n")
             self.set(.idle)
         }
         do {
             try process.run()
             app = process
-            emit("▸ \(project.appTarget) tourne dans le simulateur (\(device)).\n")
+            emit(tr("▸ %@ is running in the simulator (%@).", project.appTarget, device) + "\n")
             set(.running)
         } catch {
-            emit("✗ Impossible de lancer l'app : \(error)\n")
+            emit(tr("✗ Couldn’t launch the app: %@", "\(error)") + "\n")
             set(.failed)
         }
     }
 
-    /// Arrête l'app (et la compilation en cours).
+    /// Stops the app and any build in progress.
     func stop() {
         restartPending = false
         build?.terminate()
@@ -172,13 +171,13 @@ final class Runner {
 
     var isRunning: Bool { app != nil }
 
-    /// Geste ou commande (scheme dark…) envoyé à l'app servie dans l'IDE.
+    /// Sends a gesture or command (scheme dark…) to the app served in the IDE.
     func sendToApp(_ command: String) {
         try? appInput?.write(contentsOf: Data((command + "\n").utf8))
     }
 
-    /// App servie dans l'IDE : les annonces d'image (« \u{1}frame … ») vont à l'écran, le reste de la sortie
-    /// à la console de l'app ; les gestes passent par son entrée standard.
+    /// App served in the IDE: frame announcements (`\u{1}frame …`) go to the screen, other output to the app
+    /// console; gestures go through its standard input.
     private func serveStreams(_ process: Process, screen: SimulatorScreen) {
         let input = Pipe(), output = Pipe(), errors = Pipe()
         process.standardInput = input
@@ -209,7 +208,6 @@ final class Runner {
         }
     }
 
-    /// Sortie standard et d'erreur du processus, transmises au fil de l'eau.
     private func stream(_ process: Process, app: Bool = false) {
         let pipe = Pipe()
         process.standardOutput = pipe
@@ -224,23 +222,23 @@ final class Runner {
 
     // MARK: - iPhone
 
-    /// Compile, signe et installe sur l'iPhone choisi (xtool), puis suit son journal système.
+    /// Builds, signs and installs on the chosen iPhone (xtool), then follows its system log.
     func runOnDevice(udid: String, network: Bool) {
         if build != nil { return }
         stopApp()
         buildBuffer = ""
         set(.building)
         if !project.hasSDKVersionFix {
-            emit("⚠︎ Le Package.swift ne déclare pas la version du SDK : iOS affichera l'app sans Liquid Glass.\n")
+            emit(tr("⚠︎ Package.swift does not declare the SDK version: iOS will show the app without Liquid Glass.") + "\n")
         }
-        emit("▸ Compilation, signature et installation sur l'iPhone (\(network ? "Wi-Fi" : "USB"))…\n")
+        emit(tr("▸ Building, signing and installing on iPhone (%@)…", network ? "Wi-Fi" : "USB") + "\n")
         let env = DeviceConnection.environment()
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["xtool", "dev", "run", "--udid", udid, network ? "--network" : "--usb"]
         process.currentDirectoryURL = project.root
         process.environment = Self.environment.merging(env) { _, n in n }
-        // Pas d'entrée : sans compte, xtool échoue au lieu d'attendre une saisie invisible.
+        // No stdin: without an account, xtool fails instead of waiting for invisible input.
         process.standardInput = FileHandle.nullDevice
         stream(process)
         process.terminationHandler = { [weak self] p in
@@ -250,12 +248,12 @@ final class Runner {
             let output = self.buildBuffer
             onMain { self.onBuildFinished(output) }
             if p.terminationStatus == 0 || output.contains("Installed") || output.contains("Installing") && !output.contains("error:") {
-                self.emit("✓ Installé. Touchez l'icône de l'app sur l'iPhone pour la lancer.\n")
+                self.emit(tr("✓ Installed. Tap the app icon on the iPhone to launch it.") + "\n")
                 onMain { self.onSigningIssues([]) }
                 self.set(.idle)
                 self.startDeviceLog(udid: udid, env: env)
             } else {
-                self.emit("✗ Échec (code \(p.terminationStatus)).\n")
+                self.emit(tr("✗ Failed (exit code %d).", Int(p.terminationStatus)) + "\n")
                 let issues = SigningIssue.extract(from: output)
                 onMain { self.onSigningIssues(issues) }
                 self.set(.failed)
@@ -265,12 +263,12 @@ final class Runner {
             try process.run()
             build = process
         } catch {
-            emit("✗ xtool introuvable : \(error)\n")
+            emit(tr("✗ xtool not found: %@", "\(error)") + "\n")
             set(.failed)
         }
     }
 
-    /// Journal système de l'iPhone, filtré sur l'app (idevicesyslog).
+    /// iPhone system log filtered to the app (idevicesyslog).
     func startDeviceLog(udid: String, env: [String: String]) {
         syslog?.terminate()
         let process = Process()

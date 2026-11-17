@@ -1,7 +1,7 @@
 import Foundation
 import LCodeKit
 
-/// Suggestion d'autocomplétion.
+/// A completion item.
 struct CompletionItem {
     enum Kind { case type, function, property, keyword, variable, other }
     let label: String
@@ -9,13 +9,12 @@ struct CompletionItem {
     let insertText: String
     let kind: Kind
     let filterText: String
-    /// Remplacement explicite : colonne de début (UTF-16) sur la ligne du curseur, s'il est fourni.
+    /// Explicit replacement start column (UTF-16) on the cursor line, if provided.
     let replaceStart: Int?
     let sortText: String
 }
 
-/// Client du serveur de langage Swift (sourcekit-lsp), lancé sur la copie d'aperçu du projet (compilée
-/// contre l'API SwiftUI de LSim) : complétions à la position du curseur.
+/// sourcekit-lsp client, run on the project's preview copy (built against LSim's SwiftUI API), used for completion.
 final class LanguageServer {
     private let build: PreviewBuild
     private var process: Process?
@@ -32,7 +31,7 @@ final class LanguageServer {
         self.build = build
     }
 
-    // MARK: - Démarrage
+    // MARK: - Startup
 
     func start() {
         guard process == nil else { return }
@@ -78,10 +77,10 @@ final class LanguageServer {
 
     // MARK: - Documents
 
-    /// URI de la copie d'un fichier source (celle que compile le serveur).
+    /// URI of a source file's copy (the one the server compiles).
     private func uri(for url: URL) -> String? { build.copyURL(for: url)?.absoluteString }
 
-    /// Envoie le texte courant (réécrit comme la copie : aperçus, @main) au serveur.
+    /// Sends the current text, rewritten like the copy (previews, @main), to the server.
     func update(_ url: URL, text: String) {
         guard let uri = uri(for: url) else { return }
         let transformed = PreviewTransform.transform(text, removeMain: build.isAppFile(url), firstIndex: 0).text
@@ -103,7 +102,7 @@ final class LanguageServer {
         if initialized { send() } else { queued.append(send) }
     }
 
-    /// Complétions à une position (ligne et colonne UTF-16, à partir de 0).
+    /// Completions at a 0-based line and UTF-16 column.
     func complete(_ url: URL, text: String, line: Int, character: Int, completion: @escaping ([CompletionItem]) -> Void) {
         guard let uri = uri(for: url) else { completion([]); return }
         update(url, text: text)
@@ -112,7 +111,7 @@ final class LanguageServer {
                 "textDocument": ["uri": uri],
                 "position": ["line": line, "character": character],
             ]) { result in
-                // Ordre de pertinence du serveur (sortText), doublons retirés (même signature héritée).
+                // Server ranking (sortText), minus duplicates (same inherited signature).
                 var seen = Set<String>()
                 let items = ((result?["items"] as? [[String: Any]]) ?? []).map(Self.item)
                     .sorted { $0.sortText < $1.sortText }
@@ -131,7 +130,7 @@ final class LanguageServer {
             insert = newText
             start = ((edit["range"] as? [String: Any])?["start"] as? [String: Any])?["character"] as? Int
         }
-        // Espaces réservés éventuels « ${1:valeur} » ou « <#valeur#> » retirés.
+        // Strip placeholders like `${1:value}` or `<#value#>`.
         insert = insert.replacingOccurrences(of: #"\$\{\d+:([^}]*)\}"#, with: "", options: .regularExpression)
             .replacingOccurrences(of: #"<#[^#]*#>"#, with: "", options: .regularExpression)
         let kind: CompletionItem.Kind
@@ -167,7 +166,7 @@ final class LanguageServer {
     private func log(_ s: @autoclosure () -> String) { if Self.debug { FileHandle.standardError.write(Data(("[lsp] " + s() + "\n").utf8)) } }
 
     private func send(_ message: [String: Any]) {
-        log("→ \(message["method"] ?? "réponse") \(message["id"] ?? "")")
+        log("→ \(message["method"] ?? "response") \(message["id"] ?? "")")
         guard let input, let body = try? JSONSerialization.data(withJSONObject: message) else { return }
         try? input.write(contentsOf: Data("Content-Length: \(body.count)\r\n\r\n".utf8) + body)
     }
@@ -196,7 +195,7 @@ final class LanguageServer {
                     ?? (message["result"] as? [[String: Any]]).map { ["items": $0] }
                 onMain { handler?(result) }
             } else if let id = message["id"], message["method"] != nil {
-                // Requête du serveur (enregistrement de capacités…) : réponse vide.
+                // Server request (capability registration…): reply with an empty result.
                 send(["jsonrpc": "2.0", "id": id, "result": NSNull()])
             }
         }

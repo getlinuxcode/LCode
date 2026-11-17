@@ -2,9 +2,8 @@ import CGtk
 import Foundation
 import LSimUI
 
-/// Effet de bord de défilement Liquid Glass, d'après la table mesurée sur iPhone : chaque ligne du
-/// contenu est floutée (écart-type variable, interpolé entre plusieurs niveaux), puis
-/// sortie = α·contenu flouté + β.
+/// Liquid Glass scroll edge effect from the table measured on iPhone: each content row is blurred
+/// (per-row sigma, interpolated between levels), then output = α·blurred + β.
 extension CairoRenderer {
     func drawScrollEdge(_ rect: CGRect, _ table: ScrollEdgeTable, shift: CGFloat) {
         guard rect.width > 1, rect.height > 1 else { return }
@@ -29,7 +28,7 @@ extension CairoRenderer {
         let outL = max(0, Int((x0 - offX).rounded(.down))), outT = max(0, Int((y0 - offY).rounded(.down)))
         let outR = min(surfW, Int((x1 - offX).rounded(.up))), outB = min(surfH, Int((y1 - offY).rounded(.up)))
         guard outR > outL, outB > outT else { return }
-        // Source élargie vers le bas (le flou lit sous la zone) ; bords latéraux et haut répliqués.
+        // Source extends downwards (the blur reads below the area); top and side edges are clamped.
         let srcT = outT, srcB = min(surfH, outB + margin)
         let sw = outR - outL, sh = srcB - srcT
         var original = [UInt32](repeating: 0, count: sw * sh)
@@ -41,7 +40,7 @@ extension CairoRenderer {
         let ow = outR - outL, oh = outB - outT
         var out = [UInt32](repeating: 0, count: ow * oh)
         for py in 0..<oh {
-            // Ligne en points depuis le haut de la zone, recalée sur la mesure.
+            // Row in points from the top of the area, aligned with the measurement.
             let yPt = (Double(outT + py) + 0.5 - (y0 - offY)) / scale - Double(shift)
             let a = table.value(table.alpha, at: yPt)
             let b = (table.value(table.beta.map { $0[0] }, at: yPt), table.value(table.beta.map { $0[1] }, at: yPt),
@@ -82,7 +81,7 @@ extension CairoRenderer {
     }
 }
 
-/// Fond flouté à plusieurs niveaux (écart-type en points), chaque niveau calculé au premier accès.
+/// Background blurred at several sigmas (points), each level computed lazily.
 final class BlurPyramid {
     let original: [UInt32]
     let w: Int, h: Int
@@ -100,9 +99,9 @@ final class BlurPyramid {
     }
 
     subscript(_ i: Int) -> [UInt32] {
-        if let layer = cache[i] { return layer }  // tableau partagé (copie à l'écriture) : pas de recopie
+        if let layer = cache[i] { return layer }  // copy-on-write: no copy
         var b = original
-        // Trois passes de boîte de rayon r : σ ≈ √(r(r+1)) pixels.
+        // Three box passes of radius r: σ ≈ √(r(r+1)) pixels.
         let r = Int((levels[i] * scale - 0.5).rounded())
         if r >= 1 {
             for _ in 0..<3 {

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Banc d'essai : chaque paquet SwiftPM compile-t-il dans le simulateur LSim ?
+"""Test bench: does each SwiftPM package build in the LSim simulator?
 
-Usage : Scripts/essai-paquets.py <dossier de travail> <url> [<url>…]
+Usage: Scripts/package-compat.py <work directory> <url> [<url>…]
 
-Pour chaque URL : le paquet est ajouté (dernière version publiée) à un projet de test créé par `lcode new`,
-ses produits bibliothèque sont importés par l'app, puis l'app est compilée pour le simulateur
-(`lcode run --capture`). Le résultat (réussite, erreurs regroupées) va dans <dossier>/resultats.json et à
-l'écran. Le projet de test est réutilisé d'un paquet à l'autre : LCode n'est compilé qu'une fois.
+For each URL, the package (latest released version) is added to a test project created by `lcode new`,
+its library products are imported by the app, then the app is built for the simulator
+(`lcode run --capture`). The result (success, grouped errors) goes to <directory>/results.json and to
+the screen. The test project is reused from one package to the next, so LCode is only built once.
 """
 import json, os, re, shutil, subprocess, sys, time
 from collections import Counter
@@ -36,19 +36,21 @@ def identity(url):
 
 
 def main():
+    if len(sys.argv) < 3:
+        sys.exit(__doc__)
     work, urls = sys.argv[1], sys.argv[2:]
     os.makedirs(work, exist_ok=True)
-    project = os.path.join(work, "Essai")
+    project = os.path.join(work, "CompatTest")
     if not os.path.isdir(project):
-        code, out = run([BIN, "new", "Essai", "--dans", work])
+        code, out = run([BIN, "new", "CompatTest", "--in", work])
         if code != 0:
             sys.exit(out)
     manifest = os.path.join(project, "Package.swift")
-    original = os.path.join(work, "Package.swift.origine")
+    original = os.path.join(work, "Package.swift.orig")
     if not os.path.exists(original):
         shutil.copy(manifest, original)
-    imports_file = os.path.join(project, "Sources/Essai/EssaiImports.swift")
-    results_path = os.path.join(work, "resultats.json")
+    imports_file = os.path.join(project, "Sources/CompatTest/CompatImports.swift")
+    results_path = os.path.join(work, "results.json")
     results = json.load(open(results_path)) if os.path.exists(results_path) else {}
 
     for url in urls:
@@ -63,19 +65,19 @@ def main():
         code, out = run(args, cwd=project)
         code, out = run(["swift", "package", "resolve"], cwd=project)
         if code != 0:
-            results[name] = {"url": url, "etat": "résolution impossible", "erreurs": out[-1500:]}
-            print(f"✗ {name} : résolution impossible")
+            results[name] = {"url": url, "status": "resolution failed", "errors": out[-1500:]}
+            print(f"✗ {name}: resolution failed")
             continue
         checkouts = os.path.join(project, ".build/checkouts")
         folder = next((os.path.join(checkouts, d) for d in os.listdir(checkouts) if d.lower() == name), None)
         code, dump = run(["swift", "package", "dump-package", "--package-path", folder])
         products = [p for p in json.loads(dump).get("products", []) if "library" in p.get("type", {})]
         if not products:
-            results[name] = {"url": url, "etat": "aucune bibliothèque"}
+            results[name] = {"url": url, "status": "no library"}
             continue
-        # Le premier produit (le principal en général) : ses modules sont importés par l'app.
+        # First product (usually the main one): its modules are imported by the app.
         product = products[0]
-        run(["swift", "package", "add-target-dependency", product["name"], "Essai", "--package", name], cwd=project)
+        run(["swift", "package", "add-target-dependency", product["name"], "CompatTest", "--package", name], cwd=project)
         with open(imports_file, "w") as f:
             f.write("".join(f"import {m}\n" for m in product["targets"]))
         code, out = run([BIN, "run", project, "--capture", os.path.join(work, f"{name}.png")])
@@ -85,13 +87,13 @@ def main():
                           for m in re.findall(r"no such module '([^']+)'", l))
         ok = code == 0
         results[name] = {
-            "url": url, "version": version, "produit": product["name"],
-            "etat": "ok" if ok else "échec", "duree": round(time.time() - started),
-            "modules_manquants": dict(modules), "erreurs": dict(messages.most_common(25)),
-            "nb_erreurs": len(errors), "fin": out[-1200:] if not ok and not errors else "",
+            "url": url, "version": version, "product": product["name"],
+            "status": "ok" if ok else "failed", "duration": round(time.time() - started),
+            "missing_modules": dict(modules), "errors": dict(messages.most_common(25)),
+            "error_count": len(errors), "tail": out[-1200:] if not ok and not errors else "",
         }
-        print(f"{'✓' if ok else '✗'} {name} {version} ({product['name']}) — {len(errors)} erreur(s)"
-              + (f", modules manquants : {', '.join(modules)}" if modules else ""))
+        print(f"{'✓' if ok else '✗'} {name} {version} ({product['name']}) — {len(errors)} error(s)"
+              + (f", missing modules: {', '.join(modules)}" if modules else ""))
         json.dump(results, open(results_path, "w"), ensure_ascii=False, indent=1)
     json.dump(results, open(results_path, "w"), ensure_ascii=False, indent=1)
 

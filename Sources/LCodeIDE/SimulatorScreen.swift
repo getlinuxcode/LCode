@@ -1,13 +1,13 @@
 import CAdw
 import Foundation
 
-/// Écran d'une app LSim servie sans fenêtre (aperçu `#Preview` ou app lancée) : affiche les images que le
-/// processus écrit dans un fichier, et lui renvoie les gestes (appui, glissé, molette) en points de l'écran.
+/// Screen of a windowless LSim app (preview or running app): shows the frames the process writes to a file
+/// and sends gestures (press, drag, scroll) back in screen points.
 final class SimulatorScreen {
     let picture: UnsafeMutablePointer<GtkWidget>
-    /// Fichier d'image brute partagé avec le processus (variable LSIM_PREVIEW_FRAME / LSIM_SERVE_FRAME).
+    /// Raw frame file shared with the process (LSIM_PREVIEW_FRAME / LSIM_SERVE_FRAME).
     let framePath: String
-    /// Envoi d'une commande au processus (press, move, release, scroll, scheme…).
+    /// Sends a command to the process (press, move, release, scroll, scheme…).
     var send: (String) -> Void = { _ in }
     private(set) var frameSize = CGSize(width: 440, height: 956)
     private var dragStart: (Double, Double)?
@@ -27,8 +27,8 @@ final class SimulatorScreen {
 
     deinit { try? FileManager.default.removeItem(atPath: framePath) }
 
-    /// Ligne « frame <largeur> <hauteur> <pas> » du processus (précédée d'un octet 0x01 pour la distinguer
-    /// des print() de l'app) ; nil si ce n'est pas une annonce d'image.
+    /// Parses a `frame <width> <height> <stride>` line (prefixed with 0x01 to tell it apart from the app's
+    /// print()s); nil for any other line.
     static func parseFrame(_ line: String) -> (Int, Int, Int)? {
         let trimmed = line.hasPrefix("\u{1}") ? String(line.dropFirst()) : line
         guard trimmed.hasPrefix("frame ") else { return nil }
@@ -51,9 +51,9 @@ final class SimulatorScreen {
         gtk_picture_set_paintable(cast(raw(picture)), nil)
     }
 
-    // MARK: - Gestes → app
+    // MARK: - Gestures → app
 
-    /// Point de l'écran simulé (en points) sous un point du widget image.
+    /// Simulated screen point (in points) under a widget point.
     private func screenPoint(_ x: Double, _ y: Double) -> (Double, Double)? {
         let w = Double(gtk_widget_get_width(picture)), h = Double(gtk_widget_get_height(picture))
         let fw = Double(frameSize.width), fh = Double(frameSize.height)
