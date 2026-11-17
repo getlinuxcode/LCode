@@ -34,12 +34,13 @@ public struct SimulatorBuild {
         let targetsDir = directory.appendingPathComponent("Cibles")
         try fm.createDirectory(at: targetsDir, withIntermediateDirectories: true)
 
-        // Liens vers les sources du projet : modifier le projet modifie le simulateur.
+        // Copie des sources (les blocs `#Preview` réécrits en fonctions ordinaires, sur les mêmes lignes),
+        // réécrite seulement si elle change : modifier le projet modifie le simulateur.
+        var index = 0
         for t in project.targets {
-            let link = targetsDir.appendingPathComponent(t.name)
-            if let dest = try? fm.destinationOfSymbolicLink(atPath: link.path), dest == t.path.path { continue }
-            try? fm.removeItem(at: link)
-            try fm.createSymbolicLink(at: link, withDestinationURL: t.path)
+            let found = try SourceMirror.mirror(from: t.path, to: targetsDir.appendingPathComponent(t.name),
+                                                removeMain: false, firstIndex: index)
+            index += found.reduce(0) { $0 + $1.previews.count }
         }
 
         let lcodeName = lcodeRoot.lastPathComponent

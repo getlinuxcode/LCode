@@ -10,7 +10,9 @@ import LCodeKit
 
 let usage = """
 Usage :
+  lcode new <Nom> [--bundle <id>] [--dans <dossier>]   crée un projet d'app iOS
   lcode open [<projet>]              ouvre le projet dans l'IDE LCode
+  lcode preview [<projet>] [--numero <n>] [--capture <png>] [--sombre]   lance un #Preview
   lcode run [<projet>] [options]     lance un projet xtool (dossier courant par défaut)
 
 Options :
@@ -41,6 +43,60 @@ if args.first == "open" {
     do { try process.run() } catch { fail("impossible d'ouvrir l'IDE (\(ide.path)) : \(error)") }
     exit(0)
 }
+// lcode new <Nom> [--bundle <id>] [--dans <dossier>] : nouveau projet d'app iOS.
+if args.first == "new" {
+    guard args.count >= 2 else { fail("nom du projet manquant\n\n\(usage)") }
+    let name = args[1]
+    var bundle = "com.example.\(name)"
+    var parent = FileManager.default.currentDirectoryPath
+    var k = 2
+    while k < args.count {
+        if args[k] == "--bundle", k + 1 < args.count { bundle = args[k + 1]; k += 2; continue }
+        if args[k] == "--dans", k + 1 < args.count { parent = args[k + 1]; k += 2; continue }
+        fail("option inconnue : \(args[k])")
+    }
+    do {
+        let root = try Templates.createProject(name: name, bundleID: bundle, in: URL(fileURLWithPath: parent))
+        print("▸ Projet créé : \(root.path)")
+        exit(0)
+    } catch { fail("\(error)") }
+}
+
+// lcode preview [<projet>] [--numero <n>] [--capture <fichier.png>] [--sombre] : lance un #Preview.
+if args.first == "preview" {
+    var path = FileManager.default.currentDirectoryPath
+    var number = 0
+    var capture: String?
+    var dark = false
+    var k = 1
+    while k < args.count {
+        switch args[k] {
+        case "--numero" where k + 1 < args.count: number = Int(args[k + 1]) ?? 0; k += 2
+        case "--capture" where k + 1 < args.count: capture = args[k + 1]; k += 2
+        case "--sombre": dark = true; k += 1
+        default: path = args[k]; k += 1
+        }
+    }
+    do {
+        let project = try XtoolProject.load(at: URL(fileURLWithPath: path).standardizedFileURL)
+        let preview = PreviewBuild(project: project, lcodeRoot: lcodeRoot)
+        let entries = try preview.prepare()
+        guard !entries.isEmpty else { fail("aucun #Preview dans l'app \(project.appTarget)") }
+        for (n, e) in entries.enumerated() {
+            print("\(n == number ? "▸" : " ") \(n) : \(e.file.lastPathComponent):\(e.preview.line)\(e.preview.name.map { " « \($0) »" } ?? "")")
+        }
+        let entry = entries[min(number, entries.count - 1)]
+        let status = try Shell.run(["swift", "build", "--package-path", preview.directory.path, "--product", project.appTarget])
+        guard status == 0 else { exit(status) }
+        let bin = try Shell.capture(["swift", "build", "--package-path", preview.directory.path, "--show-bin-path"])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        var env = ["LSIM_PREVIEW_ID": entry.preview.symbol, "LSIM_DEVICE": "iphone17promax"]
+        if dark { env["LSIM_DARK"] = "1" }
+        if let capture { env["LSIM_SCREENSHOT"] = capture; env["LSIM_SCREEN_ONLY"] = "1" }
+        exit(try Shell.run([bin + "/" + project.appTarget], environment: env))
+    } catch { fail("\(error)") }
+}
+
 guard args.first == "run" else { print(usage); exit(args.isEmpty || args.first == "--help" ? 0 : 1) }
 args.removeFirst()
 

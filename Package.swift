@@ -50,5 +50,6 @@ let package = Package(
             swiftSettings: v5
         ),
         .testTarget(name: "LSimUITests", dependencies: ["LSimUI"], swiftSettings: v5),
+        .testTarget(name: "LCodeKitTests", dependencies: ["LCodeKit"], swiftSettings: v5),
     ]
 )
