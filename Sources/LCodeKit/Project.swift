@@ -49,6 +49,31 @@ public struct XtoolProject {
     /// Whether the iOS binary declares the right SDK (otherwise iOS runs the app in compatibility mode).
     public var hasSDKVersionFix: Bool { manifest.contains("platform_version") }
 
+    /// Asset catalogs SwiftPM would hand to Apple's actool on an iPhone build (which fails on Linux): those
+    /// not listed in an `exclude:`. Paths relative to their target, e.g. `Resources/Assets.xcassets`.
+    public var assetCatalogsBlockingDeviceBuild: [String] {
+        var found: [String] = []
+        for t in targets {
+            guard let walker = FileManager.default.enumerator(at: t.path, includingPropertiesForKeys: nil) else { continue }
+            for case let url as URL in walker where url.pathExtension == "xcassets" {
+                walker.skipDescendants()
+                let relative = String(url.path.dropFirst(t.path.path.count + 1))
+                if !manifest.contains("\"\(relative)\"") { found.append(relative) }
+            }
+        }
+        return found
+    }
+
+    /// Message explaining how to unblock an iPhone build that would compile asset catalogs.
+    public static func assetCatalogAdvice(_ catalogs: [String]) -> String {
+        """
+        Asset catalogs can't be compiled for the iPhone on Linux yet (Apple's actool only runs on macOS, \
+        and xtool doesn't compile them). Exclude them in Package.swift, next to `resources:`:
+            exclude: [\(catalogs.map { "\"\($0)\"" }.joined(separator: ", "))],
+        The simulator keeps using them; on the iPhone, images and colors from the catalog won't be available.
+        """
+    }
+
     /// Build caches from LCode versions with French folder names, now unused.
     static func removeLegacyBuildFolders(in root: URL) {
         for name in ["simulateur", "apercu", "paquets"] {

@@ -36,6 +36,9 @@ public enum Templates {
             targets: [
                 .target(
                     name: "\(safe)",
+                    // Asset catalogs need Apple's actool (macOS only): the simulator reads the catalog
+                    // directly, iPhone builds leave it out until xtool compiles catalogs.
+                    exclude: ["Resources/Assets.xcassets"],
                     resources: [.process("Resources")],
                     linkerSettings: [
                         // Declares the SDK actually used; without it, iOS runs the app in compatibility mode

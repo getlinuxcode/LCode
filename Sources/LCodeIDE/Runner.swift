@@ -230,6 +230,14 @@ final class Runner {
         stopApp()
         buildBuffer = ""
         set(.building)
+        let catalogs = project.assetCatalogsBlockingDeviceBuild
+        if !catalogs.isEmpty {
+            emit("✗ " + tr("Asset catalogs can’t be compiled for iPhone on Linux yet. In Package.swift, add next to resources:") + "\n"
+                 + "    exclude: [\(catalogs.map { "\"\($0)\"" }.joined(separator: ", "))],\n"
+                 + tr("The simulator keeps using the catalog; on iPhone, its images and colors won’t be available.") + "\n")
+            set(.failed)
+            return
+        }
         if !project.hasSDKVersionFix {
             emit(tr("⚠︎ Package.swift does not declare the SDK version: iOS will show the app without Liquid Glass.") + "\n")
         }

@@ -137,6 +137,8 @@ do {
                                                "-Xlinker", "17.0", "-Xlinker", "27.3"])]
             """)
         }
+        let catalogs = project.assetCatalogsBlockingDeviceBuild
+        if !catalogs.isEmpty { fail(XtoolProject.assetCatalogAdvice(catalogs)) }
         let connection = DeviceConnection.environment()
         print("▸ Building, signing and installing on the iPhone (xtool, \(connection.isEmpty ? "USB" : "USB or Wi-Fi"))…")
         let transport = DeviceConnection.transportFlag(connection)
