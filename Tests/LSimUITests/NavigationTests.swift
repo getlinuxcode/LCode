@@ -9,7 +9,7 @@ private func renderScreen<V: View>(_ view: V, graph: ViewGraph) -> DisplayList {
     let lc = LayoutContext(measurer: FakeMeasurer(), colorScheme: .light, screen: screen, safeArea: safe)
     let nodes = graph.build(environment: EnvironmentValues()) { view }
     let content = CGRect(x: 0, y: safe.top, width: screen.width, height: screen.height - safe.top - safe.bottom)
-    return layoutRoot(nodes, in: content, lc)
+    return layoutRoot(nodes, in: content, lc, presentations: graph.presentations)
 }
 
 private func center(of id: String, in list: DisplayList) -> CGPoint? {
@@ -100,4 +100,48 @@ struct NavRoot: View {
     list = renderScreen(many, graph: graph)
     let after = texts(list).first { $0.0 == "row 0" }!.1.minY
     #expect(before - after == 300)
+}
+
+private func panIDs(_ list: DisplayList) -> [String] {
+    list.items.compactMap { if case let .panRegion(id, _, _) = $0 { id } else { nil } }
+}
+
+@Test func backSwipeBeyondHalfPops() {
+    let graph = ViewGraph()
+    var list = renderScreen(NavRoot(), graph: graph)
+    graph.performAction(hitIDs(list)[2])  // ouvre « item 2 »
+    list = renderScreen(NavRoot(), graph: graph)
+    let swipe = panIDs(list).first { $0.hasSuffix("#backSwipe") }
+    #expect(swipe != nil)
+
+    // Petit balayage lent : annulé, l'écran reste.
+    graph.panHandlers[swipe!]!.changed(CGSize(width: 80, height: 0))
+    graph.panHandlers[swipe!]!.ended(CGSize(width: 80, height: 0), CGSize(width: 50, height: 0))
+    list = renderScreen(NavRoot(), graph: graph)
+    #expect(texts(list).contains { $0.0 == "détail 2" })
+
+    // Balayage au-delà de la moitié de l'écran : retour à la racine.
+    graph.panHandlers[swipe!]!.changed(CGSize(width: 300, height: 0))
+    graph.panHandlers[swipe!]!.ended(CGSize(width: 300, height: 0), CGSize(width: 600, height: 0))
+    list = renderScreen(NavRoot(), graph: graph)
+    #expect(texts(list).contains { $0.0 == "taps 0" })
+}
+
+struct SheetHost: View {
+    @State var shown = true
+    var body: some View {
+        Text(shown ? "ouverte" : "fermée")
+            .sheet(isPresented: $shown) { Text("contenu") }
+    }
+}
+
+@Test func sheetPulledDownDismisses() {
+    let graph = ViewGraph()
+    var list = renderScreen(SheetHost(), graph: graph)
+    let pan = panIDs(list).first { $0.hasSuffix("#pan") }
+    #expect(pan != nil)
+    graph.panHandlers[pan!]!.changed(CGSize(width: 0, height: 500))
+    graph.panHandlers[pan!]!.ended(CGSize(width: 0, height: 500), CGSize(width: 0, height: 900))
+    list = renderScreen(SheetHost(), graph: graph)
+    #expect(texts(list).contains { $0.0 == "fermée" })
 }

@@ -256,7 +256,7 @@ struct CairoRenderer {
                 setColor(tint)
                 path(shape, rect)
                 cairo_fill(cr)
-            case .hitRegion, .scrollRegion, .marker:
+            case .hitRegion, .scrollRegion, .marker, .panRegion:
                 break
             }
         }

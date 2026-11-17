@@ -155,7 +155,12 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
         let state = context.graph.persistent(context.path + "#sheetState") { SheetState() }
         let now = context.graph.animator.clock()
         if isPresented.wrappedValue {
-            if state.presentedAt == nil || state.dismissedAt != nil { state.presentedAt = now; state.dismissedAt = nil }
+            if state.presentedAt == nil || state.dismissedAt != nil {
+                state.presentedAt = now
+                state.dismissedAt = nil
+                state.release = nil
+                state.dragOffset = nil
+            }
         } else {
             guard state.presentedAt != nil else { return nodes }
             if state.dismissedAt == nil { state.dismissedAt = now }
@@ -177,8 +182,32 @@ struct _SheetModifier<S: View>: _PrimitiveModifier {
         let sheetNodes = LSimUI._makeNodes(sheet(), ctx)
         let dimID = ctx.path + "#dim"
         context.graph.registerAction(dimID, close)
+        // Feuille tirée vers le bas : elle suit le doigt, puis se ferme ou revient selon la position projetée.
+        let panID = dimID + "#pan"
+        if isPresented.wrappedValue {
+            let graph = context.graph
+            graph.registerPan(panID, changed: { translation in
+                state.release = nil
+                state.dragOffset = translation.height
+                graph.invalidate()
+            }, ended: { translation, velocity in
+                let offset = max(0, translation.height)
+                state.dragOffset = nil
+                let travel = max(state.travel, 1)
+                let presence = 1 - Double(offset / travel)
+                let v = -Double(velocity.height / travel)
+                let now = graph.animator.clock()
+                if offset + 0.25 * velocity.height > 0.4 * state.height {
+                    state.release = (now, presence, 0, v, SheetMetrics.dismissAnimation)
+                    close()
+                } else {
+                    state.release = (now, presence, 1, v, SheetMetrics.presentAnimation)
+                }
+                graph.invalidate()
+            })
+        }
         context.graph.presentations.append(SheetNode(content: group(sheetNodes, axis: .vertical), detent: config.detents.first ?? .large,
-                                                     dimID: dimID, presentedAt: state.presentedAt ?? now, dismissedAt: state.dismissedAt))
+                                                     dimID: dimID, state: state, panID: isPresented.wrappedValue ? panID : nil))
         return nodes
     }
 }
@@ -212,10 +241,17 @@ extension View {
     public func interactiveDismissDisabled(_ disabled: Bool = true) -> some View { self }
 }
 
-/// Instants d'ouverture et de fermeture d'une feuille (persistants d'une construction à l'autre).
+/// Mouvement d'une feuille, persistant d'une construction à l'autre : ouverture, fermeture, geste.
 final class SheetState {
     var presentedAt: Double?
     var dismissedAt: Double?
+    /// Feuille tirée par le doigt : décalage vers le bas (points).
+    var dragOffset: CGFloat?
+    /// Après le geste : ressort de la présence `from` vers `to` (1 : en place, 0 : sortie), vitesse initiale.
+    var release: (start: Double, from: Double, to: Double, velocity: Double, animation: Animation)?
+    /// Course (du sommet de la feuille au bas de l'écran) et hauteur, relevées au dessin.
+    var travel: CGFloat = 900
+    var height: CGFloat = 900
 }
 
 /// Mesures des feuilles iOS 27.2 (iPhone 17 Pro Max, transitions relevées image par image).
@@ -238,30 +274,45 @@ final class SheetNode: LayoutNode {
     let content: LayoutNode
     let detent: PresentationDetent
     let dimID: String
-    let presentedAt: Double
-    let dismissedAt: Double?
+    let state: SheetState
+    let panID: String?
     private typealias M = SheetMetrics
 
-    init(content: LayoutNode, detent: PresentationDetent, dimID: String, presentedAt: Double, dismissedAt: Double?) {
+    init(content: LayoutNode, detent: PresentationDetent, dimID: String, state: SheetState, panID: String?) {
         self.content = content
         self.detent = detent
         self.dimID = dimID
-        self.presentedAt = presentedAt
-        self.dismissedAt = dismissedAt
+        self.state = state
+        self.panID = panID
     }
 
     override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        // Présence : 0 (sous l'écran) → 1 (en place), selon le ressort d'ouverture ou de fermeture.
+        // Présence : 0 (sous l'écran) → 1 (en place) : doigt, ressort après le geste, ou ouverture/fermeture.
         let now = lc.animator?.frameTime ?? .infinity
         var presence = 1.0
-        if let dismissedAt {
+        var moving = false
+        if let drag = state.dragOffset {
+            // Vers le haut, la feuille résiste (élastique).
+            let offset = drag >= 0 ? drag : -pow(-drag, 0.7)
+            presence = 1 - Double(offset / max(state.travel, 1))
+        } else if let r = state.release {
+            if let d = r.animation.displacement(at: now - r.start, d0: r.from - r.to, v0: r.velocity) {
+                presence = r.to + d.d
+                moving = true
+            } else {
+                presence = r.to
+                if r.to == 1 { state.release = nil }
+            }
+        } else if let dismissedAt = state.dismissedAt {
             presence = M.dismissAnimation.displacement(at: now - dismissedAt, d0: 1, v0: 0)?.d ?? 0
-        } else {
+            moving = presence > 0.0005
+        } else if let presentedAt = state.presentedAt {
             let spec = detent.fraction < 1 ? M.presentMediumAnimation : M.presentAnimation
             presence = 1 - (spec.displacement(at: now - presentedAt, d0: 1, v0: 0)?.d ?? 0)
+            moving = presence < 0.9995
         }
-        if presence > 0.0005 && presence < 0.9995 { lc.animator?.requestFrame() }
-        let interactive = dismissedAt == nil
+        if moving { lc.animator?.requestFrame() }
+        let interactive = state.dismissedAt == nil
         list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, (lc.colorScheme == .dark ? 0.4 : M.dimAlpha) * min(max(presence, 0), 1))))
         if interactive { list.append(.hitRegion(id: dimID, screen)) }
         var frame: CGRect
@@ -275,12 +326,15 @@ final class SheetNode: LayoutNode {
             frame = CGRect(x: screen.minX, y: top, width: screen.width, height: screen.maxY - top)
         }
         // Glissement depuis le bas de l'écran.
+        state.travel = screen.maxY - frame.minY
+        state.height = frame.height
         frame.origin.y += CGFloat(1 - presence) * (screen.maxY - frame.minY)
         let bg = lc.colorScheme == .light ? RGBA(1, 1, 1) : .rgb255(28, 28, 30)
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame.offsetBy(dx: 0, dy: -1), RGBA(0, 0, 0, 0.06)))
         list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius), frame, bg))
         // Bloque les touchers vers ce qui est derrière la feuille.
         if interactive { list.append(.hitRegion(id: dimID + "-sheet", frame)) }
+        if let panID, interactive { list.append(.panRegion(id: panID, frame, vertical: true)) }
         list.append(.pushClip(.roundedRectangle(cornerRadius: M.cornerRadius), frame))
         let inner = frame.insetBy(dx: 0, dy: 0)
         let s = content.sizeThatFits(ProposedViewSize(inner.size), lc)

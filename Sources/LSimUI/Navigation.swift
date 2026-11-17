@@ -83,16 +83,62 @@ public final class NavigationModel {
         graph?.invalidate()
     }
 
-    /// Transition en cours : l'écran sortant (nil : racine) reste construit jusqu'à la fin.
+    /// Écran d'une transition : la racine ou une entrée de la pile.
+    typealias Screen = (id: Int, entry: Entry)?
+
+    /// Transition en cours entre l'écran du dessus et celui du dessous (tous deux construits jusqu'à la
+    /// fin). La présence de l'écran du dessus va de `from` à `to` (1 : en place, 0 : sorti à droite) avec
+    /// un ressort qui part de la vitesse `velocity` (présence par seconde).
     struct Transition {
-        var push: Bool
+        var top: Screen
+        var bottom: Screen
+        var from: Double
+        var to: Double
+        var velocity: Double
         var start: Double
-        var outgoing: (id: Int, entry: Entry)?
+        var animation: Animation
+
+        func presence(at now: Double) -> (value: Double, done: Bool) {
+            guard let r = animation.displacement(at: now - start, d0: from - to, v0: velocity) else { return (to, true) }
+            return (to + r.d, false)
+        }
     }
     var transition: Transition?
+    /// Largeur de l'écran (relevée au dessin), pour convertir le geste en présence.
+    var width: CGFloat = 440
+    /// Retour par balayage en cours : présence de l'écran du dessus (suit le doigt).
+    var dragPresence: Double?
 
     func beginTransition(push: Bool, outgoing: (id: Int, entry: Entry)?) {
-        transition = Transition(push: push, start: graph?.animator.clock() ?? 0, outgoing: outgoing)
+        let now = graph?.animator.clock() ?? 0
+        if push {
+            transition = Transition(top: path.last, bottom: outgoing, from: 0, to: 1, velocity: 0, start: now,
+                                    animation: NavigationMetrics.pushAnimation)
+        } else {
+            transition = Transition(top: outgoing, bottom: path.last, from: 1, to: 0, velocity: 0, start: now,
+                                    animation: NavigationMetrics.popAnimation)
+        }
+    }
+
+    /// Fin du balayage : retour (écran retiré) ou annulation (écran remis en place), en partant de la
+    /// position et de la vitesse du doigt. La décision suit la position projetée (position + 0,2 s de vitesse).
+    func endBackSwipe(translation: CGFloat, velocity: CGFloat, width: CGFloat) {
+        guard let presence = dragPresence, !path.isEmpty else { dragPresence = nil; return }
+        dragPresence = nil
+        let now = graph?.animator.clock() ?? 0
+        let v = -Double(velocity / max(width, 1))
+        let projected = Double(translation + 0.2 * velocity) / Double(max(width, 1))
+        let below: Screen = path.count >= 2 ? path[path.count - 2] : nil
+        if projected > 0.5 {
+            let popped = path.removeLast()
+            transition = Transition(top: popped, bottom: below, from: presence, to: 0, velocity: v, start: now,
+                                    animation: NavigationMetrics.popAnimation)
+            onPop?()
+        } else {
+            transition = Transition(top: path.last, bottom: below, from: presence, to: 1, velocity: v, start: now,
+                                    animation: NavigationMetrics.popAnimation)
+        }
+        graph?.invalidate()
     }
 
     /// Ajout sans nouveau rendu (pile initiale d'une NavigationStack liée).
@@ -204,6 +250,7 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
                 while model.path.count > values.count {
                     let popped = model.path.removeLast()
                     model.beginTransition(push: false, outgoing: popped)
+                    model.dragPresence = nil
                 }
             }
         }
@@ -268,35 +315,62 @@ public struct NavigationStack<Root: View>: View, _PrimitiveView {
             )
         }
 
-        let incoming = screen(model.path.last)
+        // Retour par balayage (iOS 26 : depuis n'importe où dans le contenu) : l'écran du dessus suit le doigt.
+        let panID = ctx.path + "#backSwipe"
+        if !model.path.isEmpty {
+            context.graph.registerPan(panID, changed: { translation in
+                model.transition = nil
+                model.dragPresence = Double(max(0, min(1, 1 - translation.width / max(model.width, 1))))
+                model.graph?.invalidate()
+            }, ended: { translation, velocity in
+                model.endBackSwipe(translation: max(0, translation.width), velocity: velocity.width, width: model.width)
+            })
+        }
+
+        if let presence = model.dragPresence, !model.path.isEmpty {
+            let below: NavigationModel.Screen = model.path.count >= 2 ? model.path[model.path.count - 2] : nil
+            return [NavigationTransitionNode(top: screen(model.path.last), bottom: screen(below),
+                                             presence: presence, animating: false)]
+        }
         if let transition = model.transition {
-            if context.graph.animator.clock() - transition.start > 1.5 {
+            let state = transition.presence(at: context.graph.animator.clock())
+            if state.done {
                 model.transition = nil
             } else {
-                let outgoing = screen(transition.outgoing)
-                return [NavigationTransitionNode(top: transition.push ? incoming : outgoing,
-                                                 bottom: transition.push ? outgoing : incoming,
-                                                 push: transition.push, start: transition.start)]
+                let top = screen(transition.top)
+                // Écran du dessus qui reste (push, annulation) : le balayage reste possible.
+                if transition.to == 1, !model.path.isEmpty {
+                    top.backPanID = panID
+                    top.model = model
+                }
+                return [NavigationTransitionNode(top: top, bottom: screen(transition.bottom),
+                                                 presence: state.value, animating: true, target: transition.to)]
             }
         }
+        let incoming = screen(model.path.last)
+        incoming.backPanID = model.path.isEmpty ? nil : panID
+        incoming.model = model
         return [incoming]
     }
 }
 
-/// Transition de pile (push : l'écran du dessus arrive de la droite ; pop : il repart à droite) ; l'écran du
-/// dessous recule de 30 % de la largeur (parallaxe), les barres se croisent en fondu. Mesuré sur iPhone :
-/// ressorts sans rebond, push réponse 0,25 / amortissement 1,06, pop 0,21 / 1,24.
+/// Transition de pile : l'écran du dessus est décalé vers la droite selon sa présence (1 : en place,
+/// 0 : sorti) ; l'écran du dessous recule de 30 % de la largeur (parallaxe), les barres se croisent en fondu.
+/// Mesuré sur iPhone : ressorts sans rebond, push réponse 0,25 / amortissement 1,06, pop 0,21 / 1,24.
 final class NavigationTransitionNode: LayoutNode {
     let top: NavigationNode
     let bottom: NavigationNode
-    let push: Bool
-    let start: Double
+    let presence: Double
+    let animating: Bool
+    /// Présence visée (1 : l'écran du dessus reste, 0 : il part) ; sans animateur, seul l'écran final est dessiné.
+    let target: Double
 
-    init(top: NavigationNode, bottom: NavigationNode, push: Bool, start: Double) {
+    init(top: NavigationNode, bottom: NavigationNode, presence: Double, animating: Bool, target: Double = 1) {
         self.top = top
         self.bottom = bottom
-        self.push = push
-        self.start = start
+        self.presence = presence
+        self.animating = animating
+        self.target = target
     }
 
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
@@ -304,23 +378,18 @@ final class NavigationTransitionNode: LayoutNode {
     }
 
     override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        let spec = push ? NavigationMetrics.pushAnimation : NavigationMetrics.popAnimation
-        let now = lc.animator?.frameTime ?? .infinity
-        let d = spec.displacement(at: now - start, d0: 1, v0: 0)?.d ?? 0
-        if d == 0 {
-            // Transition terminée (ou rendu sans animateur) : seul l'écran d'arrivée est dessiné.
-            (push ? top : bottom).render(in: rect, lc, &list)
+        guard lc.animator != nil else {
+            (target >= 0.5 ? top : bottom).render(in: rect, lc, &list)
             return
         }
-        lc.animator?.requestFrame()
-        // Présence de l'écran du dessus : 0 (hors écran à droite) → 1 (en place).
-        let presence = CGFloat(push ? 1 - d : d)
+        if animating { lc.animator?.requestFrame() }
+        let s = CGFloat(min(max(presence, -0.2), 1.2))
         let width = (lc.screen == .zero ? rect : lc.screen).width
-        bottom.pageOffset = -NavigationMetrics.parallax * width * presence
-        bottom.barAlpha = Double(1 - presence)
+        bottom.pageOffset = -NavigationMetrics.parallax * width * max(0, s)
+        bottom.barAlpha = Double(min(1, max(0, 1 - s)))
         bottom.opaqueBackground = true
-        top.pageOffset = width * (1 - presence)
-        top.barAlpha = Double(presence)
+        top.pageOffset = width * (1 - s)
+        top.barAlpha = Double(min(1, max(0, s)))
         top.opaqueBackground = true
         bottom.render(in: rect, lc, &list)
         top.render(in: rect, lc, &list)
@@ -345,6 +414,9 @@ final class NavigationNode: LayoutNode {
     var pageOffset: CGFloat = 0
     var barAlpha: Double = 1
     var opaqueBackground = false
+    /// Zone du retour par balayage (écran du dessus d'une pile non vide, hors transition).
+    var backPanID: String?
+    weak var model: NavigationModel?
 
     init(page: LayoutNode, title: String?, largeTitle: LayoutNode?, backID: String?, backTitle: String, backPressed: Bool, tint: Color,
          leading: [LayoutNode] = [], trailing: [LayoutNode] = []) {
@@ -503,6 +575,11 @@ final class NavigationNode: LayoutNode {
             list.append(.hitRegion(id: backID, CGRect(x: bar.minX, y: bar.minY, width: backWidth + 8, height: bar.height)))
         }
         if fading { list.append(.popOpacity) }
+        model?.width = (lc.screen == .zero ? rect : lc.screen).width
+        if let backPanID {
+            let screen = lc.screen == .zero ? rect : lc.screen
+            list.append(.panRegion(id: backPanID, screen, vertical: false))
+        }
     }
 }
 

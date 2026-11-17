@@ -285,7 +285,12 @@ public final class Animator {
     private var stillAnimating = false
 
     /// Demande l'image suivante (transitions dessinées hors des pistes : pile de navigation, feuilles).
-    func requestFrame() { if mode != .record { stillAnimating = true } }
+    func requestFrame() {
+        if mode != .record { stillAnimating = true }
+        externalFrame = true
+    }
+    /// Image demandée hors du rendu (pendant la construction de l'arbre).
+    private var externalFrame = false
 
     /// Rendu complet d'une image (une ou deux passes), à appeler par le layout racine.
     func frame(_ render: () -> DisplayList) -> DisplayList {
@@ -303,7 +308,8 @@ public final class Animator {
         beginFrame()
         stillAnimating = false
         let list = render()
-        isAnimating = stillAnimating
+        isAnimating = stillAnimating || externalFrame
+        externalFrame = false
         // Les pistes des nœuds disparus sont oubliées.
         tracks = tracks.filter { seen.contains($0.key) }
         previousSeen = seen

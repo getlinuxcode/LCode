@@ -39,6 +39,8 @@ public enum DisplayItem {
     case hitRegion(id: String, CGRect)
     /// Repère de mesure (`accessibilityIdentifier`) : cadre de la vue identifiée.
     case marker(id: String, CGRect)
+    /// Zone de geste de glisser (retour par balayage, feuille tirée vers le bas) ; `vertical` : sens du geste.
+    case panRegion(id: String, CGRect, vertical: Bool)
     /// Zone défilable : identifiant d'état, zone visible.
     case scrollRegion(id: String, CGRect)
 }
@@ -108,6 +110,14 @@ public struct DisplayList {
     }
 
     /// Zone défilable la plus haute sous le point donné.
+    /// Zone de geste la plus haute sous le point, pour le sens donné.
+    public func panTarget(_ point: CGPoint, vertical: Bool) -> String? {
+        for item in items.reversed() {
+            if case let .panRegion(id, rect, v) = item, v == vertical, rect.contains(point) { return id }
+        }
+        return nil
+    }
+
     public func scrollTarget(_ point: CGPoint) -> String? {
         for item in items.reversed() {
             if case let .scrollRegion(id, rect) = item, rect.contains(point) { return id }

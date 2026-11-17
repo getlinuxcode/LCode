@@ -140,6 +140,18 @@ public final class ViewGraph {
         dragHandlers[id] = handler
     }
 
+    /// Geste de glisser suivi par une vue système (retour par balayage, feuille) : translation depuis le
+    /// début du geste, puis translation et vitesse (points/s) au lâcher.
+    public struct PanHandler {
+        public let changed: (CGSize) -> Void
+        public let ended: (CGSize, CGSize) -> Void
+    }
+    public private(set) var panHandlers: [String: PanHandler] = [:]
+
+    func registerPan(_ id: String, changed: @escaping (CGSize) -> Void, ended: @escaping (CGSize, CGSize) -> Void) {
+        panHandlers[id] = PanHandler(changed: changed, ended: ended)
+    }
+
     public var hasFocusedTextField: Bool { focusedID.flatMap { textInputs[$0] } != nil }
 
     /// Frappe au clavier dans le champ actif.
@@ -201,6 +213,7 @@ public final class ViewGraph {
         actions = [:]
         textInputs = [:]
         dragHandlers = [:]
+        panHandlers = [:]
         presentations = []
         touchedKeys = []
         currentAppear = []
@@ -246,7 +259,7 @@ public final class ViewGraph {
         return object
     }
 
-    func scrollOffset(_ id: String) -> CGFloat {
+    public func scrollOffset(_ id: String) -> CGFloat {
         touchedKeys.insert(id)
         return storages[id]?.value as? CGFloat ?? 0
     }

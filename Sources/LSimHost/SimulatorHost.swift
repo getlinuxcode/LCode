@@ -183,6 +183,11 @@ public final class SimulatorHost {
 
     /// Contrôle qui suit le doigt (Slider) pendant le geste en cours.
     var dragControlID: String?
+    /// Geste système en cours (retour par balayage, feuille tirée) et candidats au début du geste.
+    var panID: String?
+    var panCandidates: (horizontal: String?, vertical: String?) = (nil, nil)
+    /// Derniers points du geste (temps, translation) pour estimer la vitesse au lâcher.
+    var panSamples: [(time: Double, translation: CGSize)] = []
 
     func press(at point: CGPoint) {
         dragStart = point
@@ -190,6 +195,9 @@ public final class SimulatorHost {
         dragLastX = 0
         isScrolling = false
         dragScrollID = displayList.scrollTarget(point)
+        panID = nil
+        panSamples = []
+        panCandidates = (displayList.panTarget(point, vertical: false), displayList.panTarget(point, vertical: true))
         let hit = displayList.hitTest(point)
         // Toucher hors du champ actif : le clavier se ferme.
         if hit != graph.focusedID { graph.resignFocus() }
@@ -210,6 +218,27 @@ public final class SimulatorHost {
             graph.dragHandlers[control]?(CGPoint(x: start.x + dx, y: start.y + dy))
             return
         }
+        // Au-delà de 8 pt, un geste système peut prendre le glisser : vers la droite (retour par balayage,
+        // sauf dans une ScrollView horizontale), ou vers le bas (feuille, si son contenu est tout en haut).
+        if panID == nil, !isScrolling, hypot(dx, dy) > 8 {
+            let horizontalScroll = dragScrollID.map { graph.horizontalScrolls.contains($0) } ?? false
+            let contentAtTop = dragScrollID.map { graph.horizontalScrolls.contains($0) || graph.scrollOffset($0) <= 0.5 } ?? true
+            if abs(dx) > abs(dy), dx > 0, !horizontalScroll, let id = panCandidates.horizontal {
+                panID = id
+            } else if abs(dy) > abs(dx), dy > 0, contentAtTop, let id = panCandidates.vertical {
+                panID = id
+            }
+            if panID != nil { graph.pressedID = nil }
+        }
+        if let id = panID {
+            let translation = CGSize(width: dx, height: dy)
+            panSamples.append((graph.animator.clock(), translation))
+            if panSamples.count > 6 { panSamples.removeFirst() }
+            graph.panHandlers[id]?.changed(translation)
+            dragLast = dy
+            dragLastX = dx
+            return
+        }
         if !isScrolling, hypot(dx, dy) > 8, dragScrollID != nil {
             isScrolling = true
             graph.pressedID = nil
@@ -226,8 +255,26 @@ public final class SimulatorHost {
     }
 
     var dragLastX: CGFloat = 0
+    /// Des glisser simulés ont eu lieu (le rendu image par image part de leur lâcher).
+    var simulatedDrags = false
 
     func release(at point: CGPoint) {
+        if let id = panID, let start = dragStart {
+            // Vitesse : sur les derniers points du geste (points par seconde).
+            let translation = CGSize(width: point.x - start.x, height: point.y - start.y)
+            var velocity = CGSize.zero
+            if let first = panSamples.first, let last = panSamples.last, last.time - first.time > 0.001 {
+                let dt = CGFloat(last.time - first.time)
+                velocity = CGSize(width: (last.translation.width - first.translation.width) / dt,
+                                  height: (last.translation.height - first.translation.height) / dt)
+            }
+            graph.panHandlers[id]?.ended(translation, velocity)
+            panID = nil
+            dragStart = nil
+            graph.pressedID = nil
+            queueDraw()
+            return
+        }
         let pressed = graph.pressedID
         graph.pressedID = nil
         if dragControlID == nil, !isScrolling, let pressed, displayList.hitTest(point) == pressed {
@@ -398,6 +445,8 @@ public final class SimulatorHost {
         if ProcessInfo.processInfo.environment["LSIM_FRAMES"] != nil {
             let real = graph.animator.clock
             graph.animator.clock = { real() - 10 }
+            updateLayout()                              // état initial (ouvertures lancées ici)…
+            graph.animator.clock = { real() - 5 }       // …terminées avant les gestes et touchers
         }
         // Touchers simulés : chaque toucher reconstruit le layout puis déclenche l'action visée.
         if let scroll = ProcessInfo.processInfo.environment["LSIM_SCROLL"].flatMap(Double.init) {
@@ -406,6 +455,33 @@ public final class SimulatorHost {
                 if case let .scrollRegion(id, _) = item { return id } else { return nil }
             }.first
             if let first { graph.scroll(first, by: CGFloat(scroll)) }
+        }
+        // Glisser simulés : LSIM_DRAGS="x0,y0,x1,y1,durée;…" (points, secondes), à 120 images/s.
+        if let drags = ProcessInfo.processInfo.environment["LSIM_DRAGS"] {
+            for spec in drags.split(separator: ";") {
+                let v = spec.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                guard v.count == 5 else { continue }
+                final class Clock { var t = 0.0 }
+                let clock = Clock()
+                let base = graph.animator.clock()
+                let previous = graph.animator.clock
+                graph.animator.clock = { base + clock.t }
+                updateLayout()
+                press(at: CGPoint(x: v[0], y: v[1]))
+                let steps = max(1, Int(v[4] * 120))
+                for i in 1...steps {
+                    clock.t = Double(i) / 120
+                    let f = Double(i) / Double(steps)
+                    drag(dx: CGFloat((v[2] - v[0]) * f), dy: CGFloat((v[3] - v[1]) * f))
+                    updateLayout()
+                }
+                release(at: CGPoint(x: v[2], y: v[3]))
+                // Le temps reste figé au lâcher : les images qui suivent partent de là.
+                let end = base + clock.t
+                graph.animator.clock = { end }
+                _ = previous
+                simulatedDrags = true
+            }
         }
         for tap in taps.split(separator: ";") {
             let parts = tap.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
@@ -422,7 +498,7 @@ public final class SimulatorHost {
             let step = parts.first ?? 1.0 / 60, count = Int(parts.count > 1 ? parts[1] : 120)
             final class TimeBox { var t = 0.0 }
             let time = TimeBox()
-            let base = graph.animator.clock() + 10
+            let base = graph.animator.clock() + (simulatedDrags ? 0 : 10)
             graph.animator.clock = { base + time.t }
             var samples: [String: [[Double]]] = [:]
             for i in 0..<count {
