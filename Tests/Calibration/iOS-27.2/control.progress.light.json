@@ -1,0 +1,48 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 4,
+   "id": "progress.30",
+   "width": 400,
+   "x": 20,
+   "y": 440.7830403645833
+  },
+  {
+   "height": 46.76725260416663,
+   "id": "progress.label",
+   "width": 107.66666666666669,
+   "x": 166.16666666666669,
+   "y": 540.7830403645833
+  },
+  {
+   "height": 19.999999999999943,
+   "id": "progress.spinner",
+   "width": 20,
+   "x": 210,
+   "y": 496.7830403645833
+  },
+  {
+   "height": 4,
+   "id": "progress.tinted",
+   "width": 400,
+   "x": 20,
+   "y": 468.7830403645833
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 109.33333333333334,
+   "x": 165.33333333333334,
+   "y": 396.44970703125
+  }
+ ],
+ "page": "control.progress",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

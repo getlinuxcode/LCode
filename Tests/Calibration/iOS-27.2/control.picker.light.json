@@ -1,0 +1,34 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 31,
+   "id": "picker.segmented2",
+   "width": 400,
+   "x": 20,
+   "y": 526.1666666666667
+  },
+  {
+   "height": 31,
+   "id": "picker.segmented3",
+   "width": 400,
+   "x": 20,
+   "y": 471.1666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 49.66666666666666,
+   "x": 195.16666666666666,
+   "y": 426.83333333333337
+  }
+ ],
+ "page": "control.picker",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

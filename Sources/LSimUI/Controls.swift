@@ -26,6 +26,18 @@ func controlRow(_ label: [LayoutNode], _ trailing: LayoutNode) -> LayoutNode {
     return StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)
 }
 
+/// Dans une ligne de liste, iOS ne compte pas la hauteur du contrôle (interrupteur, stepper) : la ligne prend
+/// la hauteur du libellé et le contrôle déborde, centré (mesuré sur iPhone : cadre de 20,3 pt dans un Form).
+final class RowOverflowNode: SingleChildNode {
+    override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
+        CGSize(width: child.sizeThatFits(p, lc).width, height: 0)
+    }
+    override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
+        let s = child.sizeThatFits(.unspecified, lc)
+        child.render(in: CGRect(x: rect.minX, y: rect.midY - s.height / 2, width: rect.width, height: s.height), lc, &list)
+    }
+}
+
 /// Nœud de taille fixe dessiné par une fermeture.
 final class DrawNode: LayoutNode {
     let size: (ProposedViewSize) -> CGSize
@@ -118,23 +130,28 @@ public struct Toggle<Label: View>: View, _PrimitiveView {
         let enabled = context.environment.isEnabled
         if enabled { context.graph.registerAction(id) { isOn.wrappedValue.toggle() } }
         let tint = context.environment.tint ?? .green
-        // Interrupteur iOS 26 : piste en capsule, curseur blanc allongé.
-        let control = DrawNode(size: { _ in CGSize(width: 63, height: 28) }) { rect, lc, list in
-            let track = on ? tint : Color.systemFill
+        // Interrupteur iOS 27 (couches mesurées) : cadre de 61 × 28, piste de 63 pt qui déborde à droite,
+        // curseur blanc de 37 × 24 ; piste éteinte gris (120, 120, 128) à 43 % (clair) / 58 % (sombre).
+        let control = DrawNode(size: { _ in CGSize(width: 61, height: 28) }) { frame, lc, list in
+            let rect = CGRect(x: frame.minX, y: frame.minY, width: 63, height: frame.height)
+            let offTrack = Color(light: .rgb255(120, 120, 128, 0.43), dark: .rgb255(120, 120, 128, 0.58))
+            let track = on ? tint : offTrack
+            if !enabled { list.append(.pushOpacity(0.4)) }
             list.append(.fill(.capsule, rect, track.resolve(in: lc.colorScheme)))
             let knob = CGSize(width: 37, height: 24)
             let x = on ? rect.maxX - 2 - knob.width : rect.minX + 2
             let knobRect = CGRect(x: x, y: rect.midY - knob.height / 2, width: knob.width, height: knob.height)
             list.append(.fill(.capsule, knobRect.offsetBy(dx: 0, dy: 1), RGBA(0, 0, 0, 0.08)))
             list.append(.fill(.capsule, knobRect, RGBA(1, 1, 1)))
+            if !enabled { list.append(.popOpacity) }
             list.append(.hitRegion(id: id, rect))
         }
         var labelCtx = context.child("label")
         labelCtx.environment.isInList = false
         let labelNodes = LSimUI._makeNodes(label, labelCtx)
-        if context.environment.labelsHidden { return [enabled ? control : OpacityNode(control, opacity: 0.4)] }
-        let row = controlRow(labelNodes, control)
-        return [enabled ? row : OpacityNode(row, opacity: 0.4)]
+        if context.environment.labelsHidden { return [control] }
+        // Désactivé : seul l'interrupteur s'estompe, le libellé reste (mesuré sur iPhone).
+        return [controlRow(labelNodes, context.environment.isInList ? RowOverflowNode(control) : control)]
     }
 }
 
@@ -207,7 +224,9 @@ final class TextFieldNode: LayoutNode {
     override func computeSize(_ p: ProposedViewSize, _ lc: LayoutContext) -> CGSize {
         let line = text.sizeThatFits(.unspecified, lc)
         let width = p.width.flatMap { $0.isFinite ? $0 : nil } ?? max(line.width, 100)
-        return CGSize(width: width, height: line.height + insets.vertical)
+        // Champ iOS (mesuré) : ligne de 22 pt pour un texte de 17 pt (20,3 pt), plus 2 × 6 pt avec bordure (34 pt).
+        let fieldLine = line.height * 22 / 20.333
+        return CGSize(width: width, height: fieldLine + (bordered ? 12 : 0))
     }
 
     override func draw(in rect: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
@@ -316,14 +335,29 @@ public struct Slider<Label: View>: View, _PrimitiveView {
     let value: Binding<Double>
     let range: ClosedRange<Double>
     let step: Double?
+    /// Libellés des valeurs extrêmes (`minimumValueLabel` / `maximumValueLabel`), de part et d'autre.
+    var minimumLabel: AnyView?
+    var maximumLabel: AnyView?
 
     public func _makeNodes(_ context: BuildContext) -> [LayoutNode] {
+        let track = makeTrack(context)
+        guard minimumLabel != nil || maximumLabel != nil else { return track }
+        var labelCtx = context.child("valueLabels")
+        labelCtx.environment.foregroundColor = labelCtx.environment.foregroundColor ?? .primary
+        var children: [LayoutNode] = []
+        if let minimumLabel { children += LSimUI._makeNodes(minimumLabel, labelCtx.child("min")) }
+        children += track
+        if let maximumLabel { children += LSimUI._makeNodes(maximumLabel, labelCtx.child("max")) }
+        return [StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: nil, children: children)]
+    }
+
+    func makeTrack(_ context: BuildContext) -> [LayoutNode] {
         let id = context.path + "/Slider"
         let value = self.value, range = self.range, step = self.step
         let span = max(range.upperBound - range.lowerBound, .ulpOfOne)
         let fraction = min(1, max(0, (value.wrappedValue - range.lowerBound) / span))
         let tint = context.environment.tint ?? .accentColor
-        let thumb = CGSize(width: 38, height: 24)
+        let thumb = CGSize(width: 37, height: 24)
         var trackRect = CGRect.zero
         context.graph.registerDrag(id) { point in
             guard trackRect.width > 0 else { return }
@@ -333,7 +367,7 @@ public struct Slider<Label: View>: View, _PrimitiveView {
             if let step, step > 0 { v = (v / step).rounded() * step }
             value.wrappedValue = v
         }
-        return [DrawNode(size: { p in CGSize(width: p.width.flatMap { $0.isFinite ? $0 : nil } ?? 200, height: 28) }) { rect, lc, list in
+        return [DrawNode(size: { p in CGSize(width: p.width.flatMap { $0.isFinite ? $0 : nil } ?? 200, height: 31) }) { rect, lc, list in
             trackRect = rect
             let track = CGRect(x: rect.minX, y: rect.midY - 3, width: rect.width, height: 6)
             list.append(.fill(.capsule, track, Color.systemFill.resolve(in: lc.colorScheme)))
@@ -341,10 +375,34 @@ public struct Slider<Label: View>: View, _PrimitiveView {
             list.append(.fill(.capsule, CGRect(x: track.minX, y: track.minY, width: x - track.minX + thumb.width / 2, height: 6),
                               tint.resolve(in: lc.colorScheme)))
             let knob = CGRect(x: x, y: rect.midY - thumb.height / 2, width: thumb.width, height: thumb.height)
-            list.append(.fill(.capsule, knob.offsetBy(dx: 0, dy: 1.5), RGBA(0, 0, 0, 0.12)))
+            // Ombre douce tout autour du curseur (visible sur fond blanc), plus marquée vers le bas.
+            list.append(.fill(.capsule, knob.insetBy(dx: -1, dy: -1).offsetBy(dx: 0, dy: 1), RGBA(0, 0, 0, 0.06)))
+            list.append(.fill(.capsule, knob.insetBy(dx: -0.5, dy: -0.5), RGBA(0, 0, 0, 0.06)))
             list.append(.fill(.capsule, knob, RGBA(1, 1, 1)))
             list.append(.hitRegion(id: id, rect))
         }]
+    }
+}
+
+extension Slider {
+    public init<V: BinaryFloatingPoint, ValueLabel: View>(value: Binding<V>, in range: ClosedRange<V> = 0...1, step: V.Stride? = nil,
+                                                          @ViewBuilder label: () -> Label,
+                                                          @ViewBuilder minimumValueLabel: () -> ValueLabel,
+                                                          @ViewBuilder maximumValueLabel: () -> ValueLabel,
+                                                          onEditingChanged: @escaping (Bool) -> Void = { _ in }) where V.Stride: BinaryFloatingPoint {
+        self.value = Binding(get: { Double(value.wrappedValue) }, set: { value.wrappedValue = V($0) })
+        self.range = Double(range.lowerBound)...Double(range.upperBound)
+        self.step = step.map { Double($0) }
+        minimumLabel = AnyView(minimumValueLabel())
+        maximumLabel = AnyView(maximumValueLabel())
+    }
+
+    public init<V: BinaryFloatingPoint>(value: Binding<V>, in range: ClosedRange<V> = 0...1, step: V.Stride? = nil,
+                                        @ViewBuilder label: () -> Label,
+                                        onEditingChanged: @escaping (Bool) -> Void = { _ in }) where V.Stride: BinaryFloatingPoint {
+        self.value = Binding(get: { Double(value.wrappedValue) }, set: { value.wrappedValue = V($0) })
+        self.range = Double(range.lowerBound)...Double(range.upperBound)
+        self.step = step.map { Double($0) }
     }
 }
 
@@ -364,6 +422,9 @@ public struct Stepper<Label: View>: View, _PrimitiveView {
     let label: Label
     let increment: () -> Void
     let decrement: () -> Void
+    /// Boutons actifs (un bouton à la borne de l'intervalle s'estompe, comme sur iPhone).
+    var canIncrement = true
+    var canDecrement = true
 
     public init(@ViewBuilder label: () -> Label, onIncrement: (() -> Void)?, onDecrement: (() -> Void)?) {
         self.label = label()
@@ -383,19 +444,40 @@ public struct Stepper<Label: View>: View, _PrimitiveView {
             list.append(.fill(.capsule, rect, Color.tertiarySystemFill.resolve(in: lc.colorScheme)))
             let left = CGRect(x: rect.minX, y: rect.minY, width: rect.width / 2, height: rect.height)
             let right = CGRect(x: rect.midX, y: rect.minY, width: rect.width / 2, height: rect.height)
-            list.append(.fill(.rectangle, CGRect(x: rect.midX - 0.5, y: rect.midY - 9, width: 1, height: 18),
+            // Trait central : 1 × 24 pt (couches mesurées).
+            list.append(.fill(.rectangle, CGRect(x: rect.midX - 0.5, y: rect.midY - 12, width: 1, height: 24),
                               Color.separator.resolve(in: lc.colorScheme)))
-            for (node, half, id) in [(minus, left, minusID), (plus, right, plusID)] {
+            for (node, half, id, active) in [(minus, left, minusID, canDecrement), (plus, right, plusID, canIncrement)] {
                 let s = node.sizeThatFits(.unspecified, lc)
-                if pressed == id { list.append(.pushOpacity(0.3)) }
+                let dim = !active ? 0.3 : pressed == id ? 0.3 : 1
+                if dim < 1 { list.append(.pushOpacity(dim)) }
                 node.render(in: Alignment.center.place(s, in: half), lc, &list)
-                if pressed == id { list.append(.popOpacity) }
-                list.append(.hitRegion(id: id, half))
+                if dim < 1 { list.append(.popOpacity) }
+                if active { list.append(.hitRegion(id: id, half)) }
             }
         }
+        if context.environment.labelsHidden { return [control] }
         var labelCtx = context.child("label")
         labelCtx.environment.isInList = false
-        return [controlRow(LSimUI._makeNodes(label, labelCtx), control)]
+        return [controlRow(LSimUI._makeNodes(label, labelCtx), context.environment.isInList ? RowOverflowNode(control) : control)]
+    }
+}
+
+extension Stepper {
+    public init<V: Strideable>(value: Binding<V>, in bounds: ClosedRange<V>, step: V.Stride = 1,
+                               @ViewBuilder label: () -> Label, onEditingChanged: @escaping (Bool) -> Void = { _ in }) {
+        self.init(label: label,
+                  onIncrement: { value.wrappedValue = min(bounds.upperBound, value.wrappedValue.advanced(by: step)) },
+                  onDecrement: { value.wrappedValue = max(bounds.lowerBound, value.wrappedValue.advanced(by: -step)) })
+        canIncrement = value.wrappedValue < bounds.upperBound
+        canDecrement = value.wrappedValue > bounds.lowerBound
+    }
+
+    public init<V: Strideable>(value: Binding<V>, step: V.Stride = 1,
+                               @ViewBuilder label: () -> Label, onEditingChanged: @escaping (Bool) -> Void = { _ in }) {
+        self.init(label: label,
+                  onIncrement: { value.wrappedValue = value.wrappedValue.advanced(by: step) },
+                  onDecrement: { value.wrappedValue = value.wrappedValue.advanced(by: -step) })
     }
 }
 
@@ -404,6 +486,8 @@ extension Stepper where Label == Text {
         self.init(label: { Text(title) },
                   onIncrement: { value.wrappedValue = min(bounds.upperBound, value.wrappedValue.advanced(by: step)) },
                   onDecrement: { value.wrappedValue = max(bounds.lowerBound, value.wrappedValue.advanced(by: -step)) })
+        canIncrement = value.wrappedValue < bounds.upperBound
+        canDecrement = value.wrappedValue > bounds.lowerBound
     }
 
     public init<S: StringProtocol, V: Strideable>(_ title: S, value: Binding<V>, step: V.Stride = 1) {
@@ -512,11 +596,19 @@ public struct Picker<Label: View, SelectionValue: Hashable, Content: View>: View
         if !options.isEmpty {
             context.graph.registerAction(id) { select(((index ?? -1) + 1) % options.count) }
         }
+        // Hors liste : bouton teinté « Valeur ⌃⌄ », sans libellé, marges 12 × 7 (106 × 34,3 pt mesurés pour
+        // « Semaine ») ; en liste : libellé à gauche, valeur grise à droite.
+        let inList = context.environment.isInList
+        let valueColor: Color = inList ? .secondary : (context.environment.tint ?? .accentColor)
         let valueText = TextNode(index.map { options[$0].title } ?? "", font: context.environment.font ?? .body,
-                                 color: .secondary, alignment: .leading)
+                                 color: valueColor, alignment: .leading)
         let chevrons = SymbolNode(name: "chevron.up.chevron.down", font: .system(size: 13, weight: .medium), scale: .medium,
-                                  color: .secondary, resizable: false, contentMode: .fit)
-        let trailing = StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: 5, children: [valueText, chevrons])
+                                  color: valueColor, resizable: false, contentMode: .fit)
+        let trailing = StackNode(axis: .horizontal, crossAlignment: 0.5, spacing: inList ? 5 : 4, children: [valueText, chevrons])
+        if !inList || context.environment.labelsHidden {
+            let button = PaddingNode(trailing, insets: EdgeInsets(top: 7, leading: 12, bottom: 7, trailing: 12))
+            return [TapNode(button, id: id, isPressed: context.graph.pressedID == id, pressedOpacity: 0.5)]
+        }
         var labelCtx = context.child("label")
         labelCtx.environment.isInList = false
         let row = controlRow(LSimUI._makeNodes(label, labelCtx), trailing)

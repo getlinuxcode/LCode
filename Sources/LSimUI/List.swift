@@ -29,8 +29,8 @@ public enum ListMetrics {
     /// Espace avant la première section (avec / sans en-tête).
     public static var topInsetWithHeader: CGFloat { glass ? 8.5 : 13 }
     public static var topInset: CGFloat { 20 }
-    public static var sectionSpacing: CGFloat { 35 }
-    public static var headerBottomGap: CGFloat { glass ? 10 : 6 }
+    public static var sectionSpacing: CGFloat { glass ? 34.7 : 35 }
+    public static var headerBottomGap: CGFloat { glass ? 11.5 : 6 }
     public static var footerTopGap: CGFloat { 7 }
     /// En-tête de section : majuscules en footnote (compatibilité), casse normale en 17 pt medium (Liquid Glass).
     public static var headerFont: Font { glass ? .system(size: 17, weight: .medium) : .footnote }

@@ -1,0 +1,55 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 31,
+   "id": "slider.0",
+   "width": 400,
+   "x": 20,
+   "y": 388.6666666666667
+  },
+  {
+   "height": 31.000000000000057,
+   "id": "slider.100",
+   "width": 400,
+   "x": 20,
+   "y": 498.6666666666667
+  },
+  {
+   "height": 31,
+   "id": "slider.50",
+   "width": 400,
+   "x": 20,
+   "y": 443.6666666666667
+  },
+  {
+   "height": 31,
+   "id": "slider.labels",
+   "width": 400,
+   "x": 20,
+   "y": 608.6666666666667
+  },
+  {
+   "height": 31,
+   "id": "slider.tinted",
+   "width": 400,
+   "x": 20,
+   "y": 553.6666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 46,
+   "x": 197,
+   "y": 344.33333333333337
+  }
+ ],
+ "page": "control.slider",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

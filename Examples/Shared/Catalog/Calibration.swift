@@ -86,7 +86,7 @@ enum CalibrationRunner {
                     var request = URLRequest(url: url)
                     request.httpMethod = "POST"
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                    request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                    request.httpBody = try JSONSerialization.data(withJSONObject: Self.finite(payload))
                     _ = try await URLSession.shared.data(for: request)
                 } catch {
                     status("Échec de l'envoi : \(error.localizedDescription)")
@@ -207,7 +207,8 @@ enum CalibrationRunner {
         var layers: [[String: Any]] = []
         func visit(_ layer: CALayer, depth: Int) {
             let frame = layer.convert(layer.bounds, to: window.layer)
-            if !layer.isHidden, frames.values.contains(where: { $0.insetBy(dx: -4, dy: -4).intersects(frame) }) {
+            let finite = frame.minX.isFinite && frame.minY.isFinite && frame.width.isFinite && frame.height.isFinite
+            if !layer.isHidden, finite, frames.values.contains(where: { $0.insetBy(dx: -4, dy: -4).intersects(frame) }) {
                 layers.append(describe(layer, frame: frame, depth: depth))
             }
             for sub in layer.sublayers ?? [] { visit(sub, depth: depth + 1) }
@@ -238,6 +239,18 @@ enum CalibrationRunner {
         return c.map { Double($0) }
     }
 
+    /// Remplace les nombres non finis (infini, NaN) : JSONSerialization lèverait une exception (plantage).
+    static func finite(_ value: Any) -> Any {
+        switch value {
+        case let d as Double: return d.isFinite ? d : 0
+        case let f as CGFloat: return f.isFinite ? Double(f) : 0
+        case let f as Float: return f.isFinite ? Double(f) : 0
+        case let a as [Any]: return a.map(finite)
+        case let m as [String: Any]: return m.mapValues(finite)
+        default: return value
+        }
+    }
+
     static func describe(_ layer: CALayer, frame: CGRect, depth: Int) -> [String: Any] {
         var d: [String: Any] = [
             "class": String(describing: type(of: layer)),
@@ -262,7 +275,10 @@ enum CalibrationRunner {
         if let compositing = layer.compositingFilter { d["compositingFilter"] = "\(compositing)" }
         if let shape = layer as? CAShapeLayer {
             if let fill = srgb(shape.fillColor) { d["fillColor"] = fill }
-            if let path = shape.path { d["pathBounds"] = [path.boundingBox.minX, path.boundingBox.minY, path.boundingBox.width, path.boundingBox.height] }
+            // Tracé vide : encombrement infini (CGRect.null), illisible en JSON.
+            if let path = shape.path, !path.isEmpty, !path.boundingBox.isNull, !path.boundingBox.isInfinite {
+                d["pathBounds"] = [path.boundingBox.minX, path.boundingBox.minY, path.boundingBox.width, path.boundingBox.height]
+            }
         }
         return d
     }

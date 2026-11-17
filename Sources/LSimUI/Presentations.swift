@@ -386,8 +386,10 @@ struct _AlertModifier<A: View, M: View>: _PrimitiveModifier {
         }
         var messageCtx = ctx.child("message")
         messageCtx.environment.isInAlert = false
-        messageCtx.environment.font = .footnote
-        messageCtx.environment.multilineTextAlignment = .center
+        // Message (mesuré sur iPhone) : 15 pt, gris secondaire, aligné à gauche.
+        messageCtx.environment.font = AlertMetrics.messageFont
+        messageCtx.environment.foregroundColor = messageCtx.environment.foregroundColor ?? .secondary
+        messageCtx.environment.multilineTextAlignment = .leading
         let messageNodes = LSimUI._makeNodes(message(), messageCtx)
         context.graph.presentations.append(AlertNode(title: title, message: messageNodes, buttons: buttons, blockID: ctx.path + "#block"))
         return nodes
@@ -414,12 +416,22 @@ extension View {
 }
 
 /// Mesures des alertes iOS 26 (estimations à calibrer).
+/// Alertes iOS 27.2, mesurées dans les captures iPhone 17 Pro Max : carte de 320 pt centrée dans la zone
+/// sûre, titre et message alignés à gauche (retrait de 30 pt), boutons en capsules de 48 pt.
 public enum AlertMetrics {
-    public static var width: CGFloat = 300
+    public static var width: CGFloat = 320
     public static var cornerRadius: CGFloat = 34
-    public static var padding: CGFloat = 22
+    public static var textInset: CGFloat = 30
+    public static var topPadding: CGFloat = 21
+    public static var titleMessageGap: CGFloat = 7
+    public static var textButtonsGap: CGFloat = 21.3
+    public static var buttonInset: CGFloat = 16
+    public static var bottomPadding: CGFloat = 16
     public static var buttonHeight: CGFloat = 48
-    public static var buttonSpacing: CGFloat = 10
+    public static var buttonSpacing: CGFloat = 8.7
+    public static var titleFont = Font.system(size: 17, weight: .semibold)
+    /// Message : 15 pt (largeur mesurée : 178 pt pour « Cette action est définitive. »).
+    public static var messageFont = Font.system(size: 15)
 }
 
 final class AlertNode: LayoutNode {
@@ -437,37 +449,49 @@ final class AlertNode: LayoutNode {
     }
 
     override func draw(in screen: CGRect, _ lc: LayoutContext, _ list: inout DisplayList) {
-        list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, lc.colorScheme == .dark ? 0.45 : 0.2)))
+        let dark = lc.colorScheme == .dark
+        list.append(.fill(.rectangle, screen, RGBA(0, 0, 0, dark ? 0.45 : 0.2)))
         list.append(.hitRegion(id: blockID, screen))
-        let inner = M.width - 2 * M.padding
-        let titleFont = Font.system(size: 17, weight: .semibold)
-        let titleSize = lc.measurer.measure(title, font: titleFont, maxWidth: inner)
+        let inner = M.width - 2 * M.textInset
+        let titleSize = lc.measurer.measure(title, font: M.titleFont, maxWidth: inner)
         let messageNode = message.isEmpty ? nil : group(message, axis: .vertical)
         let messageSize = messageNode?.sizeThatFits(ProposedViewSize(width: inner, height: nil), lc) ?? .zero
         let sideBySide = buttons.count == 2
         let buttonRows = sideBySide ? 1 : buttons.count
         let buttonsHeight = CGFloat(buttonRows) * M.buttonHeight + CGFloat(max(0, buttonRows - 1)) * M.buttonSpacing
-        let height = M.padding + titleSize.height + (messageNode == nil ? 0 : 6 + messageSize.height) + 18 + buttonsHeight + M.padding
-        let card = CGRect(x: screen.midX - M.width / 2, y: screen.midY - height / 2, width: M.width, height: height)
-        let dark = lc.colorScheme == .dark
-        list.append(.backdrop(card, blur: 12, tint: dark ? RGBA(0.14, 0.14, 0.15, 0.92) : RGBA(1, 1, 1, 0.94),
-                              shape: .roundedRectangle(cornerRadius: M.cornerRadius)))
+        let height = M.topPadding + titleSize.height + (messageNode == nil ? 0 : M.titleMessageGap + messageSize.height)
+            + M.textButtonsGap + buttonsHeight + M.bottomPadding
+        // Centrée dans la zone sûre (entre l'encoche et l'indicateur d'accueil).
+        let safe = CGRect(x: screen.minX, y: screen.minY + lc.safeArea.top, width: screen.width,
+                          height: screen.height - lc.safeArea.top - lc.safeArea.bottom)
+        let card = CGRect(x: screen.midX - M.width / 2, y: safe.midY - height / 2, width: M.width, height: height)
+        let shape = ShapeKind.roundedRectangle(cornerRadius: M.cornerRadius)
+        // Ombre large et douce, puis carte presque opaque (gris 236 / 32 mesurés) et liseré fin.
+        // Ombre en dégradé continu : nombreux paliers très légers (pas d'anneaux visibles).
+        for spread in stride(from: 18.0, through: 1.0, by: -1.0) {
+            let alpha = 0.006 * (1 - spread / 20)
+            list.append(.fill(.roundedRectangle(cornerRadius: M.cornerRadius + spread),
+                              card.insetBy(dx: -spread, dy: -spread).offsetBy(dx: 0, dy: 4), RGBA(0, 0, 0, alpha)))
+        }
+        list.append(.backdrop(card, blur: 12, tint: dark ? RGBA(0.14, 0.14, 0.14, 0.9) : RGBA(0.94, 0.94, 0.94, 0.9), shape: shape))
+        list.append(.stroke(shape, card.insetBy(dx: 0.25, dy: 0.25), dark ? RGBA(1, 1, 1, 0.12) : RGBA(0, 0, 0, 0.18), lineWidth: 0.5))
 
-        var y = card.minY + M.padding
-        list.append(.text(title, titleFont, CGRect(x: card.midX - titleSize.width / 2, y: y, width: titleSize.width, height: titleSize.height),
-                          Color.primary.resolve(in: lc.colorScheme), .center))
+        var y = card.minY + M.topPadding
+        list.append(.text(title, M.titleFont, CGRect(x: card.minX + M.textInset, y: y, width: titleSize.width, height: titleSize.height),
+                          Color.primary.resolve(in: lc.colorScheme), .leading))
         y += titleSize.height
         if let messageNode {
-            y += 6
-            messageNode.render(in: CGRect(x: card.midX - messageSize.width / 2, y: y, width: messageSize.width, height: messageSize.height), lc, &list)
+            y += M.titleMessageGap
+            messageNode.render(in: CGRect(x: card.minX + M.textInset, y: y, width: messageSize.width, height: messageSize.height), lc, &list)
             y += messageSize.height
         }
-        y += 18
-        let buttonWidth = sideBySide ? (inner - M.buttonSpacing) / 2 : inner
+        y += M.textButtonsGap
+        let buttonWidth = sideBySide ? (M.width - 2 * M.buttonInset - M.buttonSpacing) / 2 : M.width - 2 * M.buttonInset
         for (i, button) in buttons.enumerated() {
-            let x = card.minX + M.padding + (sideBySide ? CGFloat(i) * (buttonWidth + M.buttonSpacing) : 0)
+            let x = card.minX + M.buttonInset + (sideBySide ? CGFloat(i) * (buttonWidth + M.buttonSpacing) : 0)
             let rect = CGRect(x: x, y: y, width: buttonWidth, height: M.buttonHeight)
-            list.append(.fill(.capsule, rect, Color.secondarySystemFill.resolve(in: lc.colorScheme)))
+            // Capsules grises (205 sur 236 en clair, 60 sur 32 en sombre).
+            list.append(.fill(.capsule, rect, dark ? RGBA(1, 1, 1, 0.125) : RGBA(0, 0, 0, 0.13)))
             let s = button.child.sizeThatFits(ProposedViewSize(width: buttonWidth - 16, height: nil), lc)
             button.child.render(in: Alignment.center.place(s, in: rect), lc, &list)
             list.append(.hitRegion(id: button.id, rect))

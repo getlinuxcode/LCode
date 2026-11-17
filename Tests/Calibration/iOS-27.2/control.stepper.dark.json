@@ -1,0 +1,41 @@
+{
+ "colorScheme": "dark",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 32,
+   "id": "stepper.bare",
+   "width": 94,
+   "x": 173,
+   "y": 548.1666666666667
+  },
+  {
+   "height": 32.00000000000006,
+   "id": "stepper.min",
+   "width": 400,
+   "x": 20,
+   "y": 496.1666666666667
+  },
+  {
+   "height": 32,
+   "id": "stepper.value",
+   "width": 400,
+   "x": 20,
+   "y": 444.1666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 63.66666666666666,
+   "x": 188.16666666666666,
+   "y": 403.83333333333337
+  }
+ ],
+ "page": "control.stepper",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

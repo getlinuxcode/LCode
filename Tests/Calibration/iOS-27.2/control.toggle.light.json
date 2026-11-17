@@ -1,0 +1,55 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 53.66666666666666,
+   "x": 193.16666666666666,
+   "y": 361.83333333333337
+  },
+  {
+   "height": 28,
+   "id": "toggle.bare",
+   "width": 61,
+   "x": 189.5,
+   "y": 594.1666666666667
+  },
+  {
+   "height": 28,
+   "id": "toggle.disabled",
+   "width": 400,
+   "x": 20,
+   "y": 546.1666666666667
+  },
+  {
+   "height": 28,
+   "id": "toggle.off",
+   "width": 400,
+   "x": 20,
+   "y": 402.1666666666667
+  },
+  {
+   "height": 28,
+   "id": "toggle.on",
+   "width": 400,
+   "x": 20,
+   "y": 450.1666666666667
+  },
+  {
+   "height": 28.000000000000057,
+   "id": "toggle.tinted",
+   "width": 400,
+   "x": 20,
+   "y": 498.1666666666667
+  }
+ ],
+ "page": "control.toggle",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

@@ -40,6 +40,7 @@ enum Catalog {
         pages.append(CatalogPage(id: "image.styles") { AnyView(ImageStylesPage()) })
         pages.append(CatalogPage(id: "image.scales") { AnyView(ImageScalesPage()) })
         pages.append(CatalogPage(id: "image.resizable") { AnyView(ImageResizablePage()) })
+        pages += ControlCatalog.pages
         pages += AnimationCatalog.pages
         pages += TransitionCatalog.pages
         pages += GestureCatalog.pages

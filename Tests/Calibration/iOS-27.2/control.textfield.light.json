@@ -1,0 +1,48 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 34,
+   "id": "textfield.filled",
+   "width": 400,
+   "x": 20,
+   "y": 516.1666666666667
+  },
+  {
+   "height": 22,
+   "id": "textfield.plain",
+   "width": 400,
+   "x": 20,
+   "y": 420.1666666666667
+  },
+  {
+   "height": 34,
+   "id": "textfield.rounded",
+   "width": 400,
+   "x": 20,
+   "y": 462.1666666666667
+  },
+  {
+   "height": 34,
+   "id": "textfield.secure",
+   "width": 400,
+   "x": 20,
+   "y": 570.1666666666667
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 72,
+   "x": 184,
+   "y": 379.83333333333337
+  }
+ ],
+ "page": "control.textfield",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}

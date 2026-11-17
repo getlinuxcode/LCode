@@ -1,0 +1,27 @@
+{
+ "colorScheme": "light",
+ "device": "iPhone18,2",
+ "markers": [
+  {
+   "height": 34.33333333333337,
+   "id": "picker.menu",
+   "width": 106,
+   "x": 314,
+   "y": 497
+  },
+  {
+   "height": 20.333333333333314,
+   "id": "title",
+   "width": 98.33333333333334,
+   "x": 170.83333333333334,
+   "y": 452.6666666666667
+  }
+ ],
+ "page": "control.pickermenu",
+ "screen": {
+  "height": 956,
+  "scale": 3,
+  "width": 440
+ },
+ "system": "27.2"
+}
