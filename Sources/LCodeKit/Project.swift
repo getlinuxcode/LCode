@@ -14,8 +14,8 @@ public struct XtoolProject {
         public let path: URL
         /// Cibles locales dont elle dépend.
         public let localDependencies: [String]
-        /// Produits de paquets externes dont elle dépend (non pris en charge dans le simulateur).
-        public let externalProducts: [String]
+        /// Produits de paquets externes dont elle dépend (nom du produit, identité du paquet).
+        public let externalProducts: [ProductReference]
         public let hasResources: Bool
     }
 
@@ -27,6 +27,8 @@ public struct XtoolProject {
     /// Cibles locales nécessaires à l'app (l'app comprise), dans l'ordre de dépendance.
     public let targets: [Target]
     public let manifest: String
+    /// Paquets dont dépend le projet (déclarations reprises par le simulateur et les aperçus).
+    public let dependencies: [PackageDependency]
 
     /// Catalogues d'assets (`*.xcassets`) des cibles de l'app.
     public var assetCatalogs: [URL] {
@@ -71,11 +73,13 @@ public struct XtoolProject {
             guard let tname = t["name"] as? String, (t["type"] as? String) == "regular" else { continue }
             let relative = t["path"] as? String ?? "Sources/\(tname)"
             var local: [String] = []
-            var external: [String] = []
+            var external: [ProductReference] = []
             for dep in t["dependencies"] as? [[String: Any]] ?? [] {
                 if let byName = dep["byName"] as? [Any], let n = byName.first as? String { local.append(n) }
                 if let target = dep["target"] as? [Any], let n = target.first as? String { local.append(n) }
-                if let product = dep["product"] as? [Any], let n = product.first as? String { external.append(n) }
+                if let product = dep["product"] as? [Any], let n = product.first as? String {
+                    external.append(ProductReference(name: n, package: product.count > 1 ? product[1] as? String : nil))
+                }
             }
             let resources = (t["resources"] as? [Any])?.isEmpty == false
             all[tname] = Target(name: tname, path: root.appendingPathComponent(relative),
@@ -98,7 +102,8 @@ public struct XtoolProject {
             .first { $0.hasPrefix("bundleID:") }
             .map { $0.dropFirst("bundleID:".count).trimmingCharacters(in: .whitespaces) }
 
+        let dependencies = (json["dependencies"] as? [[String: Any]] ?? []).compactMap(PackageDependency.init(dump:))
         return XtoolProject(root: root, name: name, bundleID: bundleID, appTarget: appTarget,
-                            targets: ordered, manifest: manifest)
+                            targets: ordered, manifest: manifest, dependencies: dependencies)
     }
 }

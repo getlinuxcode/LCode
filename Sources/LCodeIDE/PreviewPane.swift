@@ -36,8 +36,8 @@ struct Diagnostic {
 /// affiché ici et interactif ; il se recompile et se recharge à chaque modification du texte.
 final class PreviewPane {
     let widget: UnsafeMutablePointer<GtkWidget>
-    private let project: XtoolProject
-    let build: PreviewBuild
+    private(set) var project: XtoolProject
+    private(set) var build: PreviewBuild
     private let screen = SimulatorScreen(name: "apercu")
     private var picture: UnsafeMutablePointer<GtkWidget> { screen.picture }
     private let status: UnsafeMutablePointer<GtkWidget>
@@ -134,6 +134,13 @@ final class PreviewPane {
         }
         connectArg(raw(selector), "notify::selected") { [weak self] _ in self?.restartServer() }
         screen.send = { [weak self] in self?.send($0) }
+    }
+
+    /// Le projet a changé (paquets ajoutés…) : nouvelle description, aperçu recompilé.
+    func reload(project: XtoolProject) {
+        self.project = project
+        build = PreviewBuild(project: project, lcodeRoot: lcodeRoot)
+        refresh()
     }
 
     // MARK: - Fichier suivi

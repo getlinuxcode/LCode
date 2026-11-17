@@ -7,7 +7,7 @@ import LCodeKit
 /// à droite, journal en bas (compilation, problèmes, sortie de l'app, appareil). Barre : exécuter, arrêter,
 /// destination (simulateurs et iPhone détectés en USB ou Wi-Fi), menu.
 final class ProjectWindow {
-    let project: XtoolProject
+    private(set) var project: XtoolProject
     let window: UnsafeMutablePointer<GtkWidget>
     private let runner: Runner
     private let monitor = DeviceMonitor()
@@ -288,6 +288,7 @@ final class ProjectWindow {
         item("Nouveau fichier…  (Ctrl+N)") { [weak self] in self?.newFile() }
         item("Nouveau dossier…") { [weak self] in self?.navigator.newFolder() }
         item("Enregistrer tout  (Ctrl+Alt+S)") { [weak self] in self?.saveAll() }
+        item("Paquets…") { [weak self] in if let self { PackagesDialog.present(for: self) } }
         separator()
         let win = window
         item("Nouveau projet…") { App.shared.newProject(from: win) }
@@ -541,6 +542,29 @@ final class ProjectWindow {
             gtk_stack_set_visible_child_name(cast(raw(sideStack)), "apercu")
             gtk_revealer_set_reveal_child(cast(raw(previewRevealer)), Settings.shared.previewVisible ? 1 : 0)
             if Settings.shared.previewVisible { preview.refresh() }
+        }
+    }
+
+    /// Relit le projet (Package.swift modifié : paquets…) et met à jour l'exécution, l'aperçu, la complétion
+    /// et l'onglet Package.swift s'il est ouvert.
+    func reloadProject(_ done: @escaping () -> Void = {}) {
+        let root = project.root
+        Thread.detachNewThread { [weak self] in
+            let loaded = try? XtoolProject.load(at: root)
+            onMain {
+                guard let self else { return }
+                if let loaded {
+                    self.project = loaded
+                    self.runner.project = loaded
+                    self.preview.reload(project: loaded)
+                    self.language.stop()
+                    self.language = LanguageServer(build: self.preview.build)
+                    self.language.start()
+                    for t in self.tabs { if case let .document(doc) = t.tab, !doc.dirty { doc.reloadFromDisk() } }
+                    self.append("▸ Projet rechargé (\(loaded.dependencies.count) paquet(s)).\n", to: self.buildLog)
+                }
+                done()
+            }
         }
     }
 

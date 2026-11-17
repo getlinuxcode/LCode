@@ -18,9 +18,6 @@ public struct SimulatorBuild {
     public var warnings: [String] {
         var w: [String] = []
         for t in project.targets {
-            if !t.externalProducts.isEmpty {
-                w.append("La cible \(t.name) dépend de paquets externes (\(t.externalProducts.joined(separator: ", "))) : non pris en charge par le simulateur pour l'instant.")
-            }
             if t.hasResources, Self.otherResources(in: t.path) {
                 w.append("La cible \(t.name) a des ressources hors catalogue d'assets : seules les images et couleurs des .xcassets sont reprises par le simulateur.")
             }
@@ -51,9 +48,11 @@ public struct SimulatorBuild {
         }
 
         let lcodeName = lcodeRoot.lastPathComponent
+        let packages = try PackageOverlay(project: project, lcodeRoot: lcodeRoot).dependencyDeclarations()
         var targets: [String] = []
         for t in project.targets {
-            let deps = t.localDependencies.map { "\"\($0)\"" } + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
+            let deps = t.localDependencies.map { "\"\($0)\"" } + t.externalProducts.map(\.declaration)
+                + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
             let kind = t.name == project.appTarget ? "executableTarget" : "target"
             targets.append("""
                     .\(kind)(
@@ -76,6 +75,7 @@ public struct SimulatorBuild {
             name: "\(project.name)Simulateur",
             dependencies: [
                 .package(path: "\(lcodeRoot.path)"),
+        \(packages.map { "        " + $0 + "," }.joined(separator: "\n"))
             ],
             targets: [
         \(targets.joined(separator: "\n"))

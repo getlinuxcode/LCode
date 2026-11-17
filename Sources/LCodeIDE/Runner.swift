@@ -3,7 +3,7 @@ import LCodeKit
 
 /// Compilation et exécution dans le simulateur, en arrière-plan : la sortie arrive ligne par ligne.
 final class Runner {
-    let project: XtoolProject
+    var project: XtoolProject
     let lcodeRoot: URL
     /// Sorties (compilation, app, journal de l'appareil) et changements d'état, sur le fil principal.
     var onOutput: (String) -> Void = { _ in }

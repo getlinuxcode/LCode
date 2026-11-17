@@ -231,9 +231,11 @@ public struct PreviewBuild {
 
     private func writeManifest() throws {
         let lcodeName = lcodeRoot.lastPathComponent
+        let packages = try PackageOverlay(project: project, lcodeRoot: lcodeRoot).dependencyDeclarations()
         var targets: [String] = []
         for t in project.targets {
-            let deps = t.localDependencies.map { "\"\($0)\"" } + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
+            let deps = t.localDependencies.map { "\"\($0)\"" } + t.externalProducts.map(\.declaration)
+                + [".product(name: \"SwiftUI\", package: \"\(lcodeName)\")"]
             let kind = t.name == project.appTarget ? "executableTarget" : "target"
             targets.append("""
                     .\(kind)(
@@ -253,6 +255,7 @@ public struct PreviewBuild {
             name: "\(project.name)Apercu",
             dependencies: [
                 .package(path: "\(lcodeRoot.path)"),
+        \(packages.map { "        " + $0 + "," }.joined(separator: "\n"))
             ],
             targets: [
         \(targets.joined(separator: "\n"))

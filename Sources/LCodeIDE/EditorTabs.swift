@@ -80,6 +80,17 @@ final class EditorDocument {
         overlayTypes()
     }
 
+    /// Relit le fichier (modifié hors de l'éditeur, par SwiftPM par exemple), si son contenu a changé.
+    func reloadFromDisk() {
+        guard let disk = try? String(contentsOf: url, encoding: .utf8), disk != text else { return }
+        loading = true
+        gtk_text_buffer_begin_irreversible_action(cast(raw(buffer)))
+        gtk_text_buffer_set_text(cast(raw(buffer)), disk, -1)
+        gtk_text_buffer_end_irreversible_action(cast(raw(buffer)))
+        loading = false
+        overlayTypes()
+    }
+
     /// Thème Xcode clair ou sombre selon l'apparence.
     func applyScheme() {
         let manager = gtk_source_style_scheme_manager_get_default()
