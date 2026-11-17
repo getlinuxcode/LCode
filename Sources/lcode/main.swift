@@ -10,6 +10,7 @@ import LCodeKit
 
 let usage = """
 Usage :
+  lcode open [<projet>]              ouvre le projet dans l'IDE LCode
   lcode run [<projet>] [options]     lance un projet xtool (dossier courant par défaut)
 
 Options :
@@ -30,6 +31,16 @@ func fail(_ message: String) -> Never {
 }
 
 var args = Array(CommandLine.arguments.dropFirst())
+// lcode open [<projet>] : ouvre l'IDE (exécutable lcode-ide, à côté de lcode).
+if args.first == "open" {
+    let ide = URL(fileURLWithPath: CommandLine.arguments[0]).deletingLastPathComponent().appendingPathComponent("lcode-ide")
+    let project = args.count > 1 ? args[1] : FileManager.default.currentDirectoryPath
+    let process = Process()
+    process.executableURL = ide
+    process.arguments = [project]
+    do { try process.run() } catch { fail("impossible d'ouvrir l'IDE (\(ide.path)) : \(error)") }
+    exit(0)
+}
 guard args.first == "run" else { print(usage); exit(args.isEmpty || args.first == "--help" ? 0 : 1) }
 args.removeFirst()
 

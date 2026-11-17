@@ -24,6 +24,13 @@ let package = Package(
         // Cœur de l'IDE : projets xtool, génération et lancement du simulateur.
         .target(name: "LCodeKit", swiftSettings: v5),
         .executableTarget(name: "lcode", dependencies: ["LCodeKit"], swiftSettings: v5),
+        .systemLibrary(
+            name: "CAdw",
+            pkgConfig: "libadwaita-1",
+            providers: [.apt(["libadwaita-1-dev"])]
+        ),
+        // L'IDE : fenêtre GTK4/libadwaita façon Xcode (navigateur, éditeur, console, simulateur).
+        .executableTarget(name: "lcode-ide", dependencies: ["LCodeKit", "CAdw"], path: "Sources/LCodeIDE", swiftSettings: v5),
         .executableTarget(
             name: "CounterExample",
             dependencies: ["SwiftUI"],
