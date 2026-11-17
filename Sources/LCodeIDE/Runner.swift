@@ -53,7 +53,30 @@ final class Runner {
     private func emit(_ text: String) {
         let clean = Self.clean(text)
         buildBuffer.append(clean)
-        onMain { self.onOutput(clean) }
+        onMain {
+            self.lastOutputAt = Date()
+            self.onOutput(clean)
+        }
+    }
+
+    private var lastOutputAt = Date()
+
+    /// iOS only replaces an app that isn't running: while the old version is open on the iPhone (even in the
+    /// background), installd refuses to terminate it ("termination resistance") and xtool silently waits after
+    /// "[Installing] 100%". Tell the user what to do; the build carries on by itself once the app is closed.
+    private func watchInstall(_ process: Process) {
+        var warned = false
+        func check() {
+            guard build === process, !warned else { return }
+            let tail = buildBuffer.suffix(300)
+            if tail.contains("[Installing] 100%"), !tail.contains("[Verifying]"), Date().timeIntervalSince(lastOutputAt) > 6 {
+                warned = true
+                emit("⏳ " + tr("iOS finishes installing once %@ is closed on the iPhone: swipe it away in the app switcher.", project.name) + "\n")
+                return
+            }
+            after(2000, check)
+        }
+        after(2000, check)
     }
 
     private func emitApp(_ text: String) {
@@ -276,6 +299,7 @@ final class Runner {
         do {
             try process.run()
             build = process
+            watchInstall(process)
         } catch {
             emit(tr("✗ xtool not found: %@", "\(error)") + "\n")
             set(.failed)

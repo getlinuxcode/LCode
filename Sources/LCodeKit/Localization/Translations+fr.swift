@@ -292,5 +292,6 @@ extension Localization {
         "Bluetooth": "Bluetooth",
         "Face ID": "Face ID",
         "SwiftPM can’t compile asset catalogs on Linux; LCode compiles them itself. In Package.swift, add next to resources:": "SwiftPM ne sait pas compiler les catalogues d’assets sous Linux ; LCode les compile lui-même. Dans Package.swift, ajoutez à côté de resources :",
+        "iOS finishes installing once %@ is closed on the iPhone: swipe it away in the app switcher.": "iOS termine l’installation une fois %@ fermée sur l’iPhone : balayez-la vers le haut dans le sélecteur d’apps.",
     ]
 }

@@ -179,7 +179,7 @@ public enum DeviceBuild {
         xtool dev build
         app=$(ls -td xtool/*.app | head -1)
         \(q(tool.path)) \(q(catalog.path)) "$app" --deployment-target \(deploymentTarget(project.manifest))
-        echo "▸ Signing and installing $(basename "$app")…"
+        echo "▸ Signing and installing $(basename "$app")… (if it stops at 100%, close the app on the iPhone)"
         xtool install \(device) "$app"
         """
     }
